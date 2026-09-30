@@ -1,0 +1,98 @@
+# File: .github/workflows/build.yml
+# Builds a CMake-based JUCE plugin on Linux, macOS and Windows on every push,
+# then runs pluginval on the VST3. Part of the "away from home" protocol:
+# lets you get a real compile + validation from your phone.
+#
+# Assumes: CMakeLists.txt at repo root, JUCE as a git submodule or via FetchContent.
+# For a Projucer (.jucer) project this file needs adapting.
+
+name: Build
+
+on:
+  push:
+    branches: ["**"]     # a push to a PR branch also updates the PR checks
+  workflow_dispatch:     # "Run workflow" button in the Actions tab
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true   # a newer push cancels the older run
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false        # see every platform's errors, not just the first
+      matrix:
+        include:
+          - { name: Linux,   os: ubuntu-24.04 }
+          - { name: macOS,   os: macos-14 }
+          - { name: Windows, os: windows-latest }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build xvfb \
+            libasound2-dev libjack-jackd2-dev ladspa-sdk libcurl4-openssl-dev \
+            libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev libxi-dev \
+            libglu1-mesa-dev mesa-common-dev libegl-dev   # libxi + libegl: new in JUCE 9 (docs/Linux Dependencies.md)
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          else
+            cmake -B build -DCMAKE_BUILD_TYPE=Release
+          fi
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: DSP tests
+        # Runs dsp/tests via ctest (requires enable_testing() + add_subdirectory(dsp) in the root CMakeLists).
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Find VST3
+        id: find
+        shell: bash
+        run: |
+          VST3=$(find build -type d -name "*.vst3" -path "*Release*" | head -n 1)
+          echo "Found: $VST3"
+          echo "vst3=$VST3" >> "$GITHUB_OUTPUT"
+
+      - name: pluginval
+        if: steps.find.outputs.vst3 != ''
+        shell: bash
+        # pluginval asset names / flags confirmed working in CI (JUCE 9.0.3 template, Sep 2026).
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   ZIP=pluginval_Linux.zip;   BIN=./pluginval ;;
+            macOS)   ZIP=pluginval_macOS.zip;   BIN=./pluginval.app/Contents/MacOS/pluginval ;;
+            Windows) ZIP=pluginval_Windows.zip; BIN=./pluginval.exe ;;
+          esac
+          curl -sSL -o pv.zip "https://github.com/Tracktion/pluginval/releases/latest/download/$ZIP"
+          unzip -q pv.zip
+          ARGS=(--strictness-level 5 --skip-gui-tests --validate "${{ steps.find.outputs.vst3 }}")
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a "$BIN" "${ARGS[@]}"
+          else
+            "$BIN" "${ARGS[@]}"
+          fi
+
+      - name: Upload plugin binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-plugin
+          path: build/**/*_artefacts/Release/
+          if-no-files-found: warn
+          retention-days: 7
