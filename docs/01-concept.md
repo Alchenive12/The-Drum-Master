@@ -1,21 +1,24 @@
 <!-- File: docs/01-concept.md -->
 # The Drum Master — Phase 1: Concept
 
-> Status: **draft, waiting for approval**. No math and no code in this phase, only what the plugin
-> does and how it should feel. The open questions at the bottom must be answered before phase 2.
+> Status: **answers integrated, waiting for final approval**. No math and no code in this phase, only
+> what the plugin does and how it should feel. The items marked *(to confirm)* are Claude's
+> reading of your answers.
 
 ## One sentence
 An effect that sits on a drum bus or on the insert of a drum loop. It recognises each drum hit as it
-arrives and mixes that hit with the settings you chose for that kind of drum.
+arrives and mixes that hit with the settings you chose for that kind of drum. The mixing workflow
+is inspired by Addictive Drums 2, but it works on audio you already have.
 
 ## Where it lives
-- It's an **insert effect** on a drum bus, a drum-loop track, or a stereo drum stem. It is not an instrument and it has no MIDI input.
+- It's an **insert effect** on a drum bus, a drum-loop track, or a stereo drum stem. It is not an
+  instrument and it has no MIDI input.
 - The input is a mixed drum signal in which the kick, snare, hats, etc. are all on one track.
 - The output is the same loop, with each hit shaped by the settings for its drum type.
+- **Home test setup:** FL Studio on Windows, i7-11700K, RTX 3060 Ti. The main format is
+  **VST3**.
 
 ## What it hears: drum types
-The plugin sorts every hit into one of these types:
-
 | Type | In plain words |
 |---|---|
 | Kick | Low thump, strong start, short-to-medium tail |
@@ -36,69 +39,93 @@ The plugin sorts every hit into one of these types:
   - **frequency range**: where the energy sits (low, mid, high),
   - **transient shape**: how sharply it starts and how long it rings,
   - **volume**: how loud it is compared with the rest of the loop.
-- The exact method will be worked out together in phase 2.
-- The lookahead adds a small, fixed delay. The plugin reports that delay to the DAW so the DAW can
+- **Several drums at once.** If a kick and a closed hat land together, both are detected. Each
+  type's settings act **only on that drum's own frequency range**, so the kick settings shape the
+  lows and the hat settings shape the highs. The two don't fight each other.
+- **How long a hit lasts.** A hit's settings stay on through its **tail**. They end when the tail
+  has faded, or earlier if a new hit of the same type is detected.
+- The lookahead adds a small, fixed delay. The plugin reports that delay to FL Studio so FL can
   compensate, and the loop stays in time with the rest of the mix.
+- The exact method will be worked out together in phase 2.
 
 ## Two ways to start
 1. **Auto detect.** Press *Auto detect* and play the loop. While it plays, the plugin notes which
-   drum types it hears and adds each one to the display as it finds it. You don't set anything. When
-   you stop listening (press again, or stop playback — open question), the list stays.
+   drum types it hears and adds each one to the puppet display as it finds it. You don't set
+   anything. It **stops when playback stops**.
 2. **Manual.** Pick the expected drum types yourself: "kick", "snare", "closed hat", and so on. You
    pick types, never samples. Types that aren't on the list are never guessed, which should make
    detection more reliable.
 
 Either way you end up with a list of the drum types the plugin should expect, and each one has its
-own mix settings.
+own mix settings. *(To confirm: you can still add or remove types by hand after auto detect.)*
 
-## What "mixing a hit" means
-- Every drum type has its own settings, which you choose.
-- When a hit is recognised, that type's settings are applied to the hit.
-- If a hit is uncertain it goes to **Misc**, which by default leaves the sound unchanged, so a
-  wrong guess never sounds bad.
-- Which settings each type gets (volume, EQ, punch, compression, saturation, stereo width, …) is an
-  open question below.
+## Mixing: three layers
+### 1. Quick mix (main screen)
+Fast controls for the three groups you touch most. These are for quick decisions, with no need to
+go into any drum.
+
+| Group | Covers |
+|---|---|
+| Kick | Kick |
+| Snare | Snare, plus rimshot and clap *(to confirm)* |
+| Hats | Closed hat, open hat *(to confirm: ride and crash too?)* |
+
+*(To confirm: each group gets volume plus one or two "character" knobs, for example punch and
+tone.)*
+
+**Global controls** (also on the main screen): **dry/wet**, **output gain**, **detection
+sensitivity**, **punch**, **clip**, **bypass**.
+
+### 2. Deep edit per drum (click a string)
+Clicking a string **zooms in on the drum hanging from it** and opens that drum's full settings.
+
+**Kick**
+- **Low-end boost**: adds weight and sub.
+- **Top**: the beater click and attack at the front of the kick. *(To confirm: this is your "top".)*
+- **Bottom**: the body and boom behind the attack. *(To confirm: this is your "bottom".)*
+- **Compression**
+- **Saturation**
+- **Clipping**
+- **EQ**
+
+**Snare**
+- **Saturation**
+- **EQ**
+- **Compression**
+- **Character knobs**. Each one turns a whole set of hidden settings at once to push the snare
+  towards a genre:
+  - **Dubstepify**: huge, bright, compressed and aggressive.
+  - **Popify**: clean, tight, polished and forward.
+  - **Rockify**: fat, roomy and natural, with body.
+  - **Rimify**: more of the rim, a sharper and harder crack.
+
+  The knobs **blend**. For example, half Rockify plus a little Dubstepify mixes both characters.
+  In phase 2 we'll decide exactly which hidden settings each knob moves.
+
+**Other drums** (closed hat, open hat, crash, ride, rimshot, clap, misc): *(To confirm: for now they
+get a basic set of volume, EQ, compression and saturation. Special knobs can come in phase 5.)*
+
+### 3. Advanced global (click the puppet master)
+Clicking the **puppet master himself** opens the advanced global page. It works on the whole bus:
+**distortion**, **saturation**, **filter**, and more to be listed in phase 2.
 
 ## Look and feel: the Puppet Master
 - A **puppet master** stands above the plugin. He's taller than the window, so you only see his
-  hands and the control bar he holds. His face is always cut off by the top edge, which keeps him
-  mysterious.
+  hands and the control bar he holds. His face is always cut off by the top edge.
 - **Strings** hang from the control bar. There's one string for each drum type on your list.
 - At the end of each string hangs that **drum type**, for example a small kick drum, a snare, a
   hi-hat or a crash cymbal.
 - When the plugin hears a hit, that drum's **string jerks up a little**, as if the master pulled
-  it. This gives you a live view of what the plugin thinks it hears.
+  it. If two drums hit together, both strings jerk.
 - In auto-detect mode, new strings and drums **drop in** as new types are found.
+- **Click a string** → zoom in on that drum's deep edit. **Click the puppet master** → advanced
+  global page.
 - The generic JUCE editor stands in until phase 4 (UI). The puppet master is the phase-4 goal, and
   everything above works without it.
 
 ## What it is NOT (for now)
 - Not a drum replacer or sampler: it never adds sounds, it only shapes the hits that are already
   there.
-- Not a full stem separator: it can't pull the kick out of the loop as its own track (see open
-  question 1).
+- Not a full stem separator: it shapes each drum inside its own frequency range, but it doesn't
+  output separate tracks.
 - Not a MIDI extractor (this could come back as a phase-5 feature).
-
-## Open questions (answer these before phase 2)
-1. **Overlapping hits.** In a loop, a kick and a closed hat often land at the same moment, and
-   they're mixed together. When the plugin applies the "kick" settings, it's shaping the whole signal
-   at that moment, hat included. Is that OK? Options:
-   a. Yes: settings apply to the whole signal during that hit. This is the simplest option and the
-      most predictable.
-   b. Allow several types at once ("kick + hat"). Each type's settings then only act on its own
-      frequency range (for example, kick settings only touch the lows).
-   c. Something else you have in mind.
-2. **Per-drum settings.** Which knobs does each drum type get? Pick your must-haves:
-   volume · EQ (low/mid/high or a tilt) · transient punch/attack · sustain/tail · compression ·
-   saturation/drive · stereo width/pan · reverb send. Should every type have the same set, or
-   should each type have its own (for example, kick gets "sub", cymbals get "tame")?
-3. **How long a hit lasts.** How long should a hit's settings stay on: until the next hit, for a
-   fixed time per type, or until the hit's own tail fades out?
-4. **Ending auto detect.** Should it stop when you press the button again, when playback stops, or
-   after N bars? Can you edit the list afterwards (remove a false "crash", add a missing "ride")?
-5. **Clicking a puppet.** Does clicking a drum puppet open its settings? Should there be a solo or
-   mute for each type?
-6. **Global controls.** Do you want a dry/wet mix, output gain, a detection "sensitivity" knob,
-   bypass?
-7. **Formats and home setup.** Which formats (VST3 / AU / Standalone) and which OS and DAW will you
-   test on at home?
