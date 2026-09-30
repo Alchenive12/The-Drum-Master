@@ -10,7 +10,7 @@
 - Formats:                       VST3 / AU (macOS only) / Standalone
 - Platforms built at home:       Windows (FL Studio, i7-11700K, RTX 3060 Ti) — VST3
 - CI:                            .github/workflows/build.yml (Linux, Windows + DSP tests + pluginval; macOS dropped)
-- Last known-good commit:        0f3ba40 on this branch (The Puppet Show engine + learned classifier + plugin; CI run 32 green on Linux + Windows incl. DSP tests + pluginval; Windows VST3 in the run's artifacts)
+- Last known-good commit:        8c56559 on this branch (full v1: DSP + learned classifier + The Puppet Show + puppet-stage UI; CI run 35 green on Linux + Windows incl. DSP tests + pluginval; Windows VST3 in the run's artifacts)
 
 ## Current trip
 - Pipeline phase:                4 — UI built (docs/04-ui-concept.md, screenshots in docs/screenshots/); phase 3 DSP done
@@ -21,7 +21,7 @@
 | Commit msg | Files | Verification level (0–4) | Notes |
 |---|---|---|---|
 | [untested] ui: late-night grey-blue room with an old drum set; the very tall master's legs in the room | Source/ui/{Art.h, Theme.h}, Source/PluginEditor.h, docs/04-ui-concept.md, docs/03-decisions-for-review.md, docs/screenshots/*, REMOTE_LOG.md | 2 | Built in sandbox, screenshots re-taken (user's art direction 2026-09-30) |
-| [untested] ui: phase 4 - the puppet stage editor (strings, Shadow Play, quick mix, deep edit, Puppet Show curtain, advanced, about) + screenshots | Source/PluginEditor.h, Source/ui/{Theme.h, Art.h, Widgets.h} (new, header-only), Source/PluginProcessor.* (string/transport/forget API, fresh instance listens), docs/04-ui-concept.md, docs/screenshots/*, docs/02-parameters.md (detect_mode default), docs/03-decisions-for-review.md, research/ui-screenshots.sh, REMOTE_LOG.md | 2 | Built in sandbox (Linux Release+LTO, no warnings from our code); pluginval strictness 5 SUCCESS incl. editor tests; screenshots from the Standalone under Xvfb. CMakeLists.txt NOT touched |
+| [untested] ui: phase 4 - the puppet stage editor (strings, Shadow Play, quick mix, deep edit, Puppet Show curtain, advanced, about) + screenshots | Source/PluginEditor.h, Source/ui/{Theme.h, Art.h, Widgets.h} (new, header-only), Source/PluginProcessor.* (string/transport/forget API, fresh instance listens), docs/04-ui-concept.md, docs/screenshots/*, docs/02-parameters.md (detect_mode default), docs/03-decisions-for-review.md, research/ui-screenshots.sh, REMOTE_LOG.md | 3 | Built in sandbox (Linux Release+LTO, no warnings from our code); pluginval strictness 5 SUCCESS incl. editor tests; screenshots from the Standalone under Xvfb. CMakeLists.txt NOT touched; CI run 35 (8c56559) green Linux + Windows |
 | [untested] dsp: The Puppet Show engine (listen, correct, glide) + targets in the plugin's scale | PuppetShow.h (new), DrumEngine.h, DrumChannel.h (11 EQ slots, 8-10 reserved), test_puppet_show.cpp, research/puppet-show/{measure_kits.py, measure_rise.cpp, run_on_loops.cpp}, docs/05-puppet-show-targets-v1.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 3 | gcc, clang, ASan/UBSan 12/12; plugin rebuilt, pluginval strictness 5 SUCCESS; bit-exact transparent with Puppet Show on and nothing measured; CI run 32 (0f3ba40) green Linux + Windows |
 | [untested] docs: Puppet Show v1 genre targets (average of 3 answers, kick rows anchored to 43 real kits) | prompts/answers/05-agent1.md, 05-agent2.md, research/puppet-show/{average_targets.py, measure_kits.py}, docs/05-puppet-show-targets-v1.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | Averaging + real-kit measurement run in sandbox; no plugin code changed |
 | [untested] prompts: 05 Puppet Show genre targets (fixed table to average) + Claude's blind answer | prompts/05-puppet-show-genre-targets.md, prompts/answers/05-claude.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 0 | Docs only |
@@ -79,6 +79,7 @@
 | VERIFY(host) | PluginProcessor.cpp (D-C13) | FL shows 50 ms latency (pluginval reads 0 before prepare, as with the template); Link with FL automation; transport stop ends auto detect |
 
 ## Decisions (and why)
+- **2026-09-30, the owner's explicit choice (outside the protocol):** PR #1 is merged into main **before home testing** (level 4), to test from main. CI run 35 (8c56559) was green on Linux + Windows. Every VERIFY item below stays open for the first home session. From now on, new work goes on a new branch and a new PR.
 - JUCE 9.0.3 via FetchContent: latest release; pinned so every build uses the same JUCE.
 - Generic editor until phase 4: plugin testable in a DAW before any custom UI.
 - dsp/ header-only for now; becomes a static lib automatically when dsp/src/*.cpp exists.
