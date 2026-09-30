@@ -10,10 +10,10 @@
 - Formats:                       VST3 / AU (macOS only) / Standalone
 - Platforms built at home:       Windows (FL Studio, i7-11700K, RTX 3060 Ti) — VST3
 - CI:                            .github/workflows/build.yml (Linux, Windows + DSP tests + pluginval; macOS dropped)
-- Last known-good commit:        main (template, CI green on Linux, macOS, Windows)
+- Last known-good commit:        3ec2987 on this branch (rename; CI run 7 green on Linux + Windows incl. pluginval)
 
 ## Current trip
-- Pipeline phase:                2b — engine shootout done (research/engine-shootout); prompt 03 (agents review Claude's engine) out; D1 + D2 open
+- Pipeline phase:                2b — shootout v2 done after agents' review; recommendation now hybrid dual-res engine; D1 + D2 open
 - Branch: claude/away-from-home-protocol-pc5bni (session-assigned; stands in for `remote/<feature>`)
 - Goal: approve docs/02-algorithm.md, then parameter table closes phase 2
 
@@ -26,16 +26,17 @@
 | [untested] docs: concept answers (1b, AD2-style mixing, puppet clicks) | docs/01-concept.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: approve concept, add prompt 01 + Claude's blind answer | docs/01-concept.md, prompts/, REMOTE_LOG.md | 0 | Docs only |
 | [untested] CI: drop macOS job | build.yml, REMOTE_LOG.md | 0 | Approved by user; how to re-add is in the build.yml header |
-| [untested] Rename template to The Drum Master | CMakeLists.txt, Source/*, README.md, REMOTE_LOG.md | 0 | Mechanical rename; CI to confirm (level 3) |
+| [untested] Rename template to The Drum Master | CMakeLists.txt, Source/*, README.md, REMOTE_LOG.md | 3 | CI run 7 (3ec2987) green on Linux + Windows: build, DSP tests, pluginval |
 | [untested] docs: agent answers + per-drum settings comparison | prompts/answers/agent1.md, agent2.md, docs/02-mix-settings.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: approve mix settings, add detection prompt 02 + Claude's blind answer | docs/02-mix-settings.md, prompts/02-detection-algorithm.md, prompts/answers/02-claude.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: agent answers to prompt 02 + algorithm comparison | prompts/answers/02-agent1.md, 02-agent2.md, docs/02-algorithm.md, REMOTE_LOG.md | 0 | Docs only; some agent formulas lost in paste (marked) |
 | [untested] research: engine shootout STFT mask vs time bands + review prompt 03 | research/engine-shootout/*, docs/02-algorithm.md, prompts/03-review-claude-engine.md, REMOTE_LOG.md | 2 | Pure C++ compiled + run in sandbox; not in plugin build/CI |
+| [untested] research: shootout v2 after agents' review | research/engine-shootout/shootout2.cpp, RESULTS2.txt, README.md, prompts/answers/03-*.md, docs/02-algorithm.md, REMOTE_LOG.md | 2 | Same-band overlaps, dual-res STFT, spectral metric, jitter; B loses, hybrid dual-res wins |
 
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
 ## Next steps
-1. Agents' answers to prompts/03 → prompts/answers/03-<agent>.md; then user decides D1 (bands vs STFT) and D2 (lookahead).
+1. User decides D1 (recommendation now: hybrid dual-res — STFT estimate + time-domain processors) and D2 (fixed 30 ms).
 2. Parameter table (ID, range, default, unit) → docs/02-parameters.md closes phase 2.
 3. Phase 3: dsp/ core (synthetic drum generator + offline WAV harness first), then JUCE wiring.
 
@@ -60,7 +61,8 @@
 - Deep-edit controls: from prompt 01 (Claude blind + 2 agents); rule = in if ≥2 of 3 sources, single-source judged on merit. Every drum has Level + Decay.
 - Parked for phase 5: open-hat choke by closed hat, crash duck on kick/snare (Agent 1).
 - Algorithm backbone (all 3 sources): STFT analysis, per-band flux onsets, template split + rule-based soft scores, Misc below confidence, tail = drop below peak/floor or retrigger, loop adaptation capped at 50 %.
-- Engine shootout (synthetic stems, exact ideal): time-domain bands beat STFT masks on transient (−20 vs −11 dB), compression (−25 vs −19 dB), saturation (−40 vs impossible), tie on level; decay-shortening ~−4 dB for all (mixed-audio limit). Hybrid ≈ bands.
+- Shootout v2 (same-band overlaps: kick+bass, snare+clap, hat+crash): Claude's 6 bands LOSE (kick Top vs hats −8.4 vs −18.7 dB); hybrid dual-res STFT estimate (1024 low / 256 high, split 1.5 kHz, fits 30 ms) + time-domain processors best or tied on 6/7. With overlaps every engine is only ~70–90 % right (decay ~40 %).
+- Engine shootout v1 (superseded): time-domain bands beat STFT masks on transient (−20 vs −11 dB), compression (−25 vs −19 dB), saturation (−40 vs impossible), tie on level; decay-shortening ~−4 dB for all (mixed-audio limit). Hybrid ≈ bands.
 - No ML in v1: rule-based first; RF/MLP only if rules miss targets on real loops (needs 9-class labelled data).
 - Mix settings approved: kick clipping kept (off by default); Dubstepify = long tail + added ~200 Hz body; clap compression kept.
 

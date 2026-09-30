@@ -138,7 +138,7 @@
   energy goes to the selected types or to Misc. [all 3]
 - **Parked for phase 4/5:** a "show suppressed detections" indicator (A1).
 
-### 7. Per-drum processing (depends on D1)
+### 7. Per-drum processing (depends on D1, recommendation: hybrid dual-resolution)
 Fixed in both D1 options:
 - **Transparency:** every setting at default, or no hit active → output = input delayed by exactly
   D. [all 3]
@@ -216,26 +216,39 @@ The **high** ones are candidates for an advanced page later. [A1's idea]
   documenting it honestly.
 
 ## Decisions for you
-- **D1: How the processing is done.** This is the only real disagreement, now **measured** in
-  `research/engine-shootout/` (a synthetic loop with known stems, so the ideal result is exact):
+- **D1: How the processing is done.** Measured twice in `research/engine-shootout/`, on synthetic
+  loops with known stems, so the ideal result is exact.
+  - **v1** (no same-range overlaps): the time-domain bands won. Both agents' review
+    (`prompts/answers/03-*.md`) said the test was too easy, and **they were right**.
+  - **v2** adds kick + bass, snare + clap and open hat + crash, richer drums, dual-resolution STFT
+    engines, a phase-insensitive metric and timing jitter. Realistic shares, L2 error in dB (lower
+    is better):
 
-  | Test (error vs ideal, realistic shares) | STFT mask (A1 + A2) | 6 time bands (Claude) |
-  |---|---|---|
-  | Transparent at neutral | yes | yes |
-  | Kick level −6 dB | −27 dB | −29 dB (tie) |
-  | Snare Crack +6 dB | −11 dB, smears before the hit | **−20 dB, no smear** |
-  | Snare compression | −19 dB, smears before the hit | **−25 dB, no smear** |
-  | Kick saturation | **impossible** | **−40 dB** |
-  | Open-hat Decay shorter | −4 dB | −4 dB (weak for both: a limit of mixed audio) |
+    | Test | STFT mask (A1 + A2) | 6 bands (Claude) | **Hybrid dual-res, fits 30 ms** |
+    |---|---|---|---|
+    | Kick −6 dB, bass under it | −5.3 | −6.0 | −5.3 |
+    | Snare Crack, clap on it | −7.2 | −9.4 | **−10.0** |
+    | Snare compression, clap on it | −9.9 | −9.4 | **−10.4** |
+    | Kick saturation, bass under it | impossible | **−5.9** | −5.2 |
+    | Clap −6 dB, on the snare | −5.1 | −4.6 | **−5.3** |
+    | Kick Top +6 dB, hats in range | −10.5 | −8.4 | **−18.7** |
+    | Open-hat Decay, crash under it | −2.1 | −2.0 | −2.2 |
 
-  - *Correction:* Claude earlier said a mask "can't do compression or attack and decay shaping".
-    It can, as time-varying gains, but less accurately and with pre-echo. Only saturation and
-    clipping are truly impossible for it.
-  - A hybrid (an STFT estimate plus time-domain processors) scores the same as the bands, so the
-    extra STFT resynthesis buys nothing here.
-  - *Claude's recommendation, now evidence-based:* **6 time-domain bands**, keeping the hybrid as a
-    fallback if real loops show that 6 bands are too coarse. Analysis stays STFT either way.
-  - The agents review this proposal with `prompts/03-review-claude-engine.md` before you decide.
+  - **New recommendation (it replaces Claude's earlier one): the hybrid dual-resolution engine.**
+    - **Estimate:** an STFT soft-mask estimate of each active drum, with N = 1024 / hop 128 below
+      1.5 kHz and N = 256 / hop 64 above.
+    - **Processing:** that drum's real time-domain processors (EQ, compressor, transient shaper,
+      saturator, clipper) run on the estimate, and y = x + Σ (P(x̂) − x̂).
+    - **Where it came from:** this is Agent 2's verdict plus both agents' dual-resolution idea. It
+      beats the 6 bands clearly on transients and on the kick click versus hats, and it can do
+      everything the mask can't.
+    - **Latency:** about 21 ms for the STFT plus a short split filter, inside the 30 ms lookahead.
+  - **Honest expectation:** where two sounds share a range at the same moment, **every** method is
+    only about 70–90% right for level and dynamics, and about 40% for Decay. A kick change partly
+    moves a bass under it. The ear test at home decides whether that's audible.
+  - Still untested: real multitrack stems, stereo, and the two decay ideas (A1's predictive decay,
+    A2's spectral floor). They become the first `dsp/` tests in phase 3.
 - **D2: Lookahead.** Fixed at 30 ms, or adjustable 10–40 ms (A1)?
-  *Claude's recommendation:* **fixed 30 ms for version 1.** Shorter than that, the hat and cymbal
-  decisions fail, and FL compensates the latency anyway. A low-latency mode can come in phase 5.
+  *Claude's recommendation:* **fixed 30 ms for version 1.** The detection needs it, and the hybrid
+  engine's ~21 ms latency fits inside it. FL compensates the delay. A low-latency mode can come in
+  phase 5.
