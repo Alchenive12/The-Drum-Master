@@ -9,6 +9,21 @@
 > - **Screenshots:** in `docs/screenshots/`.
 > - **Background:** `docs/01-concept.md` (look and feel) and `docs/05-features.md` (F1, F2).
 
+## The room and the very tall master [user, 2026-09-30]
+- **Background:** an eerie, dark, grey room with a little blue in it, late at night.
+  - Faded striped wallpaper with damp stains.
+  - A tall cracked window high on the left, with cold moonlight falling in a shaft across the
+    floorboards and dust drifting in the light.
+  - An **old dusty drum set** in the dark back corner: a split bass-drum head, a floor tom under a
+    dust sheet, tarnished cymbals.
+  - The Puppet Show keeps its velvet theatre, because it's "the show".
+- **The master is very tall:** his bowed head (the mask) hangs in at the top, and **his legs stand
+  in the room behind the strings**.
+  - Very long, skinny and bowed outwards, with knobbly knees.
+  - Charcoal pinstripe trousers with a cold moonlit edge, and long curled pointed shoes on the
+    floor.
+  - His sleeves are the same charcoal suit.
+
 ## Art
 - **Everything is drawn in code as vector graphics** [Claude]. This environment has no AI image
   generator, and vector art stays sharp at every window size.

@@ -24,6 +24,13 @@ const juce::Colour glow       { 0xff8fd18a };   // sickly green: meters, playhea
 const juce::Colour wood       { 0xff4a3322 };
 const juce::Colour woodLight  { 0xff7a5a3c };
 const juce::Colour string     { 0xffcfc5b0 };
+// the late-night room (grey, dark, a little blue)
+const juce::Colour wall       { 0xff1c222c };
+const juce::Colour wallDark   { 0xff0d1016 };
+const juce::Colour moon       { 0xffa9bccf };
+const juce::Colour floorBoard { 0xff1a1d22 };
+const juce::Colour oldMetal   { 0xff7c8794 };
+const juce::Colour oldShell   { 0xff3a3f4a };
 } // namespace colours
 
 inline juce::Font serif (float height, bool bold = false)

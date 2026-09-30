@@ -412,6 +412,7 @@ edit, and strings side by side and centred. Claude decided the rest:
   - long bony hands with dark nails and frayed gold cuffs, arms reaching down from the body;
   - a wooden control bar.
 - **Colours:** black, maroon velvet, bone, dim gold, and a sickly green for "alive" things.
+- **Update (user):** the background is now a late-night grey-blue room with an old drum set, and the master is very tall, with his skinny legs standing in the room. The velvet stays only for The Puppet Show.
 - **Font:** the system serif.
 - **Top bar:** LISTEN (auto detect: clears the strings and forgets the loop), + STRING,
   PUPPET SHOW, bypass (power symbol), ? (about).

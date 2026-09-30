@@ -195,7 +195,9 @@ public:
     void paint (juce::Graphics& g) override
     {
         const auto r = getLocalBounds().toFloat();
-        art::stage (g, r, model.flicker);
+        art::room (g, r, model.flicker, static_cast<float> (model.now));
+        art::oldDrumSet (g, { 975.0f, 406.0f }, 0.68f, model.flicker * 0.8f);
+        art::legs (g, 550.0f, 452.0f, model.sway * 1.5f, 1.0f);   // the master is very tall: his legs stand in the room
 
         layout();
         // the master: mask above, arms reaching down, hands holding the bar
@@ -417,9 +419,9 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        g.fillAll (colours::night);
-        // spotlight on the drum
-        g.setGradientFill (juce::ColourGradient (colours::stageLight.brighter (0.2f), 210.0f, 300.0f, colours::night, 210.0f, 620.0f, true));
+        g.fillAll (colours::wallDark);
+        // cold moonlight spot on the drum
+        g.setGradientFill (juce::ColourGradient (colours::wall.brighter (0.35f), 210.0f, 300.0f, colours::wallDark, 210.0f, 620.0f, true));
         g.fillEllipse (juce::Rectangle<float> (420.0f, 640.0f).withCentre ({ 210.0f, 330.0f }));
         g.setColour (colours::goldDim.withAlpha (0.5f));
         g.drawVerticalLine (400, 30.0f, 660.0f);
@@ -635,7 +637,8 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        art::stage (g, getLocalBounds().toFloat(), 1.0f);
+        art::room (g, getLocalBounds().toFloat(), 1.0f, 0.0f);
+        art::legs (g, 550.0f, 452.0f, 0.0f, 1.0f);
         art::hand (g, { 330.0f, 250.0f }, 150.0f, true, 0.0f, 440.0f);
         art::hand (g, { 770.0f, 250.0f }, 150.0f, false, 0.0f, 660.0f);
         art::mask (g, 550.0f, 110.0f, 230.0f, 0.0f);
@@ -666,7 +669,8 @@ public:
     void resized() override { back.setBounds (20, 14, 110, 30); }
     void paint (juce::Graphics& g) override
     {
-        art::stage (g, getLocalBounds().toFloat(), 1.0f);
+        art::room (g, getLocalBounds().toFloat(), 1.0f, 0.0f);
+        art::oldDrumSet (g, { 975.0f, 406.0f }, 0.68f, 0.8f);
         g.setFont (serif (34.0f, true));
         g.setColour (colours::gold);
         g.drawText ("THE DRUM MASTER", 200, 110, 700, 44, juce::Justification::centred);

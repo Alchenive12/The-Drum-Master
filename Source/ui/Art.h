@@ -82,6 +82,195 @@ inline void stage (Graphics& g, Rectangle<float> r, float flicker)
     g.strokePath (val, juce::PathStrokeType (1.0f));
 }
 
+/** Late at night in a dark, bare room (grey, a little blue): wallpaper, a tall window letting in
+    moonlight that falls across the floorboards, an old dusty drum set in the back corner, dust
+    drifting in the light. `time` animates the dust, `flicker` dims everything for a moment. */
+inline void room (Graphics& g, Rectangle<float> r, float flicker, float time)
+{
+    const float horizon = r.getY() + r.getHeight() * 0.6f;   // where the wall meets the floor
+    const auto vp = Point<float> (r.getCentreX(), r.getY() + r.getHeight() * 0.42f);   // vanishing point
+
+    // back wall: faded vertical wallpaper stripes, darker towards the corners
+    g.setGradientFill (juce::ColourGradient (c::wall.brighter (0.08f * flicker), vp.x, vp.y, c::wallDark, r.getX(), r.getY(), true));
+    g.fillRect (r.withBottom (horizon));
+    for (int i = 0; i < 44; ++i)
+    {
+        const float x = r.getX() + r.getWidth() * static_cast<float> (i) / 44.0f;
+        g.setColour (c::wallDark.withAlpha (i % 2 == 0 ? 0.25f : 0.1f));
+        g.fillRect (Rectangle<float> (x, r.getY(), r.getWidth() / 88.0f, horizon - r.getY()));
+    }
+    for (int i = 0; i < 30; ++i)   // damp stains, fixed pattern
+    {
+        const float x = r.getX() + r.getWidth() * std::fmod (static_cast<float> (i) * 0.6180339f, 1.0f);
+        const float y = r.getY() + (horizon - r.getY()) * std::fmod (static_cast<float> (i) * 0.4142135f + 0.1f, 1.0f);
+        g.setColour (c::wallDark.withAlpha (0.12f));
+        g.fillEllipse (Rectangle<float> (40.0f + static_cast<float> ((i * 37) % 60), 26.0f + static_cast<float> ((i * 53) % 40)).withCentre ({ x, y }));
+    }
+
+    // floor: boards running towards the vanishing point
+    g.setGradientFill (juce::ColourGradient (c::floorBoard.darker (0.6f), 0.0f, horizon, c::floorBoard.brighter (0.05f), 0.0f, r.getBottom(), false));
+    g.fillRect (r.withTop (horizon));
+    g.setColour (c::wallDark.withAlpha (0.7f));
+    for (int i = -14; i <= 14; ++i)
+    {
+        const float bx = vp.x + static_cast<float> (i) * r.getWidth() * 0.09f;
+        const float t = (horizon - vp.y) / (r.getBottom() - vp.y);
+        g.drawLine (vp.x + (bx - vp.x) * t, horizon, bx, r.getBottom(), 1.0f);
+    }
+    // baseboard
+    g.setColour (c::wallDark);
+    g.fillRect (Rectangle<float> (r.getX(), horizon - 8.0f, r.getWidth(), 8.0f));
+    g.setColour (c::oldShell.withAlpha (0.5f));
+    g.drawHorizontalLine (juce::roundToInt (horizon - 8.0f), r.getX(), r.getRight());
+
+    // the window, high on the left, and its cold light across the floor
+    const auto win = Rectangle<float> (r.getX() + r.getWidth() * 0.09f, r.getY() + r.getHeight() * 0.12f, r.getWidth() * 0.12f, r.getHeight() * 0.33f);
+    g.setGradientFill (juce::ColourGradient (c::moon.withAlpha (0.55f * flicker), win.getCentreX(), win.getY(), c::moon.withAlpha (0.18f), win.getCentreX(), win.getBottom(), false));
+    g.fillRect (win);
+    g.setColour (c::wallDark);
+    g.drawRect (win, 5.0f);
+    g.fillRect (Rectangle<float> (win.getCentreX() - 2.5f, win.getY(), 5.0f, win.getHeight()));
+    g.fillRect (Rectangle<float> (win.getX(), win.getCentreY() - 2.5f, win.getWidth(), 5.0f));
+    g.setColour (c::wallDark.withAlpha (0.55f));   // a crack across one pane
+    g.drawLine (win.getX() + win.getWidth() * 0.6f, win.getY() + 4.0f, win.getX() + win.getWidth() * 0.85f, win.getCentreY() - 3.0f, 1.0f);
+    Path shaft;
+    shaft.startNewSubPath (win.getX(), win.getY());
+    shaft.lineTo (win.getRight(), win.getY());
+    shaft.lineTo (win.getRight() + r.getWidth() * 0.26f, r.getBottom());
+    shaft.lineTo (win.getX() + r.getWidth() * 0.06f, r.getBottom());
+    shaft.closeSubPath();
+    g.setGradientFill (juce::ColourGradient (c::moon.withAlpha (0.10f * flicker), win.getCentreX(), win.getBottom(), c::moon.withAlpha (0.0f), win.getCentreX() + r.getWidth() * 0.15f, r.getBottom(), false));
+    g.fillPath (shaft);
+
+    // dust drifting in the moonlight
+    for (int i = 0; i < 40; ++i)
+    {
+        const float seed = static_cast<float> (i) * 12.9898f;
+        const float fx = std::fmod (std::sin (seed) * 43758.5453f, 1.0f);
+        const float fy = std::fmod (std::fabs (std::cos (seed * 1.3f) * 23421.631f) + time * 0.012f * (0.5f + std::fabs (fx)), 1.0f);
+        const float y = win.getY() + (r.getBottom() - win.getY()) * fy;
+        const float x = win.getX() + (y - win.getY()) * 0.3f + std::fabs (fx) * win.getWidth() * 1.8f + 6.0f * std::sin (time * 0.3f + seed);
+        g.setColour (c::moon.withAlpha (0.25f + 0.2f * std::sin (time + seed)));
+        g.fillEllipse (Rectangle<float> (1.6f, 1.6f).withCentre ({ x, y }));
+    }
+}
+
+/** An old, dusty drum set standing in the dark back corner (base line = the floor under it). */
+inline void oldDrumSet (Graphics& g, Point<float> base, float scale, float flicker)
+{
+    const auto col = [flicker] (Colour cc) { return cc.withMultipliedBrightness (0.55f + 0.25f * flicker); };
+    auto stand = [&] (float x, float topY) {
+        g.setColour (col (c::oldMetal).withAlpha (0.8f));
+        g.drawLine (x, base.y, x, topY, 1.6f * scale);
+        g.drawLine (x, base.y, x - 12.0f * scale, base.y + 4.0f * scale, 1.2f * scale);
+        g.drawLine (x, base.y, x + 12.0f * scale, base.y + 4.0f * scale, 1.2f * scale);
+    };
+    auto disc = [&] (Point<float> cc, float w, float tilt) {
+        const auto d = Rectangle<float> (w, w * tilt).withCentre (cc);
+        g.setColour (col (c::oldMetal).withAlpha (0.9f));
+        g.fillEllipse (d);
+        g.setColour (col (c::wallDark));
+        g.drawEllipse (d, 1.0f);
+    };
+    // cymbal stands behind
+    stand (base.x - 70.0f * scale, base.y - 150.0f * scale);
+    disc ({ base.x - 70.0f * scale, base.y - 150.0f * scale }, 78.0f * scale, 0.28f);
+    stand (base.x + 95.0f * scale, base.y - 128.0f * scale);
+    disc ({ base.x + 95.0f * scale, base.y - 128.0f * scale }, 64.0f * scale, 0.3f);
+    // hi-hat on the left
+    stand (base.x - 115.0f * scale, base.y - 88.0f * scale);
+    disc ({ base.x - 115.0f * scale, base.y - 92.0f * scale }, 44.0f * scale, 0.22f);
+    disc ({ base.x - 115.0f * scale, base.y - 86.0f * scale }, 44.0f * scale, 0.22f);
+    // floor tom under a dust sheet
+    Path sheet;
+    const float fx = base.x + 70.0f * scale;
+    sheet.startNewSubPath (fx - 30.0f * scale, base.y);
+    sheet.quadraticTo (fx - 34.0f * scale, base.y - 50.0f * scale, fx - 10.0f * scale, base.y - 62.0f * scale);
+    sheet.quadraticTo (fx + 14.0f * scale, base.y - 70.0f * scale, fx + 32.0f * scale, base.y - 52.0f * scale);
+    sheet.quadraticTo (fx + 38.0f * scale, base.y - 20.0f * scale, fx + 34.0f * scale, base.y);
+    sheet.closeSubPath();
+    g.setColour (col (c::boneShadow).withAlpha (0.55f));
+    g.fillPath (sheet);
+    // bass drum and a rack tom on it
+    const auto kick = Rectangle<float> (92.0f * scale, 92.0f * scale).withCentre ({ base.x, base.y - 46.0f * scale });
+    g.setColour (col (c::oldShell));
+    g.fillEllipse (kick);
+    g.setColour (col (c::boneShadow).withAlpha (0.7f));
+    g.fillEllipse (kick.reduced (9.0f * scale));
+    g.setColour (col (c::oldShell).withAlpha (0.7f));
+    g.drawEllipse (kick.reduced (28.0f * scale), 1.5f * scale);   // faded logo ring
+    g.setColour (col (c::wallDark).withAlpha (0.5f));
+    g.drawLine (kick.getX() + 20.0f * scale, kick.getY() + 18.0f * scale, kick.getCentreX() + 4.0f * scale, kick.getCentreY() + 10.0f * scale, 1.0f);   // a split in the head
+    const auto tom = Rectangle<float> (46.0f * scale, 30.0f * scale).withCentre ({ base.x - 18.0f * scale, kick.getY() - 8.0f * scale });
+    g.setColour (col (c::oldShell));
+    g.fillRoundedRectangle (tom, 4.0f * scale);
+    g.setColour (col (c::boneShadow).withAlpha (0.8f));
+    g.fillEllipse (tom.withHeight (9.0f * scale).translated (0.0f, -4.0f * scale));
+    // snare on its stand
+    stand (base.x - 72.0f * scale, base.y - 48.0f * scale);
+    const auto sn = Rectangle<float> (48.0f * scale, 18.0f * scale).withCentre ({ base.x - 72.0f * scale, base.y - 56.0f * scale });
+    g.setColour (col (c::oldShell).brighter (0.1f));
+    g.fillRect (sn);
+    g.setColour (col (c::boneShadow));
+    g.fillEllipse (sn.withHeight (8.0f * scale).translated (0.0f, -4.0f * scale));
+}
+
+/** The master's legs: very tall and skinny, from above the window down to the floor, standing in
+    the room behind the strings. Pinstriped trousers, knobbly knees, bony ankles, long pointed shoes. */
+inline void legs (Graphics& g, float centreX, float floorY, float sway, float scale)
+{
+    for (int side = -1; side <= 1; side += 2)
+    {
+        const float s = static_cast<float> (side);
+        const float hipX = centreX + s * 30.0f * scale + sway;
+        const auto knee = Point<float> (centreX + s * 92.0f * scale + sway * 0.5f, floorY * 0.5f);   // bowed outwards
+        const auto ankle = Point<float> (centreX + s * 60.0f * scale, floorY - 16.0f * scale);
+        const float thigh = 24.0f * scale, shin = 16.0f * scale;
+        Path leg;   // trouser outline: hip -> knee -> ankle, tapering
+        leg.startNewSubPath (hipX - thigh, -10.0f);
+        leg.lineTo (hipX + thigh, -10.0f);
+        leg.quadraticTo (knee.x + thigh * 0.8f, (knee.y - 10.0f) * 0.6f, knee.x + thigh * 0.55f, knee.y);
+        leg.quadraticTo (ankle.x + shin * 0.9f, (knee.y + ankle.y) * 0.5f, ankle.x + shin * 0.45f, ankle.y);
+        leg.lineTo (ankle.x - shin * 0.45f, ankle.y);
+        leg.quadraticTo (ankle.x - shin * 0.9f, (knee.y + ankle.y) * 0.5f, knee.x - thigh * 0.55f, knee.y);
+        leg.quadraticTo (knee.x - thigh * 0.8f, (knee.y - 10.0f) * 0.6f, hipX - thigh, -10.0f);
+        leg.closeSubPath();
+        g.setGradientFill (juce::ColourGradient (c::oldShell.darker (0.2f), knee.x - s * thigh, 0.0f, c::wallDark.darker (0.5f), knee.x + s * thigh, 0.0f, false));
+        g.fillPath (leg);
+        g.setColour (c::moon.withAlpha (0.28f));   // cold moonlit rim, so the silhouette reads
+        g.strokePath (leg, juce::PathStrokeType (1.2f * scale));
+        g.saveState();   // faint pinstripes
+        g.reduceClipRegion (leg);
+        g.setColour (c::oldMetal.withAlpha (0.18f));
+        for (int k = -3; k <= 3; ++k)
+        {
+            const float o = static_cast<float> (k) * thigh * 0.28f;
+            g.drawLine (hipX + o, -10.0f, knee.x + o * 0.7f, knee.y, 0.8f);
+            g.drawLine (knee.x + o * 0.7f, knee.y, ankle.x + o * 0.4f, ankle.y, 0.8f);
+        }
+        g.restoreState();
+        g.setColour (c::oldShell.withAlpha (0.6f));   // the knee pokes through the cloth
+        g.fillEllipse (Rectangle<float> (thigh * 1.1f, thigh * 0.9f).withCentre (knee));
+        // bony ankle, then the long pointed shoe pointing outwards
+        g.setColour (c::boneShadow);
+        g.fillRect (Rectangle<float> (shin * 0.55f, 10.0f * scale).withCentre (ankle.translated (0.0f, 6.0f * scale)));
+        Path shoe;
+        const float sy = floorY - 2.0f * scale;
+        shoe.startNewSubPath (ankle.x - s * 12.0f * scale, sy);
+        shoe.lineTo (ankle.x - s * 10.0f * scale, sy - 12.0f * scale);
+        shoe.quadraticTo (ankle.x + s * 10.0f * scale, sy - 16.0f * scale, ankle.x + s * 26.0f * scale, sy - 8.0f * scale);
+        shoe.quadraticTo (ankle.x + s * 52.0f * scale, sy - 6.0f * scale, ankle.x + s * 60.0f * scale, sy - 14.0f * scale);   // curled tip
+        shoe.quadraticTo (ankle.x + s * 50.0f * scale, sy + 1.0f, ankle.x + s * 20.0f * scale, sy);
+        shoe.closeSubPath();
+        g.setColour (c::night);
+        g.fillPath (shoe);
+        g.setColour (c::oldMetal.withAlpha (0.35f));
+        g.strokePath (shoe, juce::PathStrokeType (1.0f));
+        g.setColour (c::night.withAlpha (0.5f));   // shadow on the floor
+        g.fillEllipse (Rectangle<float> (70.0f * scale, 8.0f * scale).withCentre ({ ankle.x + s * 18.0f * scale, floorY + 2.0f * scale }));
+    }
+}
+
 /** The master's porcelain mask, cut off by the top edge: only chin, cheeks and the stitched smile. */
 inline void mask (Graphics& g, float cx, float visibleBottom, float width, float breathe)
 {
@@ -131,8 +320,10 @@ inline void hand (Graphics& g, Point<float> grip, float size, bool left, float s
     sleeve.lineTo (wrist.x - wristW, wrist.y);
     sleeve.quadraticTo (shoulderX - dir * size * 0.4f + sway, wrist.y * 0.4f, shoulderX - topW + sway, -20.0f);
     sleeve.closeSubPath();
-    g.setGradientFill (juce::ColourGradient (c::night, shoulderX, 0.0f, c::velvetDark.brighter (0.1f), wrist.x, wrist.y, false));
+    g.setGradientFill (juce::ColourGradient (c::night, shoulderX, 0.0f, c::oldShell.darker (0.25f), wrist.x, wrist.y, false));
     g.fillPath (sleeve);
+    g.setColour (c::moon.withAlpha (0.18f));
+    g.strokePath (sleeve, juce::PathStrokeType (1.0f));
     g.setColour (c::goldDim);   // frayed gold cuff
     g.drawLine (wrist.x - wristW, wrist.y, wrist.x + wristW, wrist.y, 2.0f);
     for (int i = 0; i < 5; ++i)
