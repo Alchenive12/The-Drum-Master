@@ -29,6 +29,7 @@
 #include "HitClassifier.h"
 #include "HitTracker.h"
 #include "OnsetDetector.h"
+#include "PuppetShow.h"
 #include "SpscQueue.h"
 
 #include <algorithm>
@@ -84,6 +85,7 @@ public:
         detector.reset();
         classifier.reset();
         tracker.reset();
+        puppetShow.reset();
         for (auto& e : estimator) e.reset();
         for (auto& ch : channels) ch.reset();
         for (auto& ch : advFilters) for (auto& f : ch) f.reset();
@@ -107,8 +109,8 @@ public:
     void setParams (const DrumParams& p) noexcept
     {
         params = p;
-        const auto settings = mapParams (p);
-        for (std::size_t t = 0; t < numDrumTypes; ++t) channels[t].setSettings (settings[t]);
+        mapped = mapParams (p);
+        applyChannelSettings();
         const float s01 = std::clamp (p.global.sensitivity / 100.0f, 0.0f, 1.0f);
         detector.setSensitivity (s01);
         classifier.setSensitivity (s01);
@@ -162,6 +164,9 @@ public:
             updateShares();
             spectraChanged = false;
         }
+        // The Puppet Show glides once per block; its gains go into each drum's reserved EQ slots.
+        puppetShow.advance (params.puppetShow, static_cast<double> (numSamples) / sr);
+        applyChannelSettings();
         const bool stereo = right != nullptr && right != left;
         std::array<float, numDrumTypes> stemL {}, stemR {};
         const std::size_t preLen = preDelay + 1, dryLen = static_cast<std::size_t> (lookahead) + 1;
@@ -228,6 +233,9 @@ public:
         }
     }
 
+    /** The Puppet Show (meters: meterDb() is safe on the UI thread). */
+    const PuppetShow& puppet() const noexcept { return puppetShow; }
+
     /** For tests: the tracker (gates, hit ages). */
     const HitTracker& hitTracker() const noexcept { return tracker; }
     /** For tests: current share of type t in low-band bin k / high-band bin k. */
@@ -242,6 +250,7 @@ private:
     void onHit (const ClassifiedHit& h) noexcept
     {
         tracker.addHit (h);
+        puppetShow.addHit (h);
         // Presence: every type this hit contains. Misc is also "the unexplained rest" of other
         // hits, so it only counts when it is the hit's main type.
         for (std::size_t u = 0; u < numDrumTypes; ++u)
@@ -269,6 +278,27 @@ private:
         for (std::size_t b = 0; b < numBands; ++b) typePower[t][b] += a * (h.rise[b] / total - typePower[t][b]);
         ++typeCount[t];
         spectraChanged = true;
+    }
+
+    /** Knob settings + The Puppet Show's current gains (slots 8-10) -> the drum chains. */
+    void applyChannelSettings() noexcept
+    {
+        using PS = PuppetShow;
+        auto settings = mapped;
+        const std::size_t s0 = ChannelSettings::firstPuppetSlot;
+        auto put = [&settings] (DrumType t, std::size_t slot, EqSlot e) { settings[index (t)].eq[slot] = e; };
+        const float sub = puppetShow.gainDb (PS::kickSub), mud = puppetShow.gainDb (PS::mud);
+        const float pres = puppetShow.gainDb (PS::presence), click = puppetShow.gainDb (PS::kickClick), air = puppetShow.gainDb (PS::air);
+        put (DrumType::kick, s0, { EqSlot::Kind::lowShelf, 70.0f, 0.707f, sub });
+        put (DrumType::kick, s0 + 1, { EqSlot::Kind::bell, 250.0f, 1.0f, mud });
+        put (DrumType::kick, s0 + 2, { EqSlot::Kind::bell, 3500.0f, 0.9f, click });
+        put (DrumType::snare, s0, { EqSlot::Kind::bell, 400.0f, 1.0f, mud });
+        put (DrumType::snare, s0 + 1, { EqSlot::Kind::bell, 3000.0f, 0.9f, pres });
+        put (DrumType::clap, s0, { EqSlot::Kind::bell, 3000.0f, 0.9f, pres });
+        put (DrumType::misc, s0, { EqSlot::Kind::bell, 300.0f, 1.0f, mud });   // toms are misc
+        for (auto t : { DrumType::closedHat, DrumType::openHat, DrumType::crash, DrumType::ride })
+            put (t, s0, { EqSlot::Kind::highShelf, 8000.0f, 0.707f, air });
+        for (std::size_t t = 0; t < numDrumTypes; ++t) channels[t].setSettings (settings[t]);
     }
 
     float advanced (float y, std::size_t c) noexcept
@@ -356,6 +386,8 @@ private:
     std::int64_t lookahead = 2400, inputIndex = 0;
     std::size_t preDelay = 0, prePos = 0, dryPos = 0, binsLo = 0, binsHi = 0;
     DrumParams params;
+    std::array<ChannelSettings, numDrumTypes> mapped {};
+    PuppetShow puppetShow;
 
     OnsetDetector detector;
     HitClassifier classifier;

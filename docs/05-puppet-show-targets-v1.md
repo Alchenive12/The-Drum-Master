@@ -73,3 +73,32 @@
   shifted so its mean lands on the real-kit median: M1 +7.9, M4 −31.4.
 - **Limits:** E-GMD kits are well-produced kit samples, not finished mixes. v2 (the user's packs,
   named by genre) measures the real genre medians directly.
+
+## Targets in the plugin's scale (what `PuppetShow.h` uses)
+- **Why a second scale:** the plugin doesn't take a 150 ms window per hit. It measures each hit's
+  *rise spectrum* (what the hit added in its first ~40 ms, from the classifier), and on the same
+  kits that reads differently. The kick sub, for example, has not fully built up yet.
+- **How:**
+  - The same 43 kits (5 performances each) were run through the plugin's own detector, classifier
+    and measurement (`research/puppet-show/measure_rise.cpp`).
+  - Each row above was shifted by (plugin median − 150 ms median).
+  - The genre differences and knob limits are unchanged.
+
+| | M1 | M2 | M3 | M4 | M5 |
+|---|---|---|---|---|---|
+| Real kits, 150 ms scale | +7.9 | −13.1 | −11.0 | −31.4 | −3.2 |
+| Real kits, plugin scale | −1.6 | −3.8 | −13.6 | −28.8 | −2.3 |
+| Shift | −9.5 | +9.3 | −2.6 | +2.6 | +0.9 |
+
+| Genre (plugin scale) | M1 kick sub | M2 mud | M3 snare presence | M4 kick click | M5 cymbal air |
+|---|---|---|---|---|---|
+| Rock | −4.0 | 0.0 | −7.9 | −28.9 | −4.3 |
+| Pop | −2.8 | −2.2 | −7.1 | −28.6 | −2.4 |
+| EDM | +1.6 | −3.4 | −6.9 | −29.1 | −2.1 |
+| Metal | −5.9 | −3.2 | −6.9 | −24.2 | −3.4 |
+| Hip-hop | +3.1 | −0.5 | −9.1 | −33.2 | −4.6 |
+
+- **Mud (M2) is the least trustworthy row.** It mixes kick and snare hits, so the shift depends on
+  how many of each a loop has. On the MDB rock tracks it reads −10 to −13, so The Puppet Show asks
+  for its full +3.7 dB body boost. `VERIFY(dsp)` at home. This is the first row to re-measure in
+  v2.

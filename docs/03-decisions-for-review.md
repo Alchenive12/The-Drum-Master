@@ -23,6 +23,7 @@
 | D-C13 | Plugin wiring choices (state, Link, bypass, what isn't saved) | plugin | open |
 | D-C14 | The Puppet Show: prompt 04 sent to agents, DSP waits for their answers | feature | open |
 | D-C15 | Puppet Show v1 targets: averaged answers, kick rows anchored to real kits, M1 redefined | feature | open |
+| D-C16 | The Puppet Show engine (built from Claude's prompt-04 design; agents answered only the targets) | feature | open |
 
 ---
 
@@ -352,6 +353,49 @@ estimate and adds only its change, scaled by the hit gate.
 - **To undo:** use the plain averages in `research/puppet-show/average_targets.py`'s first table.
   Kick sub and click would then almost never be reachable, so the EQ would push every kick to
   its max cut or boost.
+
+## D-C16 — The Puppet Show engine
+
+`dsp/include/plugin_dsp/PuppetShow.h`, wired in `DrumEngine.h`.
+
+Built from Claude's prompt-04 design. The agents answered only the targets (prompt 05); prompt 04
+is optional.
+
+- **Listening:** always on, even while switched off, so it acts the moment you switch it on.
+  - It measures clean, single-type, confident hits from their rise spectrum.
+  - A band the hit added nothing to isn't measured.
+  - After 4 hits, one odd hit can't move the average by more than 12 dB.
+  - The average covers about 12 hits.
+- **Correcting:**
+  - aim = target + span × knob. For Mud it's minus, so + means cut more.
+  - Soft dead zone: the genre tolerance.
+  - gain = Depth × 0.8 × error, clamped to the knob's max boost / cut.
+  - Nothing before 4 hits; boosts at half size before 12 hits.
+- **Glide:**
+  - towards a stronger correction: τ 1.5 s (cuts 1 s);
+  - back: τ 3 s;
+  - Off or Depth 0: to exactly 0 in about 0.2 s.
+- **Where it acts:** 3 reserved EQ slots in each drum's own chain (the user's knobs use the other
+  8), so it acts only while that drum plays.
+
+  | Knob | Drums | Band |
+  |---|---|---|
+  | Bass boost | kick | low shelf 70 Hz |
+  | Mud control | kick / snare / toms (misc) | bells at 250 / 400 / 300 Hz |
+  | Mid presence | snare, clap | bell 3 kHz |
+  | Mid presence (click) | kick | bell 3.5 kHz |
+  | High control | hats, cymbals | high shelf 8 kHz |
+
+  It measures the raw hits, before the user's own settings, so it never fights the user's EQ.
+- **Meters:** `meterDb()` is safe to read from the UI thread (phase 4).
+- **Not built (v1):** the "harsh peak" bell from the prompt-04 design. The genre profiles
+  (808 / acoustic kick …) suggested by agent 1 are parked for later.
+- **Checked:**
+  - 12/12 tests on gcc, Clang and ASan/UBSan: measurement math, no action before 4 hits, the
+    correction formula, limits, the knob signs, off → 0.
+  - With The Puppet Show on and nothing measured, the engine is still bit-exact transparent.
+  - Plugin rebuilt; pluginval passes at strictness 5.
+  - On real MDB loops the corrections stay within their limits.
 
 ---
 

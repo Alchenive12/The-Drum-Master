@@ -5,7 +5,7 @@
 //     delta = gate · (P(x̂) − x̂),        output = dry + Σ over types of delta
 // so a neutral chain, or gate 0, adds exactly nothing.
 //
-// Chain: EQ (up to 8 filters) -> compressor -> attack / tail shaping (by the hit's age) ->
+// Chain: EQ (up to 11 filters: 8 for the knobs, 3 for The Puppet Show) -> compressor -> attack / tail shaping (by the hit's age) ->
 // saturation -> soft clip -> level -> width. Filters and the compressor run all the time, so
 // there's no click when a gate opens. No allocation.
 #pragma once
@@ -33,7 +33,8 @@ struct EqSlot
 
 struct ChannelSettings
 {
-    static constexpr std::size_t numEq = 8;
+    static constexpr std::size_t numEq = 11;          // 0-7: the user's knobs (DrumMapping), 8-10: The Puppet Show
+    static constexpr std::size_t firstPuppetSlot = 8;
     std::array<EqSlot, numEq> eq {};
     float levelDb = 0.0f;
     float attack = 0.0f;        // -1..1: -15 dB .. +9 dB over the attack window
