@@ -9,7 +9,7 @@
 - Build system:                  CMake
 - Formats:                       VST3 / AU (macOS only) / Standalone
 - Platforms built at home:       Windows (FL Studio, i7-11700K, RTX 3060 Ti) — VST3
-- CI:                            .github/workflows/build.yml (Linux, macOS, Windows + DSP tests + pluginval)
+- CI:                            .github/workflows/build.yml (Linux, Windows + DSP tests + pluginval; macOS dropped)
 - Last known-good commit:        main after PR #2 (CI green on Linux, macOS, Windows)
 
 ## Current trip
@@ -25,6 +25,7 @@
 | [untested] docs: phase 1 concept draft | docs/01-concept.md, REMOTE_LOG.md | 0 | Docs only; dsp tests re-run in sandbox (level 2, pass) |
 | [untested] docs: concept answers (1b, AD2-style mixing, puppet clicks) | docs/01-concept.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: approve concept, add prompt 01 + Claude's blind answer | docs/01-concept.md, prompts/, REMOTE_LOG.md | 0 | Docs only |
+| [untested] CI: drop macOS job | build.yml, REMOTE_LOG.md | 0 | Approved by user; how to re-add is in the build.yml header |
 
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
@@ -57,4 +58,4 @@
 - CI minutes: private repo, macOS counts 10x, Windows 2x. CI also runs on docs-only pushes.
 - Overlapping hits: per-band processing means kick/snare/hat bands must be split cleanly (crossover phase + summing must stay transparent when all settings are neutral).
 - FL Studio: lookahead latency must be reported correctly or the loop drifts (VERIFY(host) at home).
-- AU/macOS not needed for home testing; macOS CI job costs 10x minutes — consider dropping (CI change, ask first).
+- No macOS CI any more: AU and Mac builds are unverified until the job is re-added.
