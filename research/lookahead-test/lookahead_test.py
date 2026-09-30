@@ -6,7 +6,7 @@
 # the onset, which is always available). We sweep W and measure per-type F1. The lookahead the
 # plugin needs is about W + 3 ms (onset decision + 2 ms gate pre-roll).
 #
-# The classifier is a generic learned model (gradient-boosted trees on log-mel features), NOT the
+# The classifier is a generic learned model (Extra-Trees on log-mel features), NOT the
 # plugin's rule-based scorer. It measures how much information exists in the first W ms; the plugin's
 # hand-made rules will do somewhat worse, but they hit the same knee.
 #
@@ -21,7 +21,7 @@ import glob, os, sys, time
 import numpy as np
 import soundfile as sf
 from scipy.signal import resample_poly
-from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.metrics import f1_score
 
 SR = 44100
@@ -206,7 +206,8 @@ def evaluate(dataset, groups, types_present, label):
             te = np.isin(groups, test_g); tr = ~te
             for c in range(len(types_present)):
                 if y[tr, c].sum() < 3: continue
-                clf = HistGradientBoostingClassifier(max_iter=150, learning_rate=0.1, class_weight="balanced", random_state=0)
+                clf = ExtraTreesClassifier(n_estimators=300, min_samples_leaf=2, class_weight="balanced_subsample",
+                                           n_jobs=-1, random_state=0)
                 clf.fit(X[tr], y[tr, c])
                 pred[te, c] = clf.predict(X[te])
         f1 = [f1_score(y[:, c], pred[:, c], zero_division=0) for c in range(len(types_present))]
