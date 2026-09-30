@@ -13,7 +13,7 @@
 - Last known-good commit:        main (template, CI green on Linux, macOS, Windows)
 
 ## Current trip
-- Pipeline phase:                2b — algorithm compared (docs/02-algorithm.md), waiting for D1 (processing domain) + D2 (lookahead)
+- Pipeline phase:                2b — engine shootout done (research/engine-shootout); prompt 03 (agents review Claude's engine) out; D1 + D2 open
 - Branch: claude/away-from-home-protocol-pc5bni (session-assigned; stands in for `remote/<feature>`)
 - Goal: approve docs/02-algorithm.md, then parameter table closes phase 2
 
@@ -30,11 +30,12 @@
 | [untested] docs: agent answers + per-drum settings comparison | prompts/answers/agent1.md, agent2.md, docs/02-mix-settings.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: approve mix settings, add detection prompt 02 + Claude's blind answer | docs/02-mix-settings.md, prompts/02-detection-algorithm.md, prompts/answers/02-claude.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: agent answers to prompt 02 + algorithm comparison | prompts/answers/02-agent1.md, 02-agent2.md, docs/02-algorithm.md, REMOTE_LOG.md | 0 | Docs only; some agent formulas lost in paste (marked) |
+| [untested] research: engine shootout STFT mask vs time bands + review prompt 03 | research/engine-shootout/*, docs/02-algorithm.md, prompts/03-review-claude-engine.md, REMOTE_LOG.md | 2 | Pure C++ compiled + run in sandbox; not in plugin build/CI |
 
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
 ## Next steps
-1. User decides D1 (STFT masks vs time-domain bands) and D2 (fixed 30 ms vs adjustable lookahead).
+1. Agents' answers to prompts/03 → prompts/answers/03-<agent>.md; then user decides D1 (bands vs STFT) and D2 (lookahead).
 2. Parameter table (ID, range, default, unit) → docs/02-parameters.md closes phase 2.
 3. Phase 3: dsp/ core (synthetic drum generator + offline WAV harness first), then JUCE wiring.
 
@@ -59,6 +60,7 @@
 - Deep-edit controls: from prompt 01 (Claude blind + 2 agents); rule = in if ≥2 of 3 sources, single-source judged on merit. Every drum has Level + Decay.
 - Parked for phase 5: open-hat choke by closed hat, crash duck on kick/snare (Agent 1).
 - Algorithm backbone (all 3 sources): STFT analysis, per-band flux onsets, template split + rule-based soft scores, Misc below confidence, tail = drop below peak/floor or retrigger, loop adaptation capped at 50 %.
+- Engine shootout (synthetic stems, exact ideal): time-domain bands beat STFT masks on transient (−20 vs −11 dB), compression (−25 vs −19 dB), saturation (−40 vs impossible), tie on level; decay-shortening ~−4 dB for all (mixed-audio limit). Hybrid ≈ bands.
 - No ML in v1: rule-based first; RF/MLP only if rules miss targets on real loops (needs 9-class labelled data).
 - Mix settings approved: kick clipping kept (off by default); Dubstepify = long tail + added ~200 Hz body; clap compression kept.
 

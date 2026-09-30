@@ -211,21 +211,31 @@ The **high** ones are candidates for an advanced page later. [A1's idea]
 - **Host latency reporting.** `VERIFY(host)` in FL Studio at home. A manual offset slider (A1)
   is added only if FL turns out to need it.
 - **CPU spikes** with 4+ simultaneous hits. Fallback: cap the features computed per event. [A2]
+- **Decay controls are inherently approximate on a mixed loop.** The shootout scored about 60% for
+  every method, because tails share bands with other drums. Fallback: a gentle range, and
+  documenting it honestly.
 
 ## Decisions for you
-- **D1: How the processing is done.** This is the only real disagreement.
-  - **STFT masks** (A1 + A2, the majority): each drum's settings become a gain for each frequency
-    slice. The frequency precision is very fine and it's simple for volume and EQ.
-    **But:** a per-frequency gain can't do compression, saturation, clipping, or attack and decay
-    shaping. Those are most of the controls you approved: the kick clip, the snare macros, Crack,
-    Decay on every drum. It also smears sharp transients by up to about 20 ms, which is Agent 2's
-    own risk #1, and Agent 2 suggests adding a time-domain transient shaper to fix it.
-  - **Time-domain bands** (Claude, and also Agent 1's own fallback): the audio is split into 6 bands
-    that sum back perfectly. Each drum's real EQ, compressor, saturator and transient shaper run on
-    its bands, blended in by share. Frequency ownership is coarser (6 bands instead of hundreds of
-    bins), but every approved control works and transients stay sharp.
-  - *Claude's recommendation:* **time-domain bands**, because your controls are mostly dynamics and
-    character. Analysis stays STFT either way.
+- **D1: How the processing is done.** This is the only real disagreement, now **measured** in
+  `research/engine-shootout/` (a synthetic loop with known stems, so the ideal result is exact):
+
+  | Test (error vs ideal, realistic shares) | STFT mask (A1 + A2) | 6 time bands (Claude) |
+  |---|---|---|
+  | Transparent at neutral | yes | yes |
+  | Kick level −6 dB | −27 dB | −29 dB (tie) |
+  | Snare Crack +6 dB | −11 dB, smears before the hit | **−20 dB, no smear** |
+  | Snare compression | −19 dB, smears before the hit | **−25 dB, no smear** |
+  | Kick saturation | **impossible** | **−40 dB** |
+  | Open-hat Decay shorter | −4 dB | −4 dB (weak for both: a limit of mixed audio) |
+
+  - *Correction:* Claude earlier said a mask "can't do compression or attack and decay shaping".
+    It can, as time-varying gains, but less accurately and with pre-echo. Only saturation and
+    clipping are truly impossible for it.
+  - A hybrid (an STFT estimate plus time-domain processors) scores the same as the bands, so the
+    extra STFT resynthesis buys nothing here.
+  - *Claude's recommendation, now evidence-based:* **6 time-domain bands**, keeping the hybrid as a
+    fallback if real loops show that 6 bands are too coarse. Analysis stays STFT either way.
+  - The agents review this proposal with `prompts/03-review-claude-engine.md` before you decide.
 - **D2: Lookahead.** Fixed at 30 ms, or adjustable 10–40 ms (A1)?
   *Claude's recommendation:* **fixed 30 ms for version 1.** Shorter than that, the hat and cymbal
   decisions fail, and FL compensates the latency anyway. A low-latency mode can come in phase 5.
