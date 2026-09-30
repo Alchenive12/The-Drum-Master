@@ -31,16 +31,27 @@ Generic smart EQs (Gullfoss, Soothe, Guardian Angel) have to guess what they're 
 Master **knows** that this hit is a kick and that one is a snare. So The Puppet Show compares
 **this kick** with **a typical kick in the chosen genre**, and it only acts during kicks.
 
-### Claude's proposed shape (to confirm, Q1 and Q2)
-- **It works as a layer, not by overwriting your knobs.**
-  - Each drum's setting = **your knob + Depth × the Puppet Show's suggestion**.
-  - The suggestion shows as a faint "ghost" mark on each knob, so you can see what it did.
-  - Moving Depth never erases your own tweaks, and your tweaks never fight the Puppet Show.
-- **It listens, then settles.** While the loop plays, the suggestions adapt. Once they're stable,
-  they hold still instead of moving all the time, so nothing pumps. A **"listen again"** action
-  starts a fresh pass.
-- **It uses controls that already exist** (per-drum EQ, Body, Crack, Tone, Decay), so it adds no
-  new processing stage and no new artifacts.
+### Decided (2026-09-30)
+- **It always listens actively, like Guardian Angel.** It's a dynamic EQ stage that keeps adapting
+  while the track plays. This replaces Claude's "listen then settle" proposal.
+- Because it's always moving, it's **its own stage**. It doesn't turn your knobs.
+  - Your per-drum knobs stay exactly where you put them.
+  - The Puppet Show's live changes show as **moving band meters** (like Guardian Angel's), so you
+    always see what it's doing.
+- **Knobs:**
+
+| Knob | What it does (plain words) | Guardian Angel counterpart |
+|---|---|---|
+| **Genre** | Which sound to aim for | — |
+| **Depth** | Master amount for everything below | Depth |
+| **Bass boost** | Adds low-end weight when the kick or low end is thinner than the genre wants | Biggify |
+| **High control** | Keeps the top end on target: tames harshness when it's too bright, adds air when it's too dull | Harshness + Sibilance |
+| **Mud control** | Cuts the boxy 200–500 Hz build-up when there's more than the genre wants | Mud |
+| **Mid presence** | Brings the snare crack, kick click and clap forward (about 1–5 kHz) when they're buried | — (new) |
+
+- **Keeping it from pumping** (lessons from Guardian Angel): slow, asymmetric attack and release
+  smoothing, smoothing done on the band settings (never the raw filter coefficients), a maximum dB
+  per band, and Depth as a global limit.
 
 ### Hard parts, stated honestly
 - **Genre targets** decide how good this feature is. Someone has to define what a trap kick, a rock
@@ -55,20 +66,28 @@ The detector keeps each drum type's **long-term average spectrum**. Auto-detect 
 and it's exactly the input The Puppet Show compares against its genre targets.
 
 ### Open questions (F1)
-- **Q1:** Should it be a layer with ghost marks (Claude's proposal), or should it simply set the
-  knobs?
-- **Q2:** Listen-then-settle with "listen again" (proposal), or keep adapting all the time?
+- ~~Q1 layer vs set knobs~~ **answered by the always-listening decision:** it's its own dynamic
+  stage, with live meters.
+- ~~Q2~~ **answered:** it always listens actively.
 - **Q3:** Which genres for v1? Proposal: trap, drill, hip-hop (boom bap), pop, rock, dubstep, house
   or techno, lo-fi. Add or remove any.
 - **Q4:** One Depth for everything, or Depth per drum group (kick, snare, hats)?
+- **Q9:** Should the four bands be **drum-aware** or act on the whole bus?
+  - *Claude's recommendation:* drum-aware. Bass boost acts on the kick, Mud control on
+    kick/snare/tom bodies, Mid presence on snare, clap and kick click, High control on hats and
+    cymbals. Each only acts during that drum's hits. This is the edge over Gullfoss and Guardian
+    Angel, which can't tell a kick from a bass.
+  - Whole bus is simpler, but it's just another smart EQ.
+- **Q10:** Can the four knobs also go **below zero**, to do the opposite (for example Bass boost
+  negative = tighten the low end), or only 0–100%?
 
 ---
 
-## F2 — The "what the puppet hears" visualizer
+## F2 — Shadow Play (the "what the puppet hears" visualizer)
 
 **Status:** approved for v1 · short phase 1 **draft** · UI (phase 4), but the data feed is built in
 phase 3.
-**Name idea:** **"Shadow Play"** (shadow puppetry, which fits the theme). The user decides.
+**Name:** **Shadow Play** (chosen by the user, 2026-09-30).
 
 ### In one sentence
 While the track plays, every detected hit is drawn as a shape: a **circle for the kick**, a
@@ -108,4 +127,4 @@ While the track plays, every detected hit is drawn as a shape: a **circle for th
 - **Q6:** Should the loop be drawn as a ring (proposal) or as a scrolling timeline, left to right?
 - **Q7:** Where does it live: behind the puppet master on the main screen, or on its own "stage"
   page?
-- **Q8:** What should it be called: "Shadow Play" or something else?
+- ~~Q8~~ **answered:** Shadow Play.

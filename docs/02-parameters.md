@@ -131,6 +131,10 @@ Anything more is added in phase 5.
 | `ps_enabled` | The Puppet Show on/off | off / on | **off** | — |
 | `ps_genre` | Genre | choice (list = F1 Q3) | first entry | — |
 | `ps_depth` | Depth | 0 – 100 | 50 | % (only acts when enabled) |
+| `ps_bass` | Bass boost | 0 – 100 (maybe −100 – +100, F1 Q10) | 50 | % |
+| `ps_high` | High control | 0 – 100 (maybe bipolar, Q10) | 50 | % |
+| `ps_mud` | Mud control | 0 – 100 (maybe bipolar, Q10) | 50 | % |
+| `ps_presence` | Mid presence | 0 – 100 (maybe bipolar, Q10) | 50 | % |
 
 ## 5. Plugin state (saved, not automatable)
 | Key | What | Default |
@@ -141,8 +145,8 @@ Anything more is added in phase 5.
 | `ui_zoom` | Which puppet or page is open | main |
 
 ## Totals
-- **Host parameters:** 6 global + 10 quick mix + 70 per drum + 4 advanced = **90**, plus 3 reserved for
-  The Puppet Show = **93**.
+- **Host parameters:** 6 global + 10 quick mix + 70 per drum + 4 advanced = **90**, plus 7 reserved for
+  The Puppet Show = **97**.
   - The per-drum 70: 12 kick + 14 snare + 6 closed hat + 7 open hat + 7 crash + 6 ride + 6 rim + 8
     clap + 4 misc.
   - FL Studio handles this comfortably. They're grouped by scope so its automation menu stays

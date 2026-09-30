@@ -130,9 +130,11 @@ Clicking the **puppet master himself** opens the advanced global page. It works 
   character, so we take the mood, never the design.
 
 ## Added features (2026-09-30, in v1, see `docs/05-features.md`)
-- **The Puppet Show:** a genre-aware smart EQ, **off by default**. The intended workflow is to open
+- **The Puppet Show:** a genre-aware smart EQ that **always listens actively**, like Guardian
+  Angel, and is **off by default**. Knobs: Genre, Depth, Bass boost, High control, Mud control, Mid
+  presence. The intended workflow is to open
   it first, pick a genre and Depth, and then fine-tune each drum.
-- **"What the puppet hears" visualizer:** every detected hit is drawn as a shape (kick = circle,
+- **Shadow Play**, the "what the puppet hears" visualizer: every detected hit is drawn as a shape (kick = circle,
   snare = triangle, …), rebuilding the loop as a picture while it plays.
 
 ## What it is NOT (for now)
