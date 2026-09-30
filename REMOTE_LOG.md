@@ -10,7 +10,7 @@
 - Formats:                       VST3 / AU (macOS only) / Standalone
 - Platforms built at home:       Windows (FL Studio, i7-11700K, RTX 3060 Ti) — VST3
 - CI:                            .github/workflows/build.yml (Linux, Windows + DSP tests + pluginval; macOS dropped)
-- Last known-good commit:        3ec2987 on this branch (rename; CI run 7 green on Linux + Windows incl. pluginval)
+- Last known-good commit:        b93f70e on this branch (dsp engine blocks; CI run 16 green on Linux + Windows incl. pluginval)
 
 ## Current trip
 - Pipeline phase:                3 — DSP core in dsp/ (phase 2 closed: concept, mix settings, algorithm, parameters all approved)
@@ -31,10 +31,10 @@
 | [untested] docs: approve mix settings, add detection prompt 02 + Claude's blind answer | docs/02-mix-settings.md, prompts/02-detection-algorithm.md, prompts/answers/02-claude.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: agent answers to prompt 02 + algorithm comparison | prompts/answers/02-agent1.md, 02-agent2.md, docs/02-algorithm.md, REMOTE_LOG.md | 0 | Docs only; some agent formulas lost in paste (marked) |
 | [untested] research: engine shootout STFT mask vs time bands + review prompt 03 | research/engine-shootout/*, docs/02-algorithm.md, prompts/03-review-claude-engine.md, REMOTE_LOG.md | 2 | Pure C++ compiled + run in sandbox; not in plugin build/CI |
-| [untested] dsp: streaming STFT (exact latency N-1) | StreamingStft.h, test_streaming_stft.cpp | 2 | -Werror + ASan/UBSan (gcc), clang Release |
-| [untested] dsp: complementary linear-phase split 1.5 kHz | LinearPhaseSplit.h, test_linear_phase_split.cpp | 2 | Perfect reconstruction at 44.1/48/96 kHz, ~2.6 ms |
-| [untested] dsp: dual-resolution estimator (multi-output STFT) | DualResEstimator.h, StreamingStft.h (MultiOutputStft), test_dual_res_estimator.cpp, REMOTE_LOG.md | 2 | Latency 20–30 ms at all rates (fits 50 ms); complementary shares sum to delayed input |
-| [untested] dsp: radix-2 FFT + tests; docs: creepy UI mood, phase 3 plan | dsp/include/plugin_dsp/Fft.h, dsp/tests/test_fft.cpp, docs/01-concept.md, REMOTE_LOG.md | 2 | Built with -Werror + ASan/UBSan in sandbox, vs naive DFT |
+| [untested] dsp: streaming STFT (exact latency N-1) | StreamingStft.h, test_streaming_stft.cpp | 3 | -Werror + ASan/UBSan (gcc), clang Release; CI run 16 (b93f70e) green Linux + Windows (MSVC /W4 /WX), pluginval |
+| [untested] dsp: complementary linear-phase split 1.5 kHz | LinearPhaseSplit.h, test_linear_phase_split.cpp | 3 | Perfect reconstruction at 44.1/48/96 kHz, ~2.6 ms; CI run 16 (b93f70e) green Linux + Windows (MSVC /W4 /WX), pluginval |
+| [untested] dsp: dual-resolution estimator (multi-output STFT) | DualResEstimator.h, StreamingStft.h (MultiOutputStft), test_dual_res_estimator.cpp, REMOTE_LOG.md | 3 | Latency 20–30 ms at all rates (fits 50 ms); complementary shares sum to delayed input; CI run 16 (b93f70e) green Linux + Windows (MSVC /W4 /WX), pluginval |
+| [untested] dsp: radix-2 FFT + tests; docs: creepy UI mood, phase 3 plan | dsp/include/plugin_dsp/Fft.h, dsp/tests/test_fft.cpp, docs/01-concept.md, REMOTE_LOG.md | 3 | Built with -Werror + ASan/UBSan in sandbox, vs naive DFT; CI run 16 (b93f70e) green Linux + Windows (MSVC /W4 /WX), pluginval |
 | [untested] docs: approve D1/D2, parameter table | docs/02-algorithm.md, docs/02-parameters.md, REMOTE_LOG.md | 0 | Docs only; 90 host parameters with permanent IDs |
 | [untested] research: lookahead detection test on real drums | research/lookahead-test/*, docs/02-algorithm.md, REMOTE_LOG.md | 2 | MDB Drums (23 acoustic tracks) + electronic loops from held-out one-shots; knee 40–50 ms |
 | [untested] research: shootout v2 after agents' review | research/engine-shootout/shootout2.cpp, RESULTS2.txt, README.md, prompts/answers/03-*.md, docs/02-algorithm.md, REMOTE_LOG.md | 2 | Same-band overlaps, dual-res STFT, spectral metric, jitter; B loses, hybrid dual-res wins |
