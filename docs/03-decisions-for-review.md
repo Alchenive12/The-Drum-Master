@@ -327,7 +327,13 @@ estimate and adds only its change, scaled by the hit gate.
   - The protocol's phase 2 compares Claude with the agents, and the genre targets are the part
     most likely to be wrong.
   - The `ps_*` parameters exist, so sessions stay compatible, but they do nothing yet.
-- **Please:** paste prompt 04 to your two agents, as with prompts 01–03.
+- **Update (user, 2026-09-30):**
+  - v1 targets = the **average** of the agents' answers to prompt 05 (one fixed table, so
+    averaging is mechanical, cell by cell).
+  - v2 = measured from the user's genre-named sample packs.
+  - Claude's blind table (`prompts/answers/05-claude.md`) is averaged in as one more answer with
+    equal weight, unless the user says agents only.
+- **Please:** paste prompt 05 to your two agents.
 
 ---
 

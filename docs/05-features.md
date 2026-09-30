@@ -9,7 +9,12 @@
 
 ## F1 — The Puppet Show (genre-aware smart EQ)
 
-**Status:** approved for v1 · short phase 1 **approved 2026-09-30** · phase 2 started: `prompts/04-puppet-show.md` is ready for the agents, and Claude's blind answer is in `prompts/answers/04-claude.md`.
+**Status:** approved for v1 · short phase 1 **approved 2026-09-30** · phase 2 started. **Decided (user, 2026-09-30):**
+- **v1 uses generic genre targets:** the average of the agents' answers to
+  `prompts/05-puppet-show-genre-targets.md` (a fixed table: 5 measurements × 5 genres, plus knob
+  span and max boost/cut).
+- **v2 measures the targets** from the user's own genre-named sample packs.
+- Prompt 04 (full design review) is now optional.
 **Inspiration:** Guardian Angel in HarmonyEngine (a smart dynamic EQ for vocals). We port the ideas,
 not the code, because `dsp/` stays free of JUCE.
 
