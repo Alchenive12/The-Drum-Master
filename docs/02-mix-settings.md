@@ -1,7 +1,7 @@
 <!-- File: docs/02-mix-settings.md -->
 # The Drum Master — Phase 2a: Per-drum mix settings
 
-> Status: **proposal, waiting for approval** (3 decisions for the user at the bottom).
+> Status: **approved (2026-09-30)**. D1–D3 are resolved at the bottom.
 > Sources: `prompts/answers/claude.md` (written blind, first) · `agent1.md` · `agent2.md`.
 > Ranges and units are settled later, in the phase-2 parameter table. This file only decides
 > **which controls exist**.
@@ -29,9 +29,9 @@
 | Claude suggested | Outcome | Why |
 |---|---|---|
 | Snare Room | **Dropped** | Only 1 of 3. Rockify gets its "room" from a longer decay instead. |
-| Clap Compression | **Dropped** | Only 1 of 3. Attack plus Saturation cover it. |
+| Clap Compression | **Kept by the user** | Only 1 of 3, but the user wants it (D3). |
 | Misc kept to 3 controls | **Changed to 4** | Both agents gave Misc an Attack control. It's added. |
-| Kick Clipping kept | **Your decision** (see D1) | Both agents said remove it, but you asked for it. |
+| Kick Clipping kept | **Kept by the user**, off by default (D1) | Both agents said remove it. |
 
 ## Decided controls per drum
 
@@ -45,7 +45,7 @@
 | Decay | Shorter/longer boom | **all 3** |
 | Compression | Evens out and thickens | decided in phase 1 |
 | Saturation | Harmonics so the kick is heard on small speakers | decided in phase 1 |
-| Clipping | Shaves peaks for loudness | phase 1, **see D1** |
+| Clipping | Soft clip on the kick band only, **off by default** | phase 1, D1 |
 | EQ | Fine-tuning | decided in phase 1 |
 
 - Agent 2 said Low-end boost and Bottom overlap. It's fixed by giving each its own range: boost =
@@ -63,7 +63,7 @@
 | Compression | decided in phase 1 | — |
 | Saturation | decided in phase 1 | — |
 | EQ | decided in phase 1 | — |
-| Dubstepify · Popify · Rockify · Rimify | Blendable genre macros | decided in phase 1, **see D2** |
+| Dubstepify · Popify · Rockify · Rimify | Blendable genre macros | decided in phase 1, D2 |
 
 - Out: removing the snare EQ (A1 only; you asked for EQ).
 
@@ -92,9 +92,9 @@ Level · **Ping** (all 3) · **Bell** (A1 + A2) · **Wash** (all 3) · **Tone** 
 Level · **Click** (attack, all 3) · **Body/Wood** (A1 + A2) · **Tone** (Claude + A1) · **Decay** (all 3)
 · **Saturation** (all 3, optional in 2 of them).
 
-### Clap (7)
+### Clap (8)
 Level · **Attack** (A1 + A2) · **Body** (all 3) · **Tone** (all 3) · **Decay** (all 3) · **Width**
-(A1 + A2) · **Saturation** (optional, Claude + A1).
+(A1 + A2) · **Compression** (Claude; kept by the user, D3) · **Saturation** (optional, Claude + A1).
 
 ### Misc (4, kept minimal on purpose)
 Level · **Tone** (all 3) · **Attack** (A1 + A2) · **Decay** (all 3).
@@ -106,7 +106,7 @@ Misc hits are uncertain, so strong controls there would affect the wrong drums.
 | Popify | Clean, tight, bright, out of the vocal's way | Cut low-mid mud, brighter top, snappy compression, shorter decay, slight crack boost | all 3 |
 | Rockify | Fat, natural, roomy | More body, warm saturation, gentler/parallel compression, longer decay | all 3 |
 | Rimify | Sharp, woody, rim-forward | Cut body, boost upper-mids, more crack, short decay | all 3 |
-| Dubstepify | Huge, aggressive, clipped, loud | Heavy saturation and clipping, hard compression, more crack; **tail and body direction: see D2** | split |
+| Dubstepify | Huge, aggressive, clipped, loud | Heavy saturation and clipping, hard compression, more crack, **long tail with the noise compressed up, added body around 200 Hz** (D2) | Claude + A2 (A1 wanted short and thin) |
 
 **Blending:** each macro contributes in proportion to its knob. Where macros move the same
 setting, their contributions add up, with a limit so stacking all four never goes extreme.
@@ -129,16 +129,12 @@ Plus Link, as decided in phase 1.
   real cost of answer 1b. Phase 2 has to decide how gently the changes fade in and out.
 - **Misdetection is audible:** closed vs open hat, ride vs crash, rim vs snare, clap vs snare.
   Detection sensitivity, a neutral Misc, and smooth transitions are the safety net.
-- **Too many controls.** There are about 63 per-drum controls, plus quick mix, globals and advanced.
+- **Too many controls.** There are about 64 per-drum controls, plus quick mix, globals and advanced.
   The quick mix and macros must cover 90% of use. Every parameter gets a stable ID from day one.
 
-## Decisions for you
-- **D1: Kick Clipping.** Both agents say drop it: stacked clippers, and distortion of other sounds
-  in the low band. Global Clip already exists. Keep it on the kick page, or drop it?
-  *Claude's recommendation:* keep it, since you asked for it. Default is off, and it's a soft clip
-  that only acts on the kick band.
-- **D2: Dubstepify tail.** Short and tight (Agent 1), or long, with the noise tail compressed up
-  (Claude + Agent 2)? Also: should it add body around 200 Hz (Agent 2) or cut it (Agent 1)?
-  *Claude's recommendation:* long tail plus added body, the "huge" dubstep snare. Pick whatever
-  matches the snares in the tracks you make.
-- **D3: Approve the lists above**, or name any control to add or remove.
+## Decisions (resolved 2026-09-30)
+- **D1: Kick Clipping** stays on the kick page, **off by default**. It's a soft clip acting only on
+  the kick band.
+- **D2: Dubstepify** gets a **long tail** (noise tail compressed up) and **added body around
+  200 Hz**, which is the Claude + Agent 2 version.
+- **D3:** the lists are approved as written, with **clap Compression added back**.

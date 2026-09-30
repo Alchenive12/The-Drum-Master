@@ -13,9 +13,9 @@
 - Last known-good commit:        main (template, CI green on Linux, macOS, Windows)
 
 ## Current trip
-- Pipeline phase:                2a — per-drum controls compared (docs/02-mix-settings.md), waiting for D1–D3
+- Pipeline phase:                2b — per-drum controls approved; prompt 02 (detection algorithm) out to other models
 - Branch: claude/away-from-home-protocol-pc5bni (session-assigned; stands in for `remote/<feature>`)
-- Goal: approve per-drum control list, then detection-algorithm prompt (phase 2b)
+- Goal: collect answers to prompts/02, compare vs prompts/answers/02-claude.md → docs/02-algorithm.md
 
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
@@ -28,12 +28,13 @@
 | [untested] CI: drop macOS job | build.yml, REMOTE_LOG.md | 0 | Approved by user; how to re-add is in the build.yml header |
 | [untested] Rename template to The Drum Master | CMakeLists.txt, Source/*, README.md, REMOTE_LOG.md | 0 | Mechanical rename; CI to confirm (level 3) |
 | [untested] docs: agent answers + per-drum settings comparison | prompts/answers/agent1.md, agent2.md, docs/02-mix-settings.md, REMOTE_LOG.md | 0 | Docs only |
+| [untested] docs: approve mix settings, add detection prompt 02 + Claude's blind answer | docs/02-mix-settings.md, prompts/02-detection-algorithm.md, prompts/answers/02-claude.md, REMOTE_LOG.md | 0 | Docs only |
 
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
 ## Next steps
-1. User answers D1 (kick clipping), D2 (Dubstepify tail/body), D3 (approve lists) in docs/02-mix-settings.md.
-2. Phase 2b: detection-algorithm prompt (prompts/02) + Claude's blind answer → docs/02-algorithm.md.
+1. Paste other models' answers to prompts/02 → prompts/answers/02-<model>.md.
+2. Fair comparison vs 02-claude.md → docs/02-algorithm.md (approved by user).
 3. Parameter table (ID, range, default, unit) closes phase 2.
 
 ## Open VERIFY markers
@@ -55,6 +56,7 @@
 - Quick-mix groups: Kick / Snare (+rim, clap) / Hats (+ride, crash); volume + 1–2 character knobs; Link switch keeps dB offsets moving together.
 - Deep-edit controls: from prompt 01 (Claude blind + 2 agents); rule = in if ≥2 of 3 sources, single-source judged on merit. Every drum has Level + Decay.
 - Parked for phase 5: open-hat choke by closed hat, crash duck on kick/snare (Agent 1).
+- Mix settings approved: kick clipping kept (off by default); Dubstepify = long tail + added ~200 Hz body; clap compression kept.
 
 ## Known risks
 - JUCE 9 is newer than Claude's training data (e.g. module split into juce_audio_processors_headless): verify APIs against the 9.0.3 source.
