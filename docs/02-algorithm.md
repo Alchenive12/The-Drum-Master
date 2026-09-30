@@ -48,8 +48,9 @@
    range (see D1 for how), then the global section.
 
 ### 2. Lookahead
-- **D = 30 ms**, reported to the host as latency (Claude + A2; A1 says 20). At the moment a hit
-  starts playing, about 28 ms of it has already been analysed.
+- **D = 50 ms** (measured, see D2; the proposals were Claude 30, A2 30, A1 20), reported to the
+  host as latency. At the moment a hit starts playing, about 48 ms of it has already been
+  analysed.
 - **The gate starts 2 ms before the transient**, so no attack is ever cut. [Claude]
 - **Hat revision:** a hit is labelled provisionally, then re-scored once decay evidence is clear
   (up to 100 ms after the onset). If the label changes, the settings crossfade over 5 ms.
@@ -154,7 +155,7 @@ Fixed in both D1 options:
 ### 8. Internal constants (merged)
 | Name | Meaning | Value | Sensitivity |
 |---|---|---|---|
-| D | Lookahead / latency | 30 ms | high |
+| D | Lookahead / latency | 50 ms (measured knee 40–50) | high |
 | N / hop | STFT size / hop | 1024 / 128 (2048 / 256 at ≥ 88.2 kHz) | medium |
 | α | Onset threshold multiplier | 2.4 − 1.2·s | high |
 | δ | Threshold floor | 0.5 dB | low |
@@ -248,7 +249,22 @@ The **high** ones are candidates for an advanced page later. [A1's idea]
     moves a bass under it. The ear test at home decides whether that's audible.
   - Still untested: real multitrack stems, stereo, and the two decay ideas (A1's predictive decay,
     A2's spectral floor). They become the first `dsp/` tests in phase 3.
-- **D2: Lookahead.** Fixed at 30 ms, or adjustable 10–40 ms (A1)?
-  *Claude's recommendation:* **fixed 30 ms for version 1.** The detection needs it, and the hybrid
-  engine's ~21 ms latency fits inside it. FL compensates the delay. A low-latency mode can come in
-  phase 5.
+- **D2: Lookahead.** **Measured** in `research/lookahead-test/` on real drums: 23 recorded
+  acoustic tracks (6,513 hits) plus 100 electronic loops built from held-out 808/909 one-shots
+  (4,319 hits). The classifier may only see the first W ms of each hit. Average precision (1.0 =
+  perfect):
+
+  | W | Electronic, overall | Acoustic, overall | What's still missing |
+  |---|---|---|---|
+  | 10 ms | 0.63 | 0.39 | snare, clap, crash far from done |
+  | 20 ms | 0.82 | 0.45 | clap just arrived (0.82); cymbals climbing |
+  | 30 ms | 0.85 | 0.49 | kick, snare and closed hat settled |
+  | **40 ms** | **0.87** | 0.52 | knee: electronic essentially settled |
+  | **50 ms** | **0.87** | 0.54 | same as 100 ms on electronic |
+  | 100 ms | 0.87 | 0.59 | only acoustic open hat and crash still gain |
+
+  - Under 20 ms isn't enough. 30 ms (the earlier guess) is close but not at the knee.
+  - Acoustic open hat and crash keep improving to 100 ms+, because their identity is in the tail.
+    That's handled by the "label now, correct within 100 ms" crossfade, not by more lookahead.
+  - *Claude's recommendation:* **50 ms fixed** for version 1. Latency is cheap here (one instance
+    per project, compensated by FL), and the hybrid engine's ~21 ms fits inside it.
