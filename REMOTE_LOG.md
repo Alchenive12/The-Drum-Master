@@ -10,7 +10,7 @@
 - Formats:                       VST3 / AU (macOS only) / Standalone
 - Platforms built at home:       Windows (FL Studio, i7-11700K, RTX 3060 Ti) — VST3
 - CI:                            .github/workflows/build.yml (Linux, Windows + DSP tests + pluginval; macOS dropped)
-- Last known-good commit:        f1829ea on this branch (learned classifier + plugin; CI run 31 green on Linux + Windows incl. DSP tests + pluginval; Windows VST3 in the run's artifacts)
+- Last known-good commit:        0f3ba40 on this branch (The Puppet Show engine + learned classifier + plugin; CI run 32 green on Linux + Windows incl. DSP tests + pluginval; Windows VST3 in the run's artifacts)
 
 ## Current trip
 - Pipeline phase:                3 — DSP core in dsp/ (phase 2 closed: concept, mix settings, algorithm, parameters all approved)
@@ -20,7 +20,7 @@
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
 |---|---|---|---|
-| [untested] dsp: The Puppet Show engine (listen, correct, glide) + targets in the plugin's scale | PuppetShow.h (new), DrumEngine.h, DrumChannel.h (11 EQ slots, 8-10 reserved), test_puppet_show.cpp, research/puppet-show/{measure_kits.py, measure_rise.cpp, run_on_loops.cpp}, docs/05-puppet-show-targets-v1.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | gcc, clang, ASan/UBSan 12/12; plugin rebuilt, pluginval strictness 5 SUCCESS; bit-exact transparent with Puppet Show on and nothing measured |
+| [untested] dsp: The Puppet Show engine (listen, correct, glide) + targets in the plugin's scale | PuppetShow.h (new), DrumEngine.h, DrumChannel.h (11 EQ slots, 8-10 reserved), test_puppet_show.cpp, research/puppet-show/{measure_kits.py, measure_rise.cpp, run_on_loops.cpp}, docs/05-puppet-show-targets-v1.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 3 | gcc, clang, ASan/UBSan 12/12; plugin rebuilt, pluginval strictness 5 SUCCESS; bit-exact transparent with Puppet Show on and nothing measured; CI run 32 (0f3ba40) green Linux + Windows |
 | [untested] docs: Puppet Show v1 genre targets (average of 3 answers, kick rows anchored to 43 real kits) | prompts/answers/05-agent1.md, 05-agent2.md, research/puppet-show/{average_targets.py, measure_kits.py}, docs/05-puppet-show-targets-v1.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | Averaging + real-kit measurement run in sandbox; no plugin code changed |
 | [untested] prompts: 05 Puppet Show genre targets (fixed table to average) + Claude's blind answer | prompts/05-puppet-show-genre-targets.md, prompts/answers/05-claude.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] dsp: learned hit classifier (225 log-mel -> 96 -> 9) replaces the rules; weights from Groove + E-GMD (CC BY 4.0) + own synth | HitClassifier.h (rewritten, same API), HitClassifierWeights.h (generated), test_hit_classifier.cpp (sanity thresholds), research/classifier-eval/eval.cpp, research/classifier-train/train.py, docs/02-algorithm.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 3 | gcc, clang, ASan/UBSan 11/11; plugin rebuilt + pluginval strictness 5 SUCCESS. Real drums (never trained on): acoustic kick 0.83 / snare 0.65 / CH 0.51, electronic kick 0.78 / snare 0.53 / CH 0.58 (rules: 0.63/0.61/0.27, 0.78/0.24/0.22); CI run 31 (f1829ea) green Linux + Windows |
