@@ -124,6 +124,10 @@ Clicking the **puppet master himself** opens the advanced global page. It works 
   global page.
 - The generic JUCE editor stands in until phase 4 (UI). The puppet master is the phase-4 goal, and
   everything above works without it.
+- **Mood (added 2026-09-30):** **creepy**, close in feeling to the FNaF puppet: a dark stage,
+  stiff marionette movement, a pale mask-like presence you never fully see, and strings that twitch.
+  It must be **our own original character and art**. The FNaF Puppet is someone else's copyrighted
+  character, so we take the mood, never the design.
 
 ## What it is NOT (for now)
 - Not a drum replacer or sampler: it never adds sounds, it only shapes the hits that are already
