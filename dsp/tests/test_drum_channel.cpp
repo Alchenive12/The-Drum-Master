@@ -127,25 +127,31 @@ int main()
         DSP_CHECK_NEAR (dsptest::rms (oq.l, 4800) / dsptest::rms (quiet, 4800), makeup, 0.02 * makeup);
     }
 
-    // 6) Saturation keeps small signals, squashes peaks; clip holds its ceiling.
+    // 6) Saturation holds a -6 dBFS peak, lifts quiet parts (at most +8 dB), rounds loud peaks;
+    //    clip holds its ceiling.
     {
         ChannelSettings s;
         s.sat = 1.0f;
         DrumChannel ch;
         ch.prepare (sr);
         ch.setSettings (s);
-        std::vector<float> small (s1k);
+        std::vector<float> small (s1k), half (s1k);
         for (auto& v : small) v *= 0.01f;
-        DSP_CHECK_NEAR (dsptest::rms (run (ch, small, small, 1.0f).l) / dsptest::rms (small), 1.0, 0.01);
+        for (auto& v : half) v *= 0.5f;
+        const double lift = dsptest::rms (run (ch, small, small, 1.0f).l) / dsptest::rms (small);
+        DSP_CHECK (lift > 2.0 && lift < 2.6);   // 2.5 / tanh (2.5) = 2.51
         float peak = 0.0f;
+        for (float v : run (ch, half, half, 1.0f).l) peak = std::max (peak, std::fabs (v));
+        DSP_CHECK_NEAR (peak, 0.5, 1e-3);
+        peak = 0.0f;
         for (float v : run (ch, s1k, s1k, 1.0f).l) peak = std::max (peak, std::fabs (v));
-        DSP_CHECK (peak <= 0.1f + 1e-6f);   // tanh(10 x) / 10
+        DSP_CHECK (peak < 0.52f);
         ChannelSettings c;
-        c.clip = 1.0f;   // ceiling -18 dBFS
+        c.clip = 1.0f;   // ceiling -12 dBFS
         ch.setSettings (c);
         peak = 0.0f;
         for (float v : run (ch, s1k, s1k, 1.0f).l) peak = std::max (peak, std::fabs (v));
-        DSP_CHECK_NEAR (dsptest::toDb (static_cast<double> (peak)), -18.0, 0.01);
+        DSP_CHECK_NEAR (dsptest::toDb (static_cast<double> (peak)), -12.0, 0.01);
         DSP_CHECK (dsptest::allFinite (run (ch, s1k, s1k, 1.0f).l));
     }
 

@@ -42,8 +42,8 @@ struct ChannelSettings
     float tailDb = 0.0f;        // static tail gain after the attack window (ride Wash), dB
     float comp = 0.0f;          // 0..1
     float compAttackMs = 5.0f;
-    float sat = 0.0f;           // 0..1 tanh drive
-    float clip = 0.0f;          // 0..1 soft-clip ceiling 0 .. -18 dBFS
+    float sat = 0.0f;           // 0..1 tanh saturation, level held around -6 dBFS (see saturate())
+    float clip = 0.0f;          // 0..1 soft-clip ceiling 0 .. -12 dBFS
     float width = 1.0f;         // 0..2 side gain
 
     bool isNeutral() const noexcept
@@ -108,8 +108,9 @@ public:
         makeupDb = s.comp > 0.0f ? 0.5f * (-thresholdDb - 6.0f) * (1.0f - 1.0f / ratio) : 0.0f;
         compAttack = static_cast<float> (std::exp (-1.0 / (static_cast<double> (std::max (0.1f, s.compAttackMs)) * 0.001 * sr)));
         if (compWasOff) smoothedCompGain = dbToGain (makeupDb);   // start settled, no fade-in
-        drive = 1.0f + 9.0f * s.sat;
-        ceiling = dbToGain (-18.0f * s.clip);
+        drive = 1.0f + 4.0f * s.sat;
+        satNorm = satRef / std::tanh (drive * satRef);
+        ceiling = dbToGain (-12.0f * s.clip);
     }
 
     /** One stereo sample of this drum's estimate. age = samples since the current hit's onset
@@ -146,8 +147,8 @@ public:
 
         if (settings.sat > 0.0f)
         {
-            l = std::tanh (drive * l) / drive;
-            r = std::tanh (drive * r) / drive;
+            l = saturate (l);
+            r = saturate (r);
         }
         if (settings.clip > 0.0f)
         {
@@ -200,6 +201,13 @@ private:
         return tailGainUp * dbToGain (down);
     }
 
+    /** tanh curve scaled so a -6 dBFS peak stays at -6 dBFS: quieter parts come up (thicker, more
+        sustain), louder peaks are rounded off. Blended in by the amount, so 0+ is continuous. */
+    float saturate (float x) const noexcept
+    {
+        return x + settings.sat * (satNorm * std::tanh (drive * x) - x);
+    }
+
     float softClip (float x) const noexcept
     {
         const float u = x / ceiling;
@@ -216,6 +224,7 @@ private:
     float attackGain = 1.0f, tailGainUp = 1.0f, tailSlopeDbPerSample = 0.0f, level = 1.0f;
     std::int64_t attackLen = 384;
     float thresholdDb = -6.0f, ratio = 1.5f, makeupDb = 0.0f, compAttack = 0.9f, releaseCoeff = 0.999f;
-    float envelope = 0.0f, smoothedCompGain = 1.0f, drive = 1.0f, ceiling = 1.0f;
+    float envelope = 0.0f, smoothedCompGain = 1.0f, drive = 1.0f, satNorm = 1.0f, ceiling = 1.0f;
+    static constexpr float satRef = 0.5f;
 };
 } // namespace plugin_dsp

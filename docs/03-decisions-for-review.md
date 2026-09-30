@@ -19,6 +19,7 @@
 | D-C9 | Known limits we accept for v1 | detection | open |
 | D-C10 | Per-drum processor chain (order, ranges, what each amount means) | processing | open |
 | D-C11 | What every knob and snare macro moves (the hidden curves) | processing | open |
+| D-C12 | How the engine splits the loop into per-drum estimates | processing | open |
 
 ---
 
@@ -207,8 +208,11 @@ estimate and adds only its change, scaled by the hit gate.
   - half of the static gain reduction comes back as make-up.
   - **Please check:** the thresholds are absolute (dBFS), so a very quiet loop compresses less.
     `VERIFY(dsp)` at home with real loops.
-- **Saturation:** tanh with drive 1 → 10, normalised so quiet parts keep their level.
-- **Clip:** a cubic soft clip; its ceiling goes 0 → −18 dBFS.
+- **Saturation:**
+  - a tanh curve with drive 1 → 5, scaled so a −6 dBFS peak stays at −6 dBFS;
+  - quiet parts come up by at most +8 dB (thicker, more sustain) and loud peaks are rounded;
+  - it blends in with the amount, so there's no jump when you leave 0.
+- **Clip:** a cubic soft clip; its ceiling goes 0 → −12 dBFS.
 - **No oversampling yet** on saturation and clip, so some aliasing at high drive. `VERIFY(dsp)`: add
   2× oversampling if it's audible.
 - **Width:** mid/side, where the side gain = width (0–200%).
@@ -250,6 +254,40 @@ estimate and adds only its change, scaled by the hit gate.
   All four at 100% therefore stay sane, and opposite moves cancel (Rimify cuts what Dubstepify
   adds).
 - **Link** (quick mix) is handled where the knobs move (the JUCE layer), not in the DSP.
+
+## D-C12 — How the engine splits the loop into per-drum estimates
+
+`dsp/include/plugin_dsp/DrumEngine.h`.
+
+- **What the phase-2 plan left open:** the estimator (D1) needs a share for each drum per frequency
+  bin, but a hit is only classified about 40–48 ms after its onset. The STFT frames around an onset
+  are analysed earlier than that (from about +26 ms), so time-varying shares can't know yet which
+  drum is hitting.
+- **Chosen:** shares are fixed per bin and change only slowly.
+
+  share(type, bin) = presence × spectrum / Σ over the enabled types
+
+  - **Spectrum:** each type's long-term average hit spectrum. It starts generic and is learned from
+    this loop's clean, single-type hits.
+  - **Presence:** 0.02 for a type never heard, rising to 1 after 4 hits containing it. Misc counts
+    only when it's a hit's main type.
+
+  **Timing comes from the gates, not the shares.** A drum's settings act only while its gate is
+  open, on the part of the spectrum that drum owns.
+- **Result on the synthetic loop:**
+  - kick −6 dB → −5.8 dB below 120 Hz, and the hats in between move 0.00 dB;
+  - every setting neutral → output = input delayed by exactly 50 ms, bit for bit, at
+    44.1/48/96 kHz.
+- **Limits** (`VERIFY(dsp)` at home):
+  - A drum's settings also act on anything else in its bins while its gate is open. Example: the
+    kick's gate also moves a bass note under 120 Hz during the kick. This is the known cost of
+    answer 1b.
+  - Spectral shares smear about ±10 ms. On a hard edge the change can start a few ms before the
+    2 ms pre-roll.
+- **CPU:** about 21% of one sandbox core for stereo 48 kHz with every drum processing. The home
+  i7-11700K should be well under that. `VERIFY(host)` in FL.
+  - **Possible optimisation:** skip the estimates of drums whose settings are all neutral. Not done
+    yet, because switching them on mid-playback could click.
 
 ---
 
