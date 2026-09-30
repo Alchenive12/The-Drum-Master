@@ -15,7 +15,7 @@
 ## Current trip
 - Pipeline phase:                3 — DSP core in dsp/ (phase 2 closed: concept, mix settings, algorithm, parameters all approved)
 - Branch: claude/away-from-home-protocol-pc5bni (session-assigned; stands in for `remote/<feature>`)
-- Goal: phase 3 step 2 — synthetic drum generator + onset detection (STFT analysis, per-band flux)
+- Goal: phase 3 step 3 — classification (templates + rule scores) incl. per-type long-term spectra (Puppet Show hook)
 
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
@@ -31,6 +31,8 @@
 | [untested] docs: approve mix settings, add detection prompt 02 + Claude's blind answer | docs/02-mix-settings.md, prompts/02-detection-algorithm.md, prompts/answers/02-claude.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: agent answers to prompt 02 + algorithm comparison | prompts/answers/02-agent1.md, 02-agent2.md, docs/02-algorithm.md, REMOTE_LOG.md | 0 | Docs only; some agent formulas lost in paste (marked) |
 | [untested] research: engine shootout STFT mask vs time bands + review prompt 03 | research/engine-shootout/*, docs/02-algorithm.md, prompts/03-review-claude-engine.md, REMOTE_LOG.md | 2 | Pure C++ compiled + run in sandbox; not in plugin build/CI |
+| [untested] dsp: synthetic drum kit for tests | dsp/tests/synth_drums.h | 2 | Deterministic on every compiler (own RNG); hit peaks normalised; 5 ms fade-out |
+| [untested] dsp: multi-band onset detector (SuperFlux) | OnsetDetector.h, test_onset_detector.cpp, docs/02-algorithm.md, REMOTE_LOG.md | 2 | gcc/clang -Werror, ASan/UBSan; isolated 100 %/0 fp, dense loop F1 0.97–0.99, timing ≤ 0.8 ms at 44.1/48/96 kHz |
 | [untested] docs: approve F1/F2 short phase 1 (genres, drum-aware, bipolar, one Depth; Shadow Play layout) | docs/05-features.md, docs/02-parameters.md, REMOTE_LOG.md | 0 | Docs only (2 commits: first one missed the params/log update) |
 | [untested] docs: Puppet Show knobs + always-listening; visualizer named Shadow Play | docs/05-features.md, docs/02-parameters.md, docs/01-concept.md, REMOTE_LOG.md | 0 | Docs only; open Q3, Q4, Q5–Q7, Q9, Q10 |
 | [untested] docs: features F1 The Puppet Show + F2 shape visualizer | docs/05-features.md, docs/01-concept.md, docs/02-parameters.md, REMOTE_LOG.md | 0 | Docs only; short phase 1 drafts with open questions Q1–Q8 |

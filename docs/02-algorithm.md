@@ -77,6 +77,29 @@
 - **Grouping:** onsets within ±6 ms form one event. The onset is then refined to the sample using
   a fast time-domain envelope. [Claude + A1, window judged]
 
+**As built in phase 3** (`dsp/include/plugin_dsp/OnsetDetector.h`; each change was forced by a failing
+test on the synthetic kit, `dsp/tests/test_onset_detector.cpp`):
+- **Per-bin SuperFlux instead of band totals** (Böck & Widmer 2013): the mean dB rise per bin against
+  the loudest of three frames about 10 ms back, spread over neighbour bins. The lag covers the ramp of
+  the 21 ms window, and the neighbour spread ignores a kick's pitch drop sliding between bins.
+- **Hann analysis window**, not the resynthesis √Hann. √Hann leakage triggered empty bands on steady
+  tones.
+- **The band plus its neighbours must also rise ≥ 3 dB.** Energy moving from B1 into B0 as a kick
+  drops in pitch raised B0 alone, not B0 + B1.
+- **Longer B0/B1 reference (≥ 25 ms)**, because a 21 ms window holds only about one cycle of a 48 Hz
+  tone.
+- **Relative gate at 35 dB** below the loudest band (it was 45), plus the −70 dB absolute floor.
+- **δ = 2 dB** (mean per-bin rise). α is unchanged (2.4 − 1.2·s).
+- **Weak echoes merge:** an onset with less than half the flux within 15 ms after an event belongs to
+  that hit (a clap's later bursts).
+- **Timing refinement** looks at the whole onset frame, on the raw signal or on a high-emphasised one
+  (1st or 2nd difference) depending on the event's strongest band. Result: ≤ 0.8 ms error.
+- **Measured on the synthetic kit** at 44.1/48/96 kHz:
+  - isolated hits: 100% found, 0 false;
+  - dense overlapping loop: F1 0.97–0.99.
+
+  The one miss is a quiet hat fully masked by a crash tail, 0.7 dB above it.
+
 ### 4. Classification
 - **Event spectrum:** p_b is the per-band power rise from before the onset to its peak.
 - **Template split (multi-label), single-source, kept on merit:**
