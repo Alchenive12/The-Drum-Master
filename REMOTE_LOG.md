@@ -13,9 +13,9 @@
 - Last known-good commit:        main (template, CI green on Linux, macOS, Windows)
 
 ## Current trip
-- Pipeline phase:                2b — per-drum controls approved; prompt 02 (detection algorithm) out to other models
+- Pipeline phase:                2b — algorithm compared (docs/02-algorithm.md), waiting for D1 (processing domain) + D2 (lookahead)
 - Branch: claude/away-from-home-protocol-pc5bni (session-assigned; stands in for `remote/<feature>`)
-- Goal: collect answers to prompts/02, compare vs prompts/answers/02-claude.md → docs/02-algorithm.md
+- Goal: approve docs/02-algorithm.md, then parameter table closes phase 2
 
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
@@ -29,18 +29,20 @@
 | [untested] Rename template to The Drum Master | CMakeLists.txt, Source/*, README.md, REMOTE_LOG.md | 0 | Mechanical rename; CI to confirm (level 3) |
 | [untested] docs: agent answers + per-drum settings comparison | prompts/answers/agent1.md, agent2.md, docs/02-mix-settings.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: approve mix settings, add detection prompt 02 + Claude's blind answer | docs/02-mix-settings.md, prompts/02-detection-algorithm.md, prompts/answers/02-claude.md, REMOTE_LOG.md | 0 | Docs only |
+| [untested] docs: agent answers to prompt 02 + algorithm comparison | prompts/answers/02-agent1.md, 02-agent2.md, docs/02-algorithm.md, REMOTE_LOG.md | 0 | Docs only; some agent formulas lost in paste (marked) |
 
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
 ## Next steps
-1. Paste other models' answers to prompts/02 → prompts/answers/02-<model>.md.
-2. Fair comparison vs 02-claude.md → docs/02-algorithm.md (approved by user).
-3. Parameter table (ID, range, default, unit) closes phase 2.
+1. User decides D1 (STFT masks vs time-domain bands) and D2 (fixed 30 ms vs adjustable lookahead).
+2. Parameter table (ID, range, default, unit) → docs/02-parameters.md closes phase 2.
+3. Phase 3: dsp/ core (synthetic drum generator + offline WAV harness first), then JUCE wiring.
 
 ## Open VERIFY markers
 | Marker | File | What to check at home |
 |---|---|---|
-| — | — | none open (pluginval step confirmed working in CI) |
+| VERIFY(host) | docs/02-algorithm.md §6 | How FL Studio reports transport stop to an effect (auto detect ends on it) |
+| VERIFY(host) | docs/02-algorithm.md §10 | FL Studio compensates the 30 ms reported latency exactly (no flam vs other tracks) |
 
 ## Decisions (and why)
 - JUCE 9.0.3 via FetchContent: latest release; pinned so every build uses the same JUCE.
@@ -56,6 +58,8 @@
 - Quick-mix groups: Kick / Snare (+rim, clap) / Hats (+ride, crash); volume + 1–2 character knobs; Link switch keeps dB offsets moving together.
 - Deep-edit controls: from prompt 01 (Claude blind + 2 agents); rule = in if ≥2 of 3 sources, single-source judged on merit. Every drum has Level + Decay.
 - Parked for phase 5: open-hat choke by closed hat, crash duck on kick/snare (Agent 1).
+- Algorithm backbone (all 3 sources): STFT analysis, per-band flux onsets, template split + rule-based soft scores, Misc below confidence, tail = drop below peak/floor or retrigger, loop adaptation capped at 50 %.
+- No ML in v1: rule-based first; RF/MLP only if rules miss targets on real loops (needs 9-class labelled data).
 - Mix settings approved: kick clipping kept (off by default); Dubstepify = long tail + added ~200 Hz body; clap compression kept.
 
 ## Known risks
