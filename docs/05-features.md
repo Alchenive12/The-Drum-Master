@@ -9,7 +9,7 @@
 
 ## F1 — The Puppet Show (genre-aware smart EQ)
 
-**Status:** approved for v1 · short phase 1 **draft** (open questions at the bottom)
+**Status:** approved for v1 · short phase 1 **approved 2026-09-30**. Next is its phase 2: genre targets and band math.
 **Inspiration:** Guardian Angel in HarmonyEngine (a smart dynamic EQ for vocals). We port the ideas,
 not the code, because `dsp/` stays free of JUCE.
 
@@ -65,28 +65,30 @@ Master **knows** that this hit is a kick and that one is a snare. So The Puppet 
 The detector keeps each drum type's **long-term average spectrum**. Auto-detect needs that anyway,
 and it's exactly the input The Puppet Show compares against its genre targets.
 
-### Open questions (F1)
-- ~~Q1 layer vs set knobs~~ **answered by the always-listening decision:** it's its own dynamic
-  stage, with live meters.
-- ~~Q2~~ **answered:** it always listens actively.
-- **Q3:** Which genres for v1? Proposal: trap, drill, hip-hop (boom bap), pop, rock, dubstep, house
-  or techno, lo-fi. Add or remove any.
-- **Q4:** One Depth for everything, or Depth per drum group (kick, snare, hats)?
-- **Q9:** Should the four bands be **drum-aware** or act on the whole bus?
-  - *Claude's recommendation:* drum-aware. Bass boost acts on the kick, Mud control on
-    kick/snare/tom bodies, Mid presence on snare, clap and kick click, High control on hats and
-    cymbals. Each only acts during that drum's hits. This is the edge over Gullfoss and Guardian
-    Angel, which can't tell a kick from a bass.
-  - Whole bus is simpler, but it's just another smart EQ.
-- **Q10:** Can the four knobs also go **below zero**, to do the opposite (for example Bass boost
-  negative = tighten the low end), or only 0–100%?
+### Answers (F1, 2026-09-30)
+- **Always listens actively**, as its own dynamic stage with live band meters.
+- **Q9, drum-aware: yes.**
+  - Bass boost → kick.
+  - Mud control → kick, snare and tom bodies.
+  - Mid presence → snare crack, clap and kick click.
+  - High control → hats and cymbals.
+  - Each acts only during those drums' hits.
+- **Q10, bipolar: yes.** Each of the four knobs goes from −100 to +100%.
+  - **0 = aim exactly at the genre's target.**
+  - **+ = more than the genre** (more bass, more highs, more presence, and for Mud control a
+    stronger mud cut).
+  - **− = less** (tighter low end, darker top, less presence, and for Mud control keeping more of
+    the body).
+  - Depth sets how hard the bands pull towards that aim.
+- **Q3, genres for v1:** Rock · Pop · EDM · Metal · Hip-hop.
+- **Q4:** **one general Depth** for everything.
 
 ---
 
 ## F2 — Shadow Play (the "what the puppet hears" visualizer)
 
-**Status:** approved for v1 · short phase 1 **draft** · UI (phase 4), but the data feed is built in
-phase 3.
+**Status:** approved for v1 · short phase 1 **approved 2026-09-30** · UI (phase 4), but the data feed
+is built in phase 3.
 **Name:** **Shadow Play** (chosen by the user, 2026-09-30).
 
 ### In one sentence
@@ -122,9 +124,11 @@ While the track plays, every detected hit is drawn as a shape: a **circle for th
   every hit. The audio thread only drops those into a lock-free queue, and the editor draws them.
 - **All the work is drawing** (phase 4), and it's limited to the editor's frame rate.
 
-### Open questions (F2)
-- **Q5:** Are these shapes OK? Any drum you want drawn differently?
-- **Q6:** Should the loop be drawn as a ring (proposal) or as a scrolling timeline, left to right?
-- **Q7:** Where does it live: behind the puppet master on the main screen, or on its own "stage"
-  page?
-- ~~Q8~~ **answered:** Shadow Play.
+### Decided (F2, 2026-09-30; the user left Q5–Q7 to Claude)
+- **Q5, shapes:** as in the table above.
+- **Q6, layout: the ring.** One bar is a clock face synced to FL's playhead. Hits at the same spot
+  stack up as the loop repeats, so the groove "draws itself", and older hits fade like smoke.
+- **Q7, where:** on the **main screen, as the stage floor below the puppet master**: the strings hang
+  down into the ring, so each shape appears under the puppet that caught it. A click enlarges Shadow
+  Play to fill the window, and a second click shrinks it back.
+- **Q8, name:** Shadow Play.
