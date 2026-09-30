@@ -22,7 +22,7 @@ import numpy as np
 import soundfile as sf
 from scipy.signal import resample_poly
 from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.metrics import f1_score
+from sklearn.metrics import average_precision_score, precision_recall_curve
 
 SR = 44100
 TYPES = ["kick", "snare", "closed hat", "open hat", "crash", "ride", "rimshot", "clap", "misc"]
@@ -189,30 +189,39 @@ class Dataset:
     def add(self, segs, labels): self.segs.append(segs); self.labels += labels
 
 def evaluate(dataset, groups, types_present, label):
+    """Per type and window: average precision (AP, threshold-free: how well hits of this type are
+    ranked above everything else) and best-F1 (F1 at the best probability threshold; slightly
+    optimistic, identical treatment for every window)."""
     print(f"\n=== {label}: {len(dataset.labels)} events ===")
     y = np.array([[t in labs for t in types_present] for labs in dataset.labels])
-    counts = y.sum(axis=0)
-    print("events per type: " + ", ".join(f"{t} {c}" for t, c in zip(types_present, counts)))
+    print("events per type: " + ", ".join(f"{t} {c}" for t, c in zip(types_present, y.sum(axis=0))))
     header = f"{'W ms':>5} | " + " | ".join(f"{t[:10]:>10}" for t in types_present) + " |  macro"
-    print(header); print("-" * len(header))
     rows = []
     segs = np.concatenate(dataset.segs)
+    ug = np.unique(groups)
+    table_ap, table_f1 = [], []
     for w in WINDOWS_MS:
         X = features_for_window(segs, w)
-        pred = np.zeros_like(y)
-        ug = np.unique(groups)
+        prob = np.zeros(y.shape)
         for f in range(5):
-            test_g = ug[f::5]
-            te = np.isin(groups, test_g); tr = ~te
+            te = np.isin(groups, ug[f::5]); tr = ~te
             for c in range(len(types_present)):
                 if y[tr, c].sum() < 3: continue
                 clf = ExtraTreesClassifier(n_estimators=300, min_samples_leaf=2, class_weight="balanced_subsample",
                                            n_jobs=-1, random_state=0)
                 clf.fit(X[tr], y[tr, c])
-                pred[te, c] = clf.predict(X[te])
-        f1 = [f1_score(y[:, c], pred[:, c], zero_division=0) for c in range(len(types_present))]
-        rows.append((w, f1))
-        print(f"{w:>5} | " + " | ".join(f"{v:10.2f}" for v in f1) + f" | {np.mean(f1):6.3f}", flush=True)
+                prob[te, c] = clf.predict_proba(X[te])[:, 1]
+        ap = [average_precision_score(y[:, c], prob[:, c]) for c in range(len(types_present))]
+        bf = []
+        for c in range(len(types_present)):
+            p_, r_, _ = precision_recall_curve(y[:, c], prob[:, c])
+            bf.append(float(np.max(2 * p_ * r_ / np.maximum(p_ + r_, 1e-12))))
+        table_ap.append((w, ap)); table_f1.append((w, bf)); rows.append((w, ap, bf))
+        print(f"  W={w} ms done (macro AP {np.mean(ap):.3f}, macro best-F1 {np.mean(bf):.3f})", flush=True)
+    for name, tab in (("AVERAGE PRECISION", table_ap), ("BEST-THRESHOLD F1", table_f1)):
+        print(f"\n{name}"); print(header); print("-" * len(header))
+        for w, v in tab:
+            print(f"{w:>5} | " + " | ".join(f"{x:10.2f}" for x in v) + f" | {np.mean(v):6.3f}")
     return rows
 
 def main():
