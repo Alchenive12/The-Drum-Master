@@ -15,6 +15,7 @@
   span and max boost/cut).
 - **v2 measures the targets** from the user's own genre-named sample packs.
 - Prompt 04 (full design review) is now optional.
+- **v1 targets done:** `docs/05-puppet-show-targets-v1.md` (both agents answered 2026-09-30; the kick rows are anchored to real kits, D-C15).
 **Inspiration:** Guardian Angel in HarmonyEngine (a smart dynamic EQ for vocals). We port the ideas,
 not the code, because `dsp/` stays free of JUCE.
 

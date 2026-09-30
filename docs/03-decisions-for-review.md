@@ -22,6 +22,7 @@
 | D-C12 | How the engine splits the loop into per-drum estimates | processing | open |
 | D-C13 | Plugin wiring choices (state, Link, bypass, what isn't saved) | plugin | open |
 | D-C14 | The Puppet Show: prompt 04 sent to agents, DSP waits for their answers | feature | open |
+| D-C15 | Puppet Show v1 targets: averaged answers, kick rows anchored to real kits, M1 redefined | feature | open |
 
 ---
 
@@ -334,6 +335,23 @@ estimate and adds only its change, scaled by the hit gate.
   - Claude's blind table (`prompts/answers/05-claude.md`) is averaged in as one more answer with
     equal weight, unless the user says agents only.
 - **Please:** paste prompt 05 to your two agents.
+
+## D-C15 — Puppet Show v1 genre targets
+
+`docs/05-puppet-show-targets-v1.md`.
+
+- **As the user decided:** the targets, tolerances and knob spans / max boost / max cut are the
+  average of the three answers to prompt 05 (Claude blind, agent 1, agent 2, equal weight).
+- **Claude's additions:**
+  - **Real-kit check:** the answers were checked on 43 real E-GMD kits.
+  - **Mud, snare presence, cymbal air:** they fit, so they're used as averaged.
+  - **Kick sub and kick click:** these were physically impossible (a kick's energy is almost all
+    below 90 Hz; its click is tiny in energy). So the answers' differences between genres are kept
+    and the row is anchored to the real-kit median.
+  - **Kick sub is redefined** as sub vs the rest, because "sub / total" saturates near 0 dB.
+- **To undo:** use the plain averages in `research/puppet-show/average_targets.py`'s first table.
+  Kick sub and click would then almost never be reachable, so the EQ would push every kick to
+  its max cut or boost.
 
 ---
 
