@@ -13,9 +13,9 @@
 - Last known-good commit:        3ec2987 on this branch (rename; CI run 7 green on Linux + Windows incl. pluginval)
 
 ## Current trip
-- Pipeline phase:                2b — engine (D1) and lookahead (D2) both measured; waiting for user approval
+- Pipeline phase:                2c — D1 (hybrid engine) + D2 (50 ms) approved; parameter table proposed (docs/02-parameters.md)
 - Branch: claude/away-from-home-protocol-pc5bni (session-assigned; stands in for `remote/<feature>`)
-- Goal: approve docs/02-algorithm.md, then parameter table closes phase 2
+- Goal: approve docs/02-parameters.md → phase 2 closed → phase 3 (dsp/ core + tests)
 
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
@@ -31,14 +31,15 @@
 | [untested] docs: approve mix settings, add detection prompt 02 + Claude's blind answer | docs/02-mix-settings.md, prompts/02-detection-algorithm.md, prompts/answers/02-claude.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: agent answers to prompt 02 + algorithm comparison | prompts/answers/02-agent1.md, 02-agent2.md, docs/02-algorithm.md, REMOTE_LOG.md | 0 | Docs only; some agent formulas lost in paste (marked) |
 | [untested] research: engine shootout STFT mask vs time bands + review prompt 03 | research/engine-shootout/*, docs/02-algorithm.md, prompts/03-review-claude-engine.md, REMOTE_LOG.md | 2 | Pure C++ compiled + run in sandbox; not in plugin build/CI |
+| [untested] docs: approve D1/D2, parameter table | docs/02-algorithm.md, docs/02-parameters.md, REMOTE_LOG.md | 0 | Docs only; 90 host parameters with permanent IDs |
 | [untested] research: lookahead detection test on real drums | research/lookahead-test/*, docs/02-algorithm.md, REMOTE_LOG.md | 2 | MDB Drums (23 acoustic tracks) + electronic loops from held-out one-shots; knee 40–50 ms |
 | [untested] research: shootout v2 after agents' review | research/engine-shootout/shootout2.cpp, RESULTS2.txt, README.md, prompts/answers/03-*.md, docs/02-algorithm.md, REMOTE_LOG.md | 2 | Same-band overlaps, dual-res STFT, spectral metric, jitter; B loses, hybrid dual-res wins |
 
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
 ## Next steps
-1. User decides D1 (recommendation: hybrid dual-res — STFT estimate + time-domain processors) and D2 (recommendation: 50 ms fixed, measured).
-2. Parameter table (ID, range, default, unit) → docs/02-parameters.md closes phase 2.
+1. User approves docs/02-parameters.md (closes phase 2).
+2. Phase 3 first tests in dsp/: transparency null, synthetic generator, lookahead re-measure with the real detector, decay ideas (A1 predictive, A2 spectral floor).
 3. Phase 3: dsp/ core (synthetic drum generator + offline WAV harness first), then JUCE wiring.
 
 ## Open VERIFY markers
@@ -64,6 +65,7 @@
 - Algorithm backbone (all 3 sources): STFT analysis, per-band flux onsets, template split + rule-based soft scores, Misc below confidence, tail = drop below peak/floor or retrigger, loop adaptation capped at 50 %.
 - Shootout v2 (same-band overlaps: kick+bass, snare+clap, hat+crash): Claude's 6 bands LOSE (kick Top vs hats −8.4 vs −18.7 dB); hybrid dual-res STFT estimate (1024 low / 256 high, split 1.5 kHz, fits 30 ms) + time-domain processors best or tied on 6/7. With overlaps every engine is only ~70–90 % right (decay ~40 %).
 - Engine shootout v1 (superseded): time-domain bands beat STFT masks on transient (−20 vs −11 dB), compression (−25 vs −19 dB), saturation (−40 vs impossible), tie on level; decay-shortening ~−4 dB for all (mixed-audio limit). Hybrid ≈ bands.
+- APPROVED 2026-09-30: D1 hybrid dual-res engine; D2 fixed 50 ms lookahead (user trusted the measurements).
 - Lookahead measured on real drums (generic classifier, first W ms only): electronic plateau at 40–50 ms (AP 0.87, same as 100 ms); acoustic kick/snare/closed hat settle by 30 ms; acoustic open hat/crash keep gaining to 100 ms+ → late-correction crossfade, not more lookahead. Recommendation 50 ms.
 - No ML in v1: rule-based first; RF/MLP only if rules miss targets on real loops (needs 9-class labelled data).
 - Mix settings approved: kick clipping kept (off by default); Dubstepify = long tail + added ~200 Hz body; clap compression kept.

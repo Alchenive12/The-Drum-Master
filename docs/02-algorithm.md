@@ -1,7 +1,7 @@
 <!-- File: docs/02-algorithm.md -->
 # The Drum Master — Phase 2b: Detection and processing algorithm
 
-> Status: **proposal, waiting for approval** (2 decisions at the bottom).
+> Status: **approved (2026-09-30)**. D1 = hybrid dual-resolution engine, D2 = fixed 50 ms lookahead, both chosen from measurements (see the bottom).
 > Sources: `prompts/answers/02-claude.md` (written blind, first) · `02-agent1.md` · `02-agent2.md`.
 > Same rule as phase 2a: **an idea is in if 2 of 3 sources suggested it**. Single-source ideas are
 > judged on merit and marked. **[guess]** values are tuned in phase 3 against the tests.
@@ -216,7 +216,7 @@ The **high** ones are candidates for an advanced page later. [A1's idea]
   every method, because tails share bands with other drums. Fallback: a gentle range, and
   documenting it honestly.
 
-## Decisions for you
+## Decisions (approved 2026-09-30, both backed by measurements)
 - **D1: How the processing is done.** Measured twice in `research/engine-shootout/`, on synthetic
   loops with known stems, so the ideal result is exact.
   - **v1** (no same-range overlaps): the time-domain bands won. Both agents' review
@@ -235,7 +235,7 @@ The **high** ones are candidates for an advanced page later. [A1's idea]
     | Kick Top +6 dB, hats in range | −10.5 | −8.4 | **−18.7** |
     | Open-hat Decay, crash under it | −2.1 | −2.0 | −2.2 |
 
-  - **New recommendation (it replaces Claude's earlier one): the hybrid dual-resolution engine.**
+  - **Approved: the hybrid dual-resolution engine** (it replaced Claude's earlier 6-band proposal).
     - **Estimate:** an STFT soft-mask estimate of each active drum, with N = 1024 / hop 128 below
       1.5 kHz and N = 256 / hop 64 above.
     - **Processing:** that drum's real time-domain processors (EQ, compressor, transient shaper,
@@ -266,5 +266,5 @@ The **high** ones are candidates for an advanced page later. [A1's idea]
   - Under 20 ms isn't enough. 30 ms (the earlier guess) is close but not at the knee.
   - Acoustic open hat and crash keep improving to 100 ms+, because their identity is in the tail.
     That's handled by the "label now, correct within 100 ms" crossfade, not by more lookahead.
-  - *Claude's recommendation:* **50 ms fixed** for version 1. Latency is cheap here (one instance
+  - **Approved: 50 ms fixed** for version 1. Latency is cheap here (one instance
     per project, compensated by FL), and the hybrid engine's ~21 ms fits inside it.
