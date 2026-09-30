@@ -20,6 +20,8 @@
 | D-C10 | Per-drum processor chain (order, ranges, what each amount means) | processing | open |
 | D-C11 | What every knob and snare macro moves (the hidden curves) | processing | open |
 | D-C12 | How the engine splits the loop into per-drum estimates | processing | open |
+| D-C13 | Plugin wiring choices (state, Link, bypass, what isn't saved) | plugin | open |
+| D-C14 | The Puppet Show: prompt 04 sent to agents, DSP waits for their answers | feature | open |
 
 ---
 
@@ -288,6 +290,44 @@ estimate and adds only its change, scaled by the hit gate.
   i7-11700K should be well under that. `VERIFY(host)` in FL.
   - **Possible optimisation:** skip the estimates of drums whose settings are all neutral. Not done
     yet, because switching them on mid-playback could click.
+
+## D-C13 — Plugin wiring choices
+
+`Source/Parameters.h`, `Source/PluginProcessor.*`.
+
+- **One table defines all 97 parameters:** ID, name, group, range, default, unit, and where the
+  value goes in the DSP. The JUCE layout and the per-block copy can't drift apart.
+  - Parameters are grouped by scope (Global, Quick mix, Kick, …), so FL's automation menu stays
+    readable.
+  - Frequency knobs use a log-feeling range: EQ mid centred at 1 kHz, crash low cut at 150 Hz,
+    HPF at 150 Hz, LPF at 5 kHz.
+- **Parameters.h is header-only,** so `CMakeLists.txt` did not change.
+- **Bypass:** `global_bypass` is also the host's bypass parameter. Bypassing crossfades to the
+  delayed dry signal and the 50 ms latency stays reported, so FL doesn't shift the track.
+- **Link:** a 30 Hz timer on the message thread watches the three group volumes. When exactly one
+  of them moved, the other two move by the same dB (clamped to their range).
+  - It never runs on the audio thread.
+  - Moves of several at once (automation, a preset) only re-base the offsets.
+  - `VERIFY(host)`: how that feels with FL automation.
+- **Saved state beyond the parameters:** `expected_types`, `detect_mode` (manual / auto) and
+  `ui_zoom`, plus `state_version = 1`.
+- **Auto detect ends on transport stop:** when playback stops, the types heard become the expected
+  types, and the mode returns to manual.
+- **Not saved (deviation from docs/02-parameters.md §5):** the learned per-type spectra. They
+  re-learn within about 4 hits of each drum, and saving them safely would need a lock-free snapshot
+  from the audio thread. Candidate for later.
+- **Checked here:** the plugin builds on Linux (JUCE 9.0.3, Release, LTO) and pluginval passes at
+  strictness 5 at 44.1/48/96 kHz, blocks 64–1024.
+
+## D-C14 — The Puppet Show phase 2
+
+- Wrote `prompts/04-puppet-show.md` (requirements only) and Claude's blind answer,
+  `prompts/answers/04-claude.md`: measurements, genre targets, correction math, timing and safety.
+- **Deliberately not built yet:**
+  - The protocol's phase 2 compares Claude with the agents, and the genre targets are the part
+    most likely to be wrong.
+  - The `ps_*` parameters exist, so sessions stay compatible, but they do nothing yet.
+- **Please:** paste prompt 04 to your two agents, as with prompts 01–03.
 
 ---
 

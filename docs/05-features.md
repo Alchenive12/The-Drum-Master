@@ -9,7 +9,7 @@
 
 ## F1 — The Puppet Show (genre-aware smart EQ)
 
-**Status:** approved for v1 · short phase 1 **approved 2026-09-30**. Next is its phase 2: genre targets and band math.
+**Status:** approved for v1 · short phase 1 **approved 2026-09-30** · phase 2 started: `prompts/04-puppet-show.md` is ready for the agents, and Claude's blind answer is in `prompts/answers/04-claude.md`.
 **Inspiration:** Guardian Angel in HarmonyEngine (a smart dynamic EQ for vocals). We port the ideas,
 not the code, because `dsp/` stays free of JUCE.
 

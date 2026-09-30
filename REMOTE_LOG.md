@@ -20,6 +20,7 @@
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
 |---|---|---|---|
+| [untested] plugin: 97 parameters + DrumEngine wired; prompt 04 (Puppet Show) | Source/Parameters.h (new, header-only), Source/PluginProcessor.*, prompts/04-puppet-show.md, prompts/answers/04-claude.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | Built in sandbox (Linux, JUCE 9.0.3 Release+LTO, no warnings from our code); pluginval strictness 5 SUCCESS (44.1/48/96 kHz, blocks 64–1024). CMakeLists.txt NOT touched |
 | [untested] dsp: DrumEngine (lookahead, detection, stems, processors, global section, Shadow Play feed) | DrumEngine.h, SpscQueue.h, DrumChannel.h (level-aware sat, clip -12 dB), test_drum_engine.cpp, test_drum_channel.cpp, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | gcc Release, clang, ASan/UBSan 11/11; bit-exact transparency + 50 ms latency at 44.1/48/96 kHz; kick -6 dB -> -5.8 dB with hats 0.00 dB; ~21 % of a sandbox core |
 | [untested] dsp: per-drum processor chain + knob mapping; E-GMD fetcher; decisions doc | DrumChannel.h, DrumParams.h, DrumMapping.h, test_drum_channel.cpp, test_drum_mapping.cpp, research/classifier-train/{fetch_egmd.py, prep_gmd.py, train.py, README.md}, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | gcc Release, clang, ASan/UBSan 10/10; neutral = exactly nothing; every knob touches only its drum(s); macros bounded |
 | [untested] dsp: hit tracker (per-type gates) + learned-classifier groundwork (log-mel features, tiny MLP, training/eval tools) | HitTracker.h, HitFeatures.h, TinyMlp.h, HitClassifier.h (extra measurements), test_hit_tracker.cpp, research/classifier-eval/*, research/classifier-train/*, .gitignore, REMOTE_LOG.md | 2 | gcc Release, clang, ASan/UBSan: 8/8 tests; tracker: exact 2 ms pre-roll, kick tail end ~0.52 s, closed hat 134 ms vs open hat 719 ms, retrigger, weights, 1 s cap |
@@ -63,6 +64,7 @@
 | VERIFY(dsp) | DrumChannel.h (D-C10) | Compressor thresholds are absolute dBFS; saturation/clip have no oversampling — listen for aliasing |
 | VERIFY(dsp) | DrumEngine.h (D-C12) | Spectral shares: a bass note under the kick moves with kick settings; ±10 ms smear on hard edges |
 | VERIFY(host) | DrumEngine.h (D-C12) | CPU in FL on the i7-11700K (sandbox: ~21 % of one core, stereo 48 kHz) |
+| VERIFY(host) | PluginProcessor.cpp (D-C13) | FL shows 50 ms latency (pluginval reads 0 before prepare, as with the template); Link with FL automation; transport stop ends auto detect |
 
 ## Decisions (and why)
 - JUCE 9.0.3 via FetchContent: latest release; pinned so every build uses the same JUCE.
