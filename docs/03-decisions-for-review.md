@@ -333,4 +333,46 @@ estimate and adds only its change, scaled by the hit gate.
 
 ## Classifier results
 
-(Filled in after training. Per-type F1 at a 0.5 threshold, on data the model never trained on.)
+- **Measured with:** the plugin's own onset detector and classifier (`research/classifier-eval`)
+  on real drums the network never trained on.
+- **Scoring:** per-type F1. A type counts as "said" when its weight ≥ 0.5, and a detection matches
+  a labelled hit within 25 ms.
+- **Onset detection is unchanged:** acoustic F1 0.879, electronic 0.975.
+
+| Type | Acoustic (MDB Drums, 23 tracks): rules → **learned** | Electronic loops (40): rules → **learned** |
+|---|---|---|
+| kick | 0.63 → **0.83** | 0.78 → **0.78** |
+| snare | 0.61 → **0.65** (precision 0.48 → 0.75) | 0.24 → **0.53** |
+| closed hat | 0.27 → **0.51** | 0.22 → **0.58** |
+| open hat | 0.00 → 0.06 | 0.32 → 0.23 |
+| crash | 0.03 → 0.14 | 0.06 → 0.10 |
+| ride | 0.01 → **0.35** | 0.00 → 0.08 |
+| rimshot | 0.56 → 0.42 | 0.00 → 0.14 |
+| clap | none in the set; false claps 2205 → 283 | 0.50 → 0.33 |
+
+**Also measured:**
+- On 6 E-GMD kits held out of training, including 808, lo-fi, metal and jazz kits: macro F1 0.59,
+  kick 0.80, snare 0.75, closed hat 0.64, ride 0.66.
+- On Groove performances held out of training: macro F1 0.85.
+
+**What this means:**
+- **Kick, snare and closed hat** — most of every loop — are clearly better and usable.
+- **Open hat vs closed hat, crash vs ride, and claps** are still weak. When unsure these fall to
+  Misc, which is neutral, or to the neighbouring type.
+  - A wrong neighbour mostly means the hi-hat or cymbal settings of the wrong page get used.
+  - `VERIFY(dsp)`: listen at home.
+- **The synthetic test kit's snare** (almost pure bright noise) is read as a closed hat. A very
+  noisy electronic snare could get hat settings. `VERIFY(dsp)` with real 909-style snares.
+- **Best next data:** your genre-named sample packs (v2), for claps, open hats and cymbals.
+
+**Choices made while training (all in `research/classifier-train/`):**
+- **Network:** 96 hidden units, not 48. Slightly better, and still only about 22 k
+  multiply-adds per hit.
+- **E-GMD:** 30 performances per kit, 350 k events sampled.
+- **Synthetic loops:** 1000, for about 6 000 claps.
+- **EQ augmentation:** ±6 dB tilt and ±6 dB bumps.
+- **Level augmentation** (−24…+6 dB on every row): quiet loops were being read as hats.
+- **Kit hold-out:** Acoustic Kit, 808 Simple, Heavy Metal, Nu RNB, Cassette (Lo-Fi), Jazz.
+- **The unit test** (`test_hit_classifier.cpp`) is now a sanity check on the synthetic kit: every
+  kick right, isolated ≥ 60%, dense loop ≥ 85%, multi-label, mask and presence. The
+  accuracy target is the table above.

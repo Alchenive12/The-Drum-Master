@@ -10,7 +10,7 @@
 - Formats:                       VST3 / AU (macOS only) / Standalone
 - Platforms built at home:       Windows (FL Studio, i7-11700K, RTX 3060 Ti) — VST3
 - CI:                            .github/workflows/build.yml (Linux, Windows + DSP tests + pluginval; macOS dropped)
-- Last known-good commit:        959d327 on this branch (hit classifier; CI run 23 green on Linux + Windows incl. pluginval; run 22 = 933bbcc onset detector also green)
+- Last known-good commit:        ac7e881 on this branch (plugin wired to DrumEngine, 97 params; CI run 27 green on Linux + Windows incl. DSP tests + pluginval; Windows VST3 in the run's artifacts)
 
 ## Current trip
 - Pipeline phase:                3 — DSP core in dsp/ (phase 2 closed: concept, mix settings, algorithm, parameters all approved)
@@ -20,7 +20,8 @@
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
 |---|---|---|---|
-| [untested] plugin: 97 parameters + DrumEngine wired; prompt 04 (Puppet Show) | Source/Parameters.h (new, header-only), Source/PluginProcessor.*, prompts/04-puppet-show.md, prompts/answers/04-claude.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | Built in sandbox (Linux, JUCE 9.0.3 Release+LTO, no warnings from our code); pluginval strictness 5 SUCCESS (44.1/48/96 kHz, blocks 64–1024). CMakeLists.txt NOT touched |
+| [untested] dsp: learned hit classifier (225 log-mel -> 96 -> 9) replaces the rules; weights from Groove + E-GMD (CC BY 4.0) + own synth | HitClassifier.h (rewritten, same API), HitClassifierWeights.h (generated), test_hit_classifier.cpp (sanity thresholds), research/classifier-eval/eval.cpp, research/classifier-train/train.py, docs/02-algorithm.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | gcc, clang, ASan/UBSan 11/11; plugin rebuilt + pluginval strictness 5 SUCCESS. Real drums (never trained on): acoustic kick 0.83 / snare 0.65 / CH 0.51, electronic kick 0.78 / snare 0.53 / CH 0.58 (rules: 0.63/0.61/0.27, 0.78/0.24/0.22) |
+| [untested] plugin: 97 parameters + DrumEngine wired; prompt 04 (Puppet Show) | Source/Parameters.h (new, header-only), Source/PluginProcessor.*, prompts/04-puppet-show.md, prompts/answers/04-claude.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 3 | CI run 27 green (Linux + Windows MSVC /W4 /WX, DSP tests, pluginval). Built in sandbox (Linux, JUCE 9.0.3 Release+LTO, no warnings from our code); pluginval strictness 5 SUCCESS (44.1/48/96 kHz, blocks 64–1024). CMakeLists.txt NOT touched |
 | [untested] dsp: DrumEngine (lookahead, detection, stems, processors, global section, Shadow Play feed) | DrumEngine.h, SpscQueue.h, DrumChannel.h (level-aware sat, clip -12 dB), test_drum_engine.cpp, test_drum_channel.cpp, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | gcc Release, clang, ASan/UBSan 11/11; bit-exact transparency + 50 ms latency at 44.1/48/96 kHz; kick -6 dB -> -5.8 dB with hats 0.00 dB; ~21 % of a sandbox core |
 | [untested] dsp: per-drum processor chain + knob mapping; E-GMD fetcher; decisions doc | DrumChannel.h, DrumParams.h, DrumMapping.h, test_drum_channel.cpp, test_drum_mapping.cpp, research/classifier-train/{fetch_egmd.py, prep_gmd.py, train.py, README.md}, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | gcc Release, clang, ASan/UBSan 10/10; neutral = exactly nothing; every knob touches only its drum(s); macros bounded |
 | [untested] dsp: hit tracker (per-type gates) + learned-classifier groundwork (log-mel features, tiny MLP, training/eval tools) | HitTracker.h, HitFeatures.h, TinyMlp.h, HitClassifier.h (extra measurements), test_hit_tracker.cpp, research/classifier-eval/*, research/classifier-train/*, .gitignore, REMOTE_LOG.md | 2 | gcc Release, clang, ASan/UBSan: 8/8 tests; tracker: exact 2 ms pre-roll, kick tail end ~0.52 s, closed hat 134 ms vs open hat 719 ms, retrigger, weights, 1 s cap |
@@ -52,9 +53,12 @@
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
 ## Next steps
-1. Phase 3 order: FFT → streaming STFT → linear-phase split → dual-res estimator (transparency) → synthetic drum generator → onset detection → classification → per-drum processors → JUCE wiring (generic editor) → CI green.
-2. Then in dsp/: transparency null, synthetic generator, lookahead re-measure with the real detector, decay ideas (A1 predictive, A2 spectral floor).
-3. Phase 3: dsp/ core (synthetic drum generator + offline WAV harness first), then JUCE wiring.
+1. ~~Classifier~~ done: learned network in (D-C1, results in docs/03). Weak spots to hear at home: open vs closed hat, crash vs ride, claps, very noisy snares.
+2. ~~CI green on the plugin wiring~~ done: run 27 green (ac7e881); the Windows VST3 artifact can be tried in FL.
+3. The Puppet Show: paste `prompts/04-puppet-show.md` to the two agents → compare with `prompts/answers/04-claude.md` → then its DSP stage.
+4. At home (level 4): load the VST3 in FL Studio — latency 50 ms compensated, transport stop ends auto detect, CPU, and listen to every knob on real loops (all VERIFY markers below). Review docs/03-decisions-for-review.md.
+5. v2 (user, 2026-09-30): the user will give access to their own sample packs (named by genre) once v1 runs. Use them to (a) set The Puppet Show's genre targets by measurement (analysis only, lowest licence risk) and (b) train or test the classifier on real one-shots. Check each pack's EULA before training shipped weights; packs that forbid it are evaluation-only.
+6. Phase 4 (UI): puppet stage, strings per drum, deep-edit zoom, Shadow Play ring — after the generic-editor version is approved.
 
 ## Open VERIFY markers
 | Marker | File | What to check at home |
@@ -64,6 +68,7 @@
 | VERIFY(dsp) | DrumChannel.h (D-C10) | Compressor thresholds are absolute dBFS; saturation/clip have no oversampling — listen for aliasing |
 | VERIFY(dsp) | DrumEngine.h (D-C12) | Spectral shares: a bass note under the kick moves with kick settings; ±10 ms smear on hard edges |
 | VERIFY(host) | DrumEngine.h (D-C12) | CPU in FL on the i7-11700K (sandbox: ~21 % of one core, stereo 48 kHz) |
+| VERIFY(dsp) | HitClassifier.h (D-C1) | Open/closed hat, crash/ride, clap and noisy-snare labels on real loops (see the results table in docs/03) |
 | VERIFY(host) | PluginProcessor.cpp (D-C13) | FL shows 50 ms latency (pluginval reads 0 before prepare, as with the template); Link with FL automation; transport stop ends auto detect |
 
 ## Decisions (and why)

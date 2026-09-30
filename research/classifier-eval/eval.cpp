@@ -40,7 +40,8 @@ int main (int argc, char** argv)
     std::FILE* dump = dumpPath.empty() ? nullptr : std::fopen (dumpPath.c_str(), "w");
     if (dump)
     {
-        std::fprintf (dump, "truth,primary,regLow,regMid,regMetal,residual,hiDrop,hiFrac,conc,lowExt,bursts,midFlat,body,cenEarly,cenLate,lowShare,highShare,bodyProm,logCen,hiRise,midRise,file");
+        std::fprintf (dump, "truth,primary,file");
+        for (std::size_t t = 0; t < numDrumTypes; ++t) std::fprintf (dump, ",p_%s", drumTypeName (static_cast<DrumType> (t)));
         for (int b = 0; b < 13; ++b) std::fprintf (dump, ",m%d", b);
         std::fprintf (dump, "\n");
     }
@@ -109,14 +110,8 @@ int main (int argc, char** argv)
                 const auto& m = meas[hi];
                 std::string ts;
                 for (std::size_t t = 0; t < numDrumTypes; ++t) if ((truth >> t) & 1u) { if (! ts.empty()) ts += "+"; ts += drumTypeName (static_cast<DrumType> (t)); }
-                std::fprintf (dump, "%s,%s,%.3f,%.3f,%.3f,%.3f,%.2f,%.3f,%.3f,%.3f,%d,%.3f,%.2f,%.1f,%.1f", ts.c_str(), drumTypeName (hit.primary),
-                              static_cast<double> (m.regionShare[0]), static_cast<double> (m.regionShare[1]), static_cast<double> (m.regionShare[2]),
-                              static_cast<double> (m.residualRatio), static_cast<double> (m.hiDropDb), static_cast<double> (m.hiDecayFraction),
-                              static_cast<double> (m.flatness), static_cast<double> (m.lowExtension), m.bursts, static_cast<double> (m.midFlatness),
-                              static_cast<double> (m.bodyRatioDb), static_cast<double> (m.centroidEarlyHz), static_cast<double> (m.centroidLateHz));
-                std::fprintf (dump, ",%.4f,%.4f,%.3f,%.3f,%.2f,%.2f,%s", static_cast<double> (m.lowShare), static_cast<double> (m.highShare),
-                              static_cast<double> (m.bodyProminence), static_cast<double> (m.logCentroid), static_cast<double> (m.hiRiseDb),
-                              static_cast<double> (m.midRiseDb), name.c_str());
+                std::fprintf (dump, "%s,%s,%s", ts.c_str(), drumTypeName (hit.primary), name.c_str());
+                for (float v : m.probability) std::fprintf (dump, ",%.3f", static_cast<double> (v));
                 float mx = 1e-20f;
                 for (float v : m.magnitude) mx = std::max (mx, v);
                 for (float v : m.magnitude) std::fprintf (dump, ",%.3f", static_cast<double> (v / mx));

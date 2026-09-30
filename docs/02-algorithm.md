@@ -139,6 +139,26 @@ test on the synthetic kit, `dsp/tests/test_onset_detector.cpp`):
   - It would need labelled data for all 9 types, and most public datasets only label kick, snare
     and hat.
 
+**As built in phase 3** (decision D-C1 in `docs/03-decisions-for-review.md`, for review):
+
+- **The rule-based scorer was built first.** It scored 27/27 on the synthetic kit, then missed on
+  real drums (`research/classifier-eval`).
+  - Acoustic (MDB Drums): kick F1 0.63, snare 0.61, closed hat 0.27.
+  - Electronic loops: snare 0.24, closed hat 0.22.
+
+  That is the "rules miss the targets on real loops" exit above.
+- **Now: a small learned network behind the same API.**
+  - `HitFeatures.h`: 32-band log-mel slices from −25 to +40 ms, 225 numbers.
+  - `TinyMlp.h`: 225 → 48 → 9 sigmoid, multi-label.
+  - It's trained on the Groove MIDI + Expanded Groove MIDI datasets (CC BY 4.0; 9-type labels come
+    from their MIDI) plus our own synthetic loops.
+  - It's evaluated on MDB Drums and the electronic loops, which it never trains on.
+- **Kept from the rule version:**
+  - the rise spectrum, used for the engine's shares and The Puppet Show;
+  - presence counting (auto detect);
+  - the allowed-type mask (switched-off types → Misc);
+  - Misc below θ_conf.
+
 ### 5. Hit duration
 - **The hit ends when the first of these happens:**
   - the envelope stays below max(peak − R_t, floor + 6 dB) for a **20 ms hangover** [A1];
