@@ -129,6 +129,12 @@ Clicking the **puppet master himself** opens the advanced global page. It works 
   It must be **our own original character and art**. The FNaF Puppet is someone else's copyrighted
   character, so we take the mood, never the design.
 
+## Added features (2026-09-30, in v1, see `docs/05-features.md`)
+- **The Puppet Show:** a genre-aware smart EQ, **off by default**. The intended workflow is to open
+  it first, pick a genre and Depth, and then fine-tune each drum.
+- **"What the puppet hears" visualizer:** every detected hit is drawn as a shape (kick = circle,
+  snare = triangle, …), rebuilding the loop as a picture while it plays.
+
 ## What it is NOT (for now)
 - Not a drum replacer or sampler: it never adds sounds, it only shapes the hits that are already
   there.
