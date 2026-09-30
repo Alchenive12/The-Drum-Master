@@ -1,16 +1,23 @@
 // File: Source/PluginProcessor.h
-// Template processor: one smoothed gain parameter, DSP math from dsp/ (plugin_dsp),
-// generic editor until phase 4 (UI). Replace per plugin.
+// The Drum Master processor: the 97 parameters of docs/02-parameters.md (Source/Parameters.h),
+// the whole DSP in plugin_dsp::DrumEngine, a fixed 50 ms latency, saved non-automatable state
+// (expected drum types, detect mode, UI page), the quick-mix Link behaviour, and the puppet-stage
+// editor (PluginEditor.h, phase 4).
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <atomic>
+#include <plugin_dsp/DrumEngine.h>
 
-class AwayTemplateProcessor final : public juce::AudioProcessor
+#include <array>
+#include <atomic>
+#include <memory>
+#include <vector>
+
+class DrumMasterProcessor final : public juce::AudioProcessor, private juce::Timer
 {
 public:
-    AwayTemplateProcessor();
-    ~AwayTemplateProcessor() override = default;
+    DrumMasterProcessor();
+    ~DrumMasterProcessor() override;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -28,6 +35,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
+    juce::AudioProcessorParameter* getBypassParameter() const override;
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -38,11 +46,61 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    // Non-automatable state (docs/02-parameters.md §5) and what the UI needs (docs/04-ui-concept.md).
+    // Everything here is called on the message thread; changes reach the DSP through atomics that
+    // processBlock applies at the start of the next block.
+    enum class DetectMode { manual = 0, autoArmed = 1 };
+    /** The strings on stage (drum types), without the always-allowed misc bit unless a misc string exists. */
+    std::uint32_t getStringTypes() const noexcept;
+    void addString (plugin_dsp::DrumType t) noexcept;
+    void removeString (plugin_dsp::DrumType t) noexcept;
+    void setExpectedTypes (std::uint32_t mask) noexcept;
+    std::uint32_t getExpectedTypes() const noexcept { return expectedTypes.load(); }
+    /** LISTEN: clear the strings, forget the loop, and let strings drop in as types are heard. */
+    void armAutoDetect() noexcept;
+    DetectMode getDetectMode() const noexcept { return static_cast<DetectMode> (detectMode.load()); }
+    /** FORGET THIS LOOP (advanced page). */
+    void forgetLoop() noexcept { forgetRequested.store (true); }
+
+    /** Hits for Shadow Play and the string jerks (read on the UI thread only). */
+    plugin_dsp::SpscQueue<plugin_dsp::ShadowEvent, 256>& shadowEvents() noexcept { return engine->shadowEvents(); }
+    /** The Puppet Show's live band meters (meterDb() is safe on the UI thread). */
+    const plugin_dsp::PuppetShow& puppetShow() const noexcept { return engine->puppet(); }
+
+    /** Where the host playhead was at the start of the last block (for the Shadow Play ring). */
+    struct Transport { double ppq = 0.0, bpm = 120.0, sampleRate = 48000.0; std::int64_t blockStart = 0; int beatsPerBar = 4; bool playing = false; };
+    Transport getTransport() const noexcept;
+
+    juce::String getUiPage() const { return uiZoom; }
+    void setUiPage (const juce::String& page) { uiZoom = page; }
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:
-    std::atomic<float>* gainDbParam = nullptr;
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> gainSmoothed;
+    void timerCallback() override;   // quick-mix Link, on the message thread
+    void rebaseLink() noexcept;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AwayTemplateProcessor)
+    std::unique_ptr<plugin_dsp::DrumEngine> engine;
+    plugin_dsp::DrumParams dspParams;
+    std::vector<std::atomic<float>*> raw;   // same order as params::table()
+
+    std::atomic<std::uint32_t> expectedTypes { 0 };   // the strings (manual mode)
+    std::atomic<std::uint32_t> heardTypes { 0 };      // present in the loop (auto detect), from the audio thread
+    std::atomic<int> detectMode { static_cast<int> (DetectMode::autoArmed) };   // a fresh instance listens
+    std::atomic<bool> forgetRequested { false };
+    std::atomic<double> transportPpq { 0.0 }, transportBpm { 120.0 }, transportRate { 48000.0 };
+    std::atomic<std::int64_t> transportBlockStart { 0 };
+    std::atomic<int> transportBeatsPerBar { 4 };
+    std::atomic<bool> transportPlaying { false };
+    std::int64_t samplesProcessed = 0;   // audio thread only: the engine's input index at block start
+    std::uint32_t appliedTypes = 0xffffffffu;   // audio thread only
+    bool wasPlaying = false;          // audio thread only
+    juce::String uiZoom { "main" };
+
+    std::array<juce::RangedAudioParameter*, 3> groupVolumes {};
+    std::array<float, 3> linkBase {};
+    juce::RangedAudioParameter* linkParam = nullptr;
+    juce::RangedAudioParameter* bypassParam = nullptr;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DrumMasterProcessor)
 };

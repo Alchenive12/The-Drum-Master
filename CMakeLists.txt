@@ -1,9 +1,9 @@
 # File: CMakeLists.txt
-# Minimal JUCE plugin template for the "away from home" protocol.
+# The Drum Master — JUCE plugin, developed with the "away from home" protocol.
 # JUCE is pinned via FetchContent so CI, the sandbox and home all build the same version.
 
 cmake_minimum_required(VERSION 3.22)
-project(AwayTemplate VERSION 0.1.0 LANGUAGES C CXX)
+project(DrumMaster VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,12 +20,12 @@ FetchContent_MakeAvailable(JUCE)
 enable_testing()
 add_subdirectory(dsp)                      # pure C++ core + tests (no JUCE)
 
-juce_add_plugin(AwayTemplate
+juce_add_plugin(DrumMaster
     COMPANY_NAME             "alchenive12"
     PLUGIN_MANUFACTURER_CODE Alch          # 4 chars, at least one upper-case
-    PLUGIN_CODE              Awyt          # 4 chars, exactly one upper-case (first)
+    PLUGIN_CODE              Drmr          # 4 chars, exactly one upper-case (first)
     FORMATS                  VST3 AU Standalone   # AU is built on macOS only
-    PRODUCT_NAME             "Away Template"
+    PRODUCT_NAME             "The Drum Master"
     IS_SYNTH                 FALSE
     NEEDS_MIDI_INPUT         FALSE
     NEEDS_MIDI_OUTPUT        FALSE
@@ -33,17 +33,17 @@ juce_add_plugin(AwayTemplate
     NEEDS_WEB_BROWSER        FALSE
     NEEDS_CURL               FALSE)
 
-target_sources(AwayTemplate
+target_sources(DrumMaster
     PRIVATE
         Source/PluginProcessor.cpp)
 
-target_compile_definitions(AwayTemplate
+target_compile_definitions(DrumMaster
     PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0)
 
-target_link_libraries(AwayTemplate
+target_link_libraries(DrumMaster
     PRIVATE
         plugin_dsp
         juce::juce_audio_utils

@@ -1,10 +1,14 @@
 # File: .github/workflows/build.yml
-# Builds a CMake-based JUCE plugin on Linux, macOS and Windows on every push,
+# Builds a CMake-based JUCE plugin on Linux and Windows on every push,
 # then runs pluginval on the VST3. Part of the "away from home" protocol:
 # lets you get a real compile + validation from your phone.
 #
 # Assumes: CMakeLists.txt at repo root, JUCE as a git submodule or via FetchContent.
 # For a Projucer (.jucer) project this file needs adapting.
+#
+# macOS job removed for The Drum Master (home testing is Windows / FL Studio only; macOS minutes
+# count 10x). To bring it back: re-add `- { name: macOS, os: macos-14 }` to the matrix and the
+# macOS line in the pluginval step (ZIP=pluginval_macOS.zip; BIN=./pluginval.app/Contents/MacOS/pluginval).
 
 name: Build
 
@@ -26,7 +30,6 @@ jobs:
       matrix:
         include:
           - { name: Linux,   os: ubuntu-24.04 }
-          - { name: macOS,   os: macos-14 }
           - { name: Windows, os: windows-latest }
 
     steps:
@@ -77,7 +80,6 @@ jobs:
         run: |
           case "$RUNNER_OS" in
             Linux)   ZIP=pluginval_Linux.zip;   BIN=./pluginval ;;
-            macOS)   ZIP=pluginval_macOS.zip;   BIN=./pluginval.app/Contents/MacOS/pluginval ;;
             Windows) ZIP=pluginval_Windows.zip; BIN=./pluginval.exe ;;
           esac
           curl -sSL -o pv.zip "https://github.com/Tracktion/pluginval/releases/latest/download/$ZIP"

@@ -1,0 +1,26 @@
+// File: research/engine-shootout/RESULTS.txt
+// Output of: g++ -O2 -std=c++17 main.cpp -o shootout && ./shootout   (sandbox, 2026-09-30)
+
+TRANSPARENCY (all settings neutral): 6-band split max error -317.2 dBFS, STFT resynthesis max error -272.2 dBFS
+
+=== SHARES: ORACLE (perfect per-moment knowledge, upper bound) ===
+Test (error vs ideal, lower=better) | A STFT mask hop128         | A STFT mask hop256         | B 6 time bands             | C hybrid (STFT est.+P)    
+                                 | total / pre-echo dB        | total / pre-echo dB        | total / pre-echo dB        | total / pre-echo dB       
+T1 kick level -6 dB              |  -29.5 /  -65.7            |  -31.0 /  -65.7            |  -31.8 /  -63.8            |  -31.7 /  -65.7           
+T2 snare Crack +6 dB (0-8 ms)    |  -11.4 /  -36.9            |  -11.1 /  -36.7            |  -20.9 / -300.0            |  -21.4 / -300.0           
+T3 open-hat Decay shorter        |   -6.8 /  -34.8            |   -6.8 /  -37.9            |   -4.4 /  -34.3            |   -6.7 /  -26.9           
+T4 snare Compression 4:1         |  -20.1 /  -42.7            |  -19.6 /  -42.5            |  -26.3 / -300.0            |  -26.9 / -300.0           
+T5 kick Saturation (tanh)        |   -0.0 / -295.0 (n/a)      |   -0.0 / -294.9 (n/a)      |  -41.6 / -143.9            |  -42.0 / -147.1           
+
+=== SHARES: TEMPLATE (average spectrum x envelope, realistic) ===
+Test (error vs ideal, lower=better) | A STFT mask hop128         | A STFT mask hop256         | B 6 time bands             | C hybrid (STFT est.+P)    
+                                 | total / pre-echo dB        | total / pre-echo dB        | total / pre-echo dB        | total / pre-echo dB       
+T1 kick level -6 dB              |  -27.1 /  -69.3            |  -27.7 /  -70.1            |  -29.0 /  -61.0            |  -28.2 /  -69.3           
+T2 snare Crack +6 dB (0-8 ms)    |  -10.9 /  -33.7            |  -10.7 /  -34.4            |  -19.9 / -300.0            |  -18.6 / -300.0           
+T3 open-hat Decay shorter        |   -4.0 /  -32.2            |   -4.0 /  -36.9            |   -3.9 /  -29.5            |   -3.9 /  -23.4           
+T4 snare Compression 4:1         |  -19.0 /  -39.6            |  -18.7 /  -40.2            |  -24.8 / -300.0            |  -23.9 / -300.0           
+T5 kick Saturation (tanh)        |   -0.0 / -295.0 (n/a)      |   -0.0 / -294.9 (n/a)      |  -39.8 / -139.5            |  -39.9 / -154.7           
+
+Error = energy(output - ideal) / energy(ideal - input). -20 dB means the intended change is 99% right.
+Pre-echo = the same error, counted only 1-25 ms BEFORE each target hit (smearing ahead of the transient).
+(n/a) = an STFT gain mask cannot create saturation harmonics; the number shows the miss when it does nothing.
