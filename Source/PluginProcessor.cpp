@@ -1,6 +1,7 @@
 // File: Source/PluginProcessor.cpp
 #include "PluginProcessor.h"
 #include "Parameters.h"
+#include "PluginEditor.h"
 
 namespace
 {
@@ -45,7 +46,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout DrumMasterProcessor::createP
 void DrumMasterProcessor::prepareToPlay (double sampleRate, int /*maximumExpectedSamplesPerBlock*/)
 {
     engine->prepare (sampleRate);   // allocates: only here, never in processBlock
-    appliedTypes = 0;
+    appliedTypes = 0xffffffffu;
+    samplesProcessed = 0;
+    transportRate.store (sampleRate);
     wasPlaying = false;
     setLatencySamples (engine->latencySamples());
 }
@@ -81,28 +84,44 @@ void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         specs[i].apply (dspParams, raw[i]->load (std::memory_order_relaxed));
     engine->setParams (dspParams);
 
-    // Auto detect ends when playback stops: the types heard become the expected types.
+    if (forgetRequested.exchange (false))
+        engine->resetLearning();
+
+    // Transport for the UI (Shadow Play ring) and for auto detect.
     bool playing = false;
     if (auto* hostPlayHead = getPlayHead())
         if (const auto position = hostPlayHead->getPosition())
-            playing = position->getIsPlaying();
-    if (detectMode.load() == static_cast<int> (DetectMode::autoArmed) && wasPlaying && ! playing)
-    {
-        const auto heard = engine->presentTypes();
-        if (heard != 0)
         {
-            expectedTypes.store (heard | plugin_dsp::bit (plugin_dsp::DrumType::misc));
-            detectMode.store (static_cast<int> (DetectMode::manual));
+            playing = position->getIsPlaying();
+            if (const auto ppq = position->getPpqPosition()) transportPpq.store (*ppq);
+            if (const auto bpm = position->getBpm()) transportBpm.store (*bpm);
+            if (const auto sig = position->getTimeSignature())
+                transportBeatsPerBar.store (juce::jmax (1, juce::roundToInt (4.0 * sig->numerator / juce::jmax (1, sig->denominator))));
         }
+    transportPlaying.store (playing);
+    transportBlockStart.store (samplesProcessed);
+
+    // Auto detect: strings = the types heard so far; it ends when playback stops (they stay).
+    const auto heard = engine->presentTypes();
+    heardTypes.store (heard);
+    const bool armed = detectMode.load() == static_cast<int> (DetectMode::autoArmed);
+    if (armed && wasPlaying && ! playing && heard != 0)
+    {
+        expectedTypes.store (heard);
+        detectMode.store (static_cast<int> (DetectMode::manual));
     }
     wasPlaying = playing;
 
-    const auto types = expectedTypes.load();
+    // The classifier may say every type while listening; afterwards only the strings (+ misc).
+    const auto types = detectMode.load() == static_cast<int> (DetectMode::autoArmed)
+                           ? plugin_dsp::allDrumTypes
+                           : (expectedTypes.load() | plugin_dsp::bit (plugin_dsp::DrumType::misc));
     if (types != appliedTypes)
     {
         engine->setAllowedTypes (types);
         appliedTypes = types;
     }
+    samplesProcessed += numSamples;
 
     if (numOut <= 0 || numSamples <= 0)
         return;
@@ -111,16 +130,44 @@ void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     engine->process (left, right, static_cast<std::size_t> (numSamples));
 }
 
+std::uint32_t DrumMasterProcessor::getStringTypes() const noexcept
+{
+    return detectMode.load() == static_cast<int> (DetectMode::autoArmed) ? heardTypes.load() : expectedTypes.load();
+}
+
+void DrumMasterProcessor::addString (plugin_dsp::DrumType t) noexcept
+{
+    setExpectedTypes (getStringTypes() | plugin_dsp::bit (t));   // adding by hand = manual mode
+}
+
+void DrumMasterProcessor::removeString (plugin_dsp::DrumType t) noexcept
+{
+    setExpectedTypes (getStringTypes() & ~plugin_dsp::bit (t));
+}
+
 void DrumMasterProcessor::setExpectedTypes (std::uint32_t mask) noexcept
 {
-    expectedTypes.store ((mask & plugin_dsp::allDrumTypes) | plugin_dsp::bit (plugin_dsp::DrumType::misc));
+    expectedTypes.store (mask & plugin_dsp::allDrumTypes);
     detectMode.store (static_cast<int> (DetectMode::manual));
 }
 
 void DrumMasterProcessor::armAutoDetect() noexcept
 {
-    expectedTypes.store (plugin_dsp::allDrumTypes);
+    expectedTypes.store (0);
+    forgetRequested.store (true);
     detectMode.store (static_cast<int> (DetectMode::autoArmed));
+}
+
+DrumMasterProcessor::Transport DrumMasterProcessor::getTransport() const noexcept
+{
+    Transport t;
+    t.ppq = transportPpq.load();
+    t.bpm = transportBpm.load();
+    t.sampleRate = transportRate.load();
+    t.blockStart = transportBlockStart.load();
+    t.beatsPerBar = transportBeatsPerBar.load();
+    t.playing = transportPlaying.load();
+    return t;
 }
 
 void DrumMasterProcessor::rebaseLink() noexcept
@@ -162,8 +209,8 @@ void DrumMasterProcessor::timerCallback()
 
 juce::AudioProcessorEditor* DrumMasterProcessor::createEditor()
 {
-    // Phase 3: generic editor, so the plugin is fully testable before any custom UI exists.
-    return new juce::GenericAudioProcessorEditor (*this);
+    // Phase 4: the puppet stage (docs/04-ui-concept.md).
+    return new DrumMasterEditor (*this);
 }
 
 void DrumMasterProcessor::getStateInformation (juce::MemoryBlock& destData)
@@ -184,10 +231,10 @@ void DrumMasterProcessor::setStateInformation (const void* data, int sizeInBytes
         {
             const auto state = juce::ValueTree::fromXml (*xml);
             apvts.replaceState (state);
-            const int types = state.getProperty (expectedTypesKey, static_cast<int> (plugin_dsp::allDrumTypes));
-            expectedTypes.store ((static_cast<std::uint32_t> (types) & plugin_dsp::allDrumTypes) | plugin_dsp::bit (plugin_dsp::DrumType::misc));
-            detectMode.store (state.getProperty (detectModeKey, "manual").toString() == "auto" ? static_cast<int> (DetectMode::autoArmed)
-                                                                                                  : static_cast<int> (DetectMode::manual));
+            const int types = state.getProperty (expectedTypesKey, 0);
+            expectedTypes.store (static_cast<std::uint32_t> (types) & plugin_dsp::allDrumTypes);
+            detectMode.store (state.getProperty (detectModeKey, "auto").toString() == "auto" ? static_cast<int> (DetectMode::autoArmed)
+                                                                                                : static_cast<int> (DetectMode::manual));
             uiZoom = state.getProperty (uiZoomKey, "main").toString();
             rebaseLink();
         }

@@ -24,6 +24,7 @@
 | D-C14 | The Puppet Show: prompt 04 sent to agents, DSP waits for their answers | feature | open |
 | D-C15 | Puppet Show v1 targets: averaged answers, kick rows anchored to real kits, M1 redefined | feature | open |
 | D-C16 | The Puppet Show engine (built from Claude's prompt-04 design; agents answered only the targets) | feature | open |
+| D-C17 | The UI details the user left to Claude (layout, deep edit, pages, art, window) | UI | open |
 
 ---
 
@@ -396,6 +397,41 @@ is optional.
   - With The Puppet Show on and nothing measured, the engine is still bit-exact transparent.
   - Plugin rebuilt; pluginval passes at strictness 5.
   - On real MDB loops the corrections stay within their limits.
+
+## D-C17 — UI details decided by Claude
+
+The full spec is in `docs/04-ui-concept.md`; screenshots are in `docs/screenshots/`. The user
+decided the curtain button, strings added by themselves, "+ STRING" with the type chosen in deep
+edit, and strings side by side and centred. Claude decided the rest:
+
+- **Art is drawn in code (vector).** There's no AI image generator in this environment. Every
+  piece is one function in `Source/ui/Art.h`, so it can be swapped for an image later.
+- **The master:**
+  - an original porcelain mask with a stitched smile and a hairline crack, cut off by the top
+    edge;
+  - long bony hands with dark nails and frayed gold cuffs, arms reaching down from the body;
+  - a wooden control bar.
+- **Colours:** black, maroon velvet, bone, dim gold, and a sickly green for "alive" things.
+- **Font:** the system serif.
+- **Top bar:** LISTEN (auto detect: clears the strings and forgets the loop), + STRING,
+  PUPPET SHOW, bypass (power symbol), ? (about).
+- **Quick mix** at the bottom in 3 groups plus LINK, with GLOBAL on the right.
+- **A fresh instance listens (auto detect armed).** Before, docs/02-parameters.md §5 said
+  "manual". That fits "strings added by themselves".
+- **Misc hangs a wooden tom block.**
+- **The deep edit page:**
+  - left: the big drum on its string, the type chooser, CUT STRING;
+  - right: knob groups (kick: weight / dynamics / EQ / level; snare: the four macros first).
+- **Knobs:** they show their value while hovered; double-click resets; bipolar arcs light from
+  the centre.
+- **The Puppet Show page:** marquee, ON/OFF lever, five genre posters, the big Depth knob,
+  four bipolar knobs, five live meters (±8 dB, up = boost, down = cut).
+- **Advanced page:** "the master's hands", with FORGET THIS LOOP.
+- **Window:** resizable at 16:10, 900 to 1600 px wide. Everything scales, nothing reflows.
+- **Screenshot demo mode:** `DRUM_MASTER_DEMO=<page>` shows made-up hits so screenshots work
+  without audio. It never touches the sound.
+- `VERIFY(host)`: Shadow Play's ring position with FL's latency compensation, and editor CPU at
+  60 fps in FL.
 
 ---
 

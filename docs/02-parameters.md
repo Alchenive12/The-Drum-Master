@@ -139,8 +139,8 @@ Anything more is added in phase 5.
 ## 5. Plugin state (saved, not automatable)
 | Key | What | Default |
 |---|---|---|
-| `expected_types` | Which of the 9 types are enabled (manual mode, or the auto-detect result) | all 9 on |
-| `detect_mode` | manual / auto-detect-armed | manual |
+| `expected_types` | The strings on stage (manual mode, or the auto-detect result) | none (they drop in while listening) |
+| `detect_mode` | manual / auto-detect-armed | auto-detect-armed (changed in phase 4, D-C17: a fresh instance listens and the strings drop in) |
 | `learned_templates` | Per-type templates adapted to this loop | generic templates |
 | `ui_zoom` | Which puppet or page is open | main |
 
