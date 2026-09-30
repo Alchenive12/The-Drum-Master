@@ -15,11 +15,12 @@
 ## Current trip
 - Pipeline phase:                3 — DSP core in dsp/ (phase 2 closed: concept, mix settings, algorithm, parameters all approved)
 - Branch: claude/away-from-home-protocol-pc5bni (session-assigned; stands in for `remote/<feature>`)
-- Goal: phase 3 step 3b — check the classifier on real drums (MDB + electronic loops), then hit tracker
+- Goal: phase 3 — learned hit classifier (MLP on Groove MIDI + synthetic, real-drum eval), then per-drum processors → DrumEngine → JUCE wiring. User away ~1 week and delegated decisions: every one is listed in docs/03-decisions-for-review.md
 
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
 |---|---|---|---|
+| [untested] dsp: hit tracker (per-type gates) + learned-classifier groundwork (log-mel features, tiny MLP, training/eval tools) | HitTracker.h, HitFeatures.h, TinyMlp.h, HitClassifier.h (extra measurements), test_hit_tracker.cpp, research/classifier-eval/*, research/classifier-train/*, .gitignore, REMOTE_LOG.md | 2 | gcc Release, clang, ASan/UBSan: 8/8 tests; tracker: exact 2 ms pre-roll, kick tail end ~0.52 s, closed hat 134 ms vs open hat 719 ms, retrigger, weights, 1 s cap |
 | Add away-from-home template (PR #1) | all | 3 | JUCE 9.0.3 APIs checked vs source; CI build + DSP tests + pluginval green on all 3 platforms |
 | CI: add JUCE 9 Linux deps (PR #2) | build.yml | 3 | libxi-dev + libegl-dev; fixed the Linux build |
 | [untested] docs: phase 1 concept draft | docs/01-concept.md, REMOTE_LOG.md | 0 | Docs only; dsp tests re-run in sandbox (level 2, pass) |
@@ -56,7 +57,7 @@
 | Marker | File | What to check at home |
 |---|---|---|
 | VERIFY(host) | docs/02-algorithm.md §6 | How FL Studio reports transport stop to an effect (auto detect ends on it) |
-| VERIFY(host) | docs/02-algorithm.md §10 | FL Studio compensates the 30 ms reported latency exactly (no flam vs other tracks) |
+| VERIFY(host) | docs/02-algorithm.md §10 | FL Studio compensates the 50 ms reported latency exactly (no flam vs other tracks) |
 
 ## Decisions (and why)
 - JUCE 9.0.3 via FetchContent: latest release; pinned so every build uses the same JUCE.
@@ -83,7 +84,7 @@
 - UI mood: creepy, FNaF-puppet feeling — original character/art only (no copying the copyrighted design).
 - APPROVED 2026-09-30: D1 hybrid dual-res engine; D2 fixed 50 ms lookahead (user trusted the measurements).
 - Lookahead measured on real drums (generic classifier, first W ms only): electronic plateau at 40–50 ms (AP 0.87, same as 100 ms); acoustic kick/snare/closed hat settle by 30 ms; acoustic open hat/crash keep gaining to 100 ms+ → late-correction crossfade, not more lookahead. Recommendation 50 ms.
-- No ML in v1: rule-based first; RF/MLP only if rules miss targets on real loops (needs 9-class labelled data).
+- ~~No ML in v1~~ REVERSED (autonomous, D-C1, for review): the rule-based classifier was perfect on the synthetic kit but failed on real drums (rule-feature trees 61–66 % in-domain, 14–23 % cross-domain), which is exactly the "rules miss targets on real loops" exit. Now: 225 log-mel segment features → 48 ReLU → 9 sigmoid (multi-label), ~11 k weights, inference ≈ 11 k MACs per hit. Train only on Groove MIDI Dataset (CC BY 4.0 → credit in About box) + own synthetic loops; MDB Drums (CC BY-NC-SA) and Dirt-Samples are evaluation only.
 - Mix settings approved: kick clipping kept (off by default); Dubstepify = long tail + added ~200 Hz body; clap compression kept.
 
 ## Known risks

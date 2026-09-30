@@ -189,6 +189,12 @@ public:
         float residualRatio = 0.0f, hiDropDb = 0.0f, midDropDb = 0.0f, flatness = 0.0f /* 2-12k concentration */, bodyRatioDb = 0.0f;
         int bursts = 0;
         float centroidEarlyHz = 0.0f, centroidLateHz = 0.0f, hiDecayFraction = 0.0f;
+        float lowShare = 0.0f;      // rise power below 160 Hz / total
+        float highShare = 0.0f;     // rise power above 4 kHz / total
+        float bodyProminence = 0.0f;// compressed magnitude 160-400 Hz / mean 630 Hz-16 kHz
+        float logCentroid = 0.0f;   // magnitude-weighted mean band index (0 = 30 Hz, 12 = 10-16 kHz)
+        float hiRiseDb = 0.0f;      // 5 kHz+ envelope: peak minus pre-onset level
+        float midRiseDb = 0.0f;     // 1-5 kHz envelope: peak minus pre-onset level
     };
     const Measurements& lastMeasurements() const noexcept { return measured; }
 
@@ -436,6 +442,9 @@ private:
         const float hiDrop = hiPeak - hiEnd;
         const float hiDecayFraction = hiDrop / std::max (hiPeak - hiPre, 3.0f);   // share of its own rise lost
 
+        envelopeDb (midRing, o - 6 * msSamples, 8, msSamples);   // 6 ms before the onset
+        float midPre = envelope[0];
+        for (std::size_t i = 1; i < 8; ++i) midPre = std::max (midPre, envelope[i]);
         const std::size_t midSteps = envelopeDb (midRing, o - msSamples, steps, msSamples + msSamples / 2);
         const float midPeak = *std::max_element (envelope.begin(), envelope.begin() + static_cast<std::ptrdiff_t> (std::min<std::size_t> (midSteps, 24)));
         const float midDrop = midPeak - envelope[midSteps - 1];
@@ -460,6 +469,27 @@ private:
         measured.centroidEarlyHz = centroidEarly;
         measured.centroidLateHz = centroidLate;
         measured.hiDecayFraction = hiDecayFraction;
+        {
+            float lo = 0.0f, hi = 0.0f, total = 1e-20f, num = 0.0f, den = 1e-20f;
+            for (std::size_t b = 0; b < numBands; ++b)
+            {
+                const float p = hit.rise[b] * static_cast<float> (binHi[b] - binLo[b] + 1);   // total power in the band
+                total += p;
+                if (b <= 2) lo += p;
+                if (b >= 10) hi += p;
+                num += static_cast<float> (b) * mag[b];
+                den += mag[b];
+            }
+            measured.lowShare = lo / total;
+            measured.highShare = hi / total;
+            measured.logCentroid = num / den;
+            float highMean = 0.0f;
+            for (std::size_t b = 6; b < numBands; ++b) highMean += mag[b];
+            highMean /= static_cast<float> (numBands - 6);
+            measured.bodyProminence = 0.5f * (mag[3] + mag[4]) / (highMean + 1e-12f);
+            measured.hiRiseDb = hiPeak - hiPre;
+            measured.midRiseDb = midPeak - midPre;
+        }
 
         // Stage 2: types inside each family.
         std::array<float, numDrumTypes> w {};
