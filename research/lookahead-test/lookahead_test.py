@@ -55,18 +55,24 @@ def logmel(x):
     frame_end = np.arange(n) * HOP + N_FFT - N_FFT   # sample index (in x) where each frame ENDS
     return lm, frame_end
 
-def event_features(lm, frame_end, onset, w_ms):
-    """Mean log-mel per segment, using only frames that END before onset + W."""
-    feats = []
-    def seg(a_ms, b_ms):
-        a, b = onset + a_ms * SR / 1000, onset + b_ms * SR / 1000
-        m = (frame_end > a) & (frame_end <= b)
-        return lm[m].mean(axis=0) if m.any() else np.full(N_MELS, -10.0)
-    feats.append(seg(-PRE_MS, 0))
-    for a, b in zip(SEG_EDGES_MS[:-1], SEG_EDGES_MS[1:]):
-        if b <= w_ms:
-            feats.append(seg(a, b))
-    return np.concatenate(feats)
+def all_segments(lm, frame_end, onsets):
+    """For each onset: mean log-mel of the pre-onset segment and every post-onset segment.
+    Segment k only uses frames that END inside it, so 'first W ms' = a prefix of the segments."""
+    cum = np.vstack([np.zeros((1, N_MELS)), np.cumsum(lm, axis=0)])
+    edges = [-PRE_MS] + SEG_EDGES_MS
+    out = np.empty((len(onsets), len(edges) - 1, N_MELS))
+    for k, (a_ms, b_ms) in enumerate(zip(edges[:-1], edges[1:])):
+        a = np.asarray(onsets) + a_ms * SR / 1000
+        b = np.asarray(onsets) + b_ms * SR / 1000
+        i0 = np.searchsorted(frame_end, a, side="right")
+        i1 = np.searchsorted(frame_end, b, side="right")
+        n = np.maximum(i1 - i0, 1)[:, None]
+        out[:, k] = np.where(i1[:, None] > i0[:, None], (cum[i1] - cum[i0]) / n, -10.0)
+    return out
+
+def features_for_window(segs, w_ms):
+    k = 1 + sum(1 for b in SEG_EDGES_MS[1:] if b <= w_ms)     # pre + post segments inside W
+    return segs[:, :k].reshape(len(segs), -1)
 
 def refine_onsets(x, onsets, search_ms=10):
     """Annotations can be off by a few ms: move each onset to the steepest energy rise nearby."""
@@ -178,16 +184,21 @@ def make_loops(shots, n_loops=100, seconds=8.0):
     return loops
 
 # ------------------------------------------------------------------ evaluation
+class Dataset:
+    def __init__(self): self.segs, self.labels = [], []
+    def add(self, segs, labels): self.segs.append(segs); self.labels += labels
+
 def evaluate(dataset, groups, types_present, label):
-    print(f"\n=== {label}: {len(dataset)} events ===")
-    y = np.array([[t in labs for t in types_present] for _, _, labs in dataset])
+    print(f"\n=== {label}: {len(dataset.labels)} events ===")
+    y = np.array([[t in labs for t in types_present] for labs in dataset.labels])
     counts = y.sum(axis=0)
     print("events per type: " + ", ".join(f"{t} {c}" for t, c in zip(types_present, counts)))
     header = f"{'W ms':>5} | " + " | ".join(f"{t[:10]:>10}" for t in types_present) + " |  macro"
     print(header); print("-" * len(header))
     rows = []
+    segs = np.concatenate(dataset.segs)
     for w in WINDOWS_MS:
-        X = np.stack([event_features(lm, fe, o, w) for (lm, fe), o, _ in dataset])
+        X = features_for_window(segs, w)
         pred = np.zeros_like(y)
         ug = np.unique(groups)
         for f in range(5):
@@ -209,13 +220,12 @@ def main():
 
     # acoustic
     tracks = load_mdb(mdb_dir)
-    ds, groups = [], []
+    ds, groups = Dataset(), []
     for gi, (name, x, events) in enumerate(tracks):
         lm, fe = logmel(x)
         ons = refine_onsets(x, [o for o, _ in events])
-        for (o_ann, labs), o in zip(events, ons):
-            if o > PRE_MS * SR / 1000 + N_FFT:
-                ds.append(((lm, fe), o, labs)); groups.append(gi)
+        keep = [(o, labs) for (_, labs), o in zip(events, ons) if o > PRE_MS * SR / 1000 + N_FFT]
+        ds.add(all_segments(lm, fe, [o for o, _ in keep]), [l for _, l in keep]); groups += [gi] * len(keep)
     ac_types = ["kick", "snare", "closed hat", "open hat", "crash", "ride", "rimshot", "misc"]
     ac = evaluate(ds, np.array(groups), ac_types, "ACOUSTIC (MDB Drums, real recordings, grouped by track)")
 
@@ -223,12 +233,11 @@ def main():
     shots = load_oneshots(dirt_dir)
     print("\none-shots per type: " + ", ".join(f"{t} {len(v)}" for t, v in shots.items()))
     loops = make_loops(shots)
-    ds, groups = [], []
+    ds, groups = Dataset(), []
     for name, x, events, fold in loops:
         lm, fe = logmel(x)
-        for o, labs in events:
-            if o > PRE_MS * SR / 1000 + N_FFT:
-                ds.append(((lm, fe), o, labs)); groups.append(fold)
+        keep = [(o, labs) for o, labs in events if o > PRE_MS * SR / 1000 + N_FFT]
+        ds.add(all_segments(lm, fe, [o for o, _ in keep]), [l for _, l in keep]); groups += [fold] * len(keep)
     el = evaluate(ds, np.array(groups), TYPES, "ELECTRONIC (loops from held-out one-shots, grouped by sample fold)")
     print(f"\n(total {time.time() - t0:.0f} s)")
 
