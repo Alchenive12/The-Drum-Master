@@ -7,15 +7,16 @@
 // window can be resized freely at a fixed 16:10 shape. A 60 Hz timer runs the animations; it reads
 // hits from the lock-free Shadow Play queue (this is its only reader), the band meters and the
 // transport (atomics). UI actions reach the DSP only through the processor's thread-safe calls.
+// Static scenery is rendered once per page into a cached image (ui/Fx.h, CachedLayer) at the
+// screen's real pixel density; the timer only redraws what moves.
 //
-// DRUM_MASTER_DEMO=<stage|kick|snare|new|show|curtain|advanced|about|shadow> (environment variable)
+// DRUM_MASTER_DEMO=<stage|listen|kick|snare|new|show|curtain|advanced|about|shadow> (environment variable)
 // makes the editor play made-up hits and open that page, for screenshots without audio. It never
 // changes the sound; without the variable it does nothing.
 #pragma once
 
 #include "PluginProcessor.h"
 #include "ui/Art.h"
-#include "ui/Theme.h"
 #include "ui/Widgets.h"
 
 #include <array>
@@ -49,6 +50,8 @@ struct StageModel
     int beatsPerBar = 4;
     double now = 0.0;
     float sway = 0.0f, breathe = 0.0f, flicker = 1.0f;
+    float pulse = 0.0f;   // the kick, for the crack in the mask
+    float slack = 0.0f;   // 0..1: bypassed, the strings go slack
     bool listening = false;
 
     void addHit (const Hit& h)
@@ -76,39 +79,50 @@ inline float easeOutBounce (float x)
     return n * x * x + 0.984375f;
 }
 
-inline juce::Colour shapeColour (DrumType t)
+inline juce::Point<float> onEllipse (juce::Point<float> centre, float rx, float ry, float angle)
 {
-    switch (t)
-    {
-        case DrumType::kick: return colours::blood.brighter (0.2f);
-        case DrumType::closedHat: case DrumType::openHat: return colours::gold;
-        case DrumType::crash: case DrumType::ride: return colours::gold.brighter (0.3f);
-        case DrumType::misc: return colours::boneShadow;
-        case DrumType::snare: case DrumType::rimshot: case DrumType::clap: break;
-    }
-    return colours::bone;
+    return centre.translated (std::sin (angle) * rx, -std::cos (angle) * ry);
 }
 
-/** The Shadow Play ring: a clock face in perspective; hits stack up and fade like smoke. */
+/** The Shadow Play ring: a clock face in perspective, one bar around. A wake of light follows the
+    playhead; hits stack up at their place in the bar and drift up and fade like smoke. */
 inline void drawShadowRing (juce::Graphics& g, const StageModel& m, juce::Point<float> centre, float rx, float ry, float scale)
 {
-    for (float f : { 0.5f, 0.75f, 1.0f })
+    using juce::Rectangle;
+    auto ellipse = [&] (float f) { return Rectangle<float> (rx * 2.0f * f, ry * 2.0f * f).withCentre (centre); };
+    fx::glowEllipse (g, ellipse (1.2f), colours::ecto.withAlpha (0.05f));
+
+    const float head = m.playPhase * 2.0f * fx::pi;
+    const int slices = 30;
+    const float wake = 1.4f;
+    for (int i = 0; i < slices; ++i)
     {
-        g.setColour (colours::bone.withAlpha (f > 0.9f ? 0.22f : 0.08f));
-        g.drawEllipse (juce::Rectangle<float> (rx * 2.0f * f, ry * 2.0f * f).withCentre (centre), f > 0.9f ? 1.5f : 1.0f);
+        const float f0 = static_cast<float> (i) / static_cast<float> (slices), f1 = static_cast<float> (i + 1) / static_cast<float> (slices);
+        juce::Path seg;
+        seg.addPieSegment (ellipse (1.0f), head - wake * f1, head - wake * f0, 0.0f);
+        g.setColour (colours::ecto.withAlpha (0.13f * (1.0f - f0) * (1.0f - f0)));
+        g.fillPath (seg);
     }
-    for (int b = 0; b < m.beatsPerBar; ++b)   // beat marks on the rim
+    for (float f : { 0.42f, 0.57f, 0.72f, 0.88f, 1.0f })
     {
-        const float a = static_cast<float> (b) / static_cast<float> (m.beatsPerBar) * 2.0f * art::pi - art::pi * 0.5f;
-        const auto p = centre.translated (std::cos (a) * rx, std::sin (a) * ry);
-        g.setColour (colours::gold.withAlpha (b == 0 ? 0.9f : 0.45f));
-        g.fillEllipse (juce::Rectangle<float> (5.0f * scale, 5.0f * scale).withCentre (p));
+        g.setColour (juce::Colours::white.withAlpha (f > 0.99f ? 0.2f : 0.055f));
+        g.drawEllipse (ellipse (f), f > 0.99f ? 1.2f : 0.8f);
     }
+    const int ticks = juce::jmax (1, m.beatsPerBar) * 4;
+    for (int i = 0; i < ticks; ++i)
+    {
+        const float a = static_cast<float> (i) / static_cast<float> (ticks) * 2.0f * fx::pi;
+        const bool beat = i % 4 == 0;
+        g.setColour (juce::Colours::white.withAlpha (i == 0 ? 0.6f : beat ? 0.32f : 0.12f));
+        g.drawLine ({ onEllipse (centre, rx, ry, a), onEllipse (centre, rx * (beat ? 0.9f : 0.95f), ry * (beat ? 0.9f : 0.95f), a) }, beat ? 1.4f * scale : 1.0f);
+    }
+    fx::glowDot (g, onEllipse (centre, rx, ry, 0.0f), 7.0f * scale, colours::ecto.withAlpha (0.6f));
+
     auto radius = [] (DrumType t) {
         switch (t)
         {
             case DrumType::kick: return 0.42f;
-            case DrumType::misc: return 0.55f;
+            case DrumType::misc: return 0.57f;
             case DrumType::snare: case DrumType::clap: case DrumType::rimshot: return 0.72f;
             case DrumType::crash: case DrumType::ride: return 0.88f;
             case DrumType::closedHat: case DrumType::openHat: break;
@@ -121,23 +135,56 @@ inline void drawShadowRing (juce::Graphics& g, const StageModel& m, juce::Point<
         const float age = static_cast<float> (m.now - h.born);
         const float alpha = h.confidence * std::exp (-age / 7.0f);
         if (alpha < 0.02f) continue;
-        const float a = h.phase * 2.0f * art::pi - art::pi * 0.5f, f = radius (h.type);
-        const auto p = centre.translated (std::cos (a) * rx * f, std::sin (a) * ry * f);
+        const float a = h.phase * 2.0f * fx::pi, f = radius (h.type);
+        const auto p = onEllipse (centre, rx * f, ry * f, a).translated (0.0f, -juce::jmin (5.0f, age * 1.2f) * scale);   // smoke rises a little
         const float size = (7.0f + 11.0f * h.level) * scale * (1.0f + 0.35f * std::exp (-age * 3.0f));   // fresh hits pop
-        art::shadowShape (g, h.type, p, size, shapeColour (h.type).withAlpha (juce::jlimit (0.0f, 1.0f, alpha)));
+        art::shadowShape (g, h.type, p, size, drumColour (h.type).withAlpha (juce::jlimit (0.0f, 1.0f, alpha)), std::exp (-age * 3.0f));
     }
-    // the playhead: a thin green hand from the centre
-    const float a = m.playPhase * 2.0f * art::pi - art::pi * 0.5f;
-    const auto tip = centre.translated (std::cos (a) * rx * 1.04f, std::sin (a) * ry * 1.04f);
-    g.setColour (colours::glow.withAlpha (0.7f));
-    g.drawLine (centre.x, centre.y, tip.x, tip.y, 1.5f * scale);
-    g.fillEllipse (juce::Rectangle<float> (6.0f * scale, 6.0f * scale).withCentre (tip));
+    juce::Path hand;
+    const auto tip = onEllipse (centre, rx * 1.04f, ry * 1.04f, head);
+    hand.startNewSubPath (centre);
+    hand.lineTo (tip);
+    fx::glowStroke (g, hand, colours::ecto.withAlpha (0.85f), 1.1f * scale, 0.9f);
+    fx::glowDot (g, tip, 9.0f * scale, colours::ecto.withAlpha (0.8f));
+    g.setColour (juce::Colours::white);
+    g.fillEllipse (Rectangle<float> (3.0f * scale, 3.0f * scale).withCentre (tip));
 }
 
 inline juce::TextButton& styleBack (juce::TextButton& b)
 {
-    b.setButtonText (juce::String::fromUTF8 ("\xe2\x86\x90 STAGE"));
+    b.setButtonText ("STAGE");
+    styled (b, "pill", "back");
     return b;
+}
+
+/** "The Drum Master": an italic "The", then the name. */
+inline void drawWordmark (juce::Graphics& g, juce::Point<float> at, float size, juce::Justification just = juce::Justification::centredLeft)
+{
+    const auto a = whisper (size), b = display (size);
+    const float wa = textWidth (a, "The "), wb = textWidth (b, "Drum Master");
+    float x = at.x;
+    if (just.testFlags (juce::Justification::horizontallyCentred)) x -= (wa + wb) * 0.5f;
+    g.setFont (a);
+    g.setColour (colours::boneDim);
+    g.drawText ("The ", juce::Rectangle<float> (x, at.y - size, wa + 4.0f, size * 1.4f), juce::Justification::centredLeft, false);
+    g.setFont (b);
+    g.setColour (colours::bone);
+    g.drawText ("Drum Master", juce::Rectangle<float> (x + wa, at.y - size, wb + 4.0f, size * 1.4f), juce::Justification::centredLeft, false);
+}
+
+/** A small section label: coloured dot, tracked caps. */
+inline void drawOverline (juce::Graphics& g, const juce::String& text, juce::Rectangle<float> r, juce::Colour dot, juce::Justification just = juce::Justification::centredLeft)
+{
+    const auto f = caps (9.5f, 0.22f);
+    const float w = textWidth (f, text) + 12.0f;
+    float x = r.getX();
+    if (just.testFlags (juce::Justification::horizontallyCentred)) x = r.getCentreX() - w * 0.5f;
+    fx::glowDot (g, { x + 3.0f, r.getCentreY() }, 5.0f, dot.withAlpha (0.5f));
+    g.setColour (dot);
+    g.fillEllipse (juce::Rectangle<float> (5.0f, 5.0f).withCentre ({ x + 3.0f, r.getCentreY() }));
+    g.setFont (f);
+    g.setColour (colours::boneDim);
+    g.drawText (text, juce::Rectangle<float> (x + 12.0f, r.getY(), w, r.getHeight()), juce::Justification::centredLeft, false);
 }
 
 // ------------------------------------------------------------------------------------ the stage
@@ -150,10 +197,20 @@ public:
     StagePage (DrumMasterProcessor& p, StageModel& m) : proc (p), model (m)
     {
         auto& s = proc.apvts;
+        styled (listen, "pill", "listen", colours::ecto);
+        styled (addString, "pill", "plus");
+        styled (show, "pill", "stage", colours::limelight);
+        styled (about, "round", "about");
+        styled (bypass, "round", "power", colours::blood);
+        styled (link, "pill", "link", colours::ecto);
         for (auto* b : { &listen, &addString, &show, &about })
             addAndMakeVisible (*b);
         addAndMakeVisible (bypass);
         listen.setTooltip ("Auto detect: clears the strings and lets them drop in as the master hears each drum");
+        addString.setTooltip ("Hang a new string by hand and choose what hangs on it");
+        show.setTooltip ("The Puppet Show: genre-aware smart EQ, behind the curtain");
+        about.setTooltip ("About The Drum Master");
+        bypass.setTooltip ("Bypass (the 50 ms latency stays, so nothing jumps)");
         listen.onClick = [this] { if (onListen) onListen(); };
         addString.onClick = [this] { if (onAddString) onAddString(); };
         show.onClick = [this] { if (onShow) onShow(); };
@@ -162,13 +219,14 @@ public:
         const char* quick[3][3][2] = { { { "qm_kick_volume", "Volume" }, { "qm_kick_punch", "Punch" }, { "qm_kick_weight", "Weight" } },
                                        { { "qm_snare_volume", "Volume" }, { "qm_snare_snap", "Snap" }, { "qm_snare_fat", "Fat" } },
                                        { { "qm_hats_volume", "Volume" }, { "qm_hats_tone", "Tone" }, { "qm_hats_tame", "Tame" } } };
+        const juce::Colour groupColour[3] = { drumColour (DrumType::kick), drumColour (DrumType::snare), drumColour (DrumType::closedHat) };
         for (int grp = 0; grp < 3; ++grp)
             for (int k = 0; k < 3; ++k)
-                knobs.push_back (std::make_unique<Knob> (s, quick[grp][k][0], quick[grp][k][1]));
+                knobs.push_back (std::make_unique<Knob> (s, quick[grp][k][0], quick[grp][k][1], groupColour[grp]));
         const char* globals[5][2] = { { "global_mix", "Dry/Wet" }, { "global_output", "Output" }, { "global_sensitivity", "Sensitivity" },
                                       { "global_punch", "Punch" }, { "global_clip", "Clip" } };
         for (auto& gl : globals)
-            knobs.push_back (std::make_unique<Knob> (s, gl[0], gl[1]));
+            knobs.push_back (std::make_unique<Knob> (s, gl[0], gl[1], colours::moon));
         for (auto& k : knobs) addAndMakeVisible (*k);
         addAndMakeVisible (link);
         link.setTooltip ("Link: the three group volumes keep their dB offsets");
@@ -176,44 +234,52 @@ public:
 
     void resized() override
     {
-        listen.setBounds (700, 12, 88, 28);
-        addString.setBounds (794, 12, 96, 28);
-        show.setBounds (896, 12, 118, 28);
-        bypass.setBounds (1020, 12, 36, 28);
-        about.setBounds (1062, 12, 28, 28);
-        bypass.setButtonText (juce::String::fromUTF8 ("\xe2\x8f\xbb"));   // power symbol
-        bypass.setTooltip ("Bypass (the 50 ms latency stays, so nothing jumps)");
-        const int groupX[3] = { 48, 268, 488 };
+        listen.setBounds (654, 14, 100, 32);
+        addString.setBounds (762, 14, 104, 32);
+        show.setBounds (874, 14, 128, 32);
+        bypass.setBounds (1010, 14, 32, 32);
+        about.setBounds (1048, 14, 32, 32);
         for (int grp = 0; grp < 3; ++grp)
             for (int k = 0; k < 3; ++k)
-                knobs[static_cast<std::size_t> (grp * 3 + k)]->setBounds (groupX[grp] + k * 66, 562, 64, 84);
-        link.setBounds (700, 594, 58, 26);
+                knobs[static_cast<std::size_t> (grp * 3 + k)]->setBounds (groupX[grp] + k * 66, 562, 64, 98);
+        link.setBounds (688, 598, 68, 28);
         for (int k = 0; k < 5; ++k)
-            knobs[static_cast<std::size_t> (9 + k)]->setBounds (786 + k * 56, 566, 54, 78);
+            knobs[static_cast<std::size_t> (9 + k)]->setBounds (782 + k * 58, 566, 56, 92);
     }
 
     void paint (juce::Graphics& g) override
     {
         const auto r = getLocalBounds().toFloat();
-        art::room (g, r, model.flicker, static_cast<float> (model.now));
-        art::oldDrumSet (g, { 975.0f, 406.0f }, 0.68f, model.flicker * 0.8f);
+        background.draw (g, baseW, baseH, [this] (juce::Graphics& ig, juce::Image& img, float s) { paintBackground (ig, img, s); });
+        if (fog.isNull()) fog = art::makeFogSprite();
+        art::roomLive (g, r.withBottom (530.0f), static_cast<float> (model.now), model.flicker, fog);
         art::legs (g, 550.0f, 452.0f, model.sway * 1.5f, 1.0f);   // the master is very tall: his legs stand in the room
 
         layout();
-        // the master: mask above, arms reaching down, hands holding the bar
+        // the master: the bar, his hands wrapped over it, arms reaching down, the mask above
+        art::controlBar (g, barX1, barX2, barY + model.sway * 0.3f, 13.0f, xs);
         art::hand (g, { barX1 + 18.0f, barY }, 74.0f, true, model.sway, 400.0f);
         art::hand (g, { barX2 - 18.0f, barY }, 74.0f, false, -model.sway, 700.0f);
-        art::mask (g, 550.0f, 92.0f + model.breathe, 190.0f, model.breathe);   // the head in front of the arms
-        art::controlBar (g, barX1, barX2, barY + model.sway * 0.3f, 13.0f);
+        const bool puppetHot = hover == Target::puppet;
+        art::mask (g, 550.0f, 92.0f + model.breathe, 190.0f, model.breathe, juce::jmax (model.pulse, puppetHot ? 0.45f : 0.0f));
 
-        g.setFont (serif (24.0f, true));
-        g.setColour (colours::gold);
-        g.drawText ("THE DRUM MASTER", 22, 10, 300, 32, juce::Justification::centredLeft);
-        if (model.listening)
+        paintTitle (g);
+        if (puppetHot)
         {
-            g.setFont (serif (14.0f));
-            g.setColour (colours::glow.withAlpha (0.6f + 0.4f * std::sin (static_cast<float> (model.now) * 3.0f)));
-            g.drawText ("the master is listening...", 24, 40, 300, 18, juce::Justification::centredLeft);
+            g.setFont (caps (9.0f, 0.24f));
+            g.setColour (colours::ecto.withAlpha (0.85f));
+            g.drawText ("THE MASTER'S HANDS  -  CLICK", juce::Rectangle<float> (400.0f, barY - 34.0f, 300.0f, 14.0f), juce::Justification::centred, false);
+        }
+
+        // the drums' faint shadows on the floor, smaller as a drum jerks up
+        for (std::size_t i = 0; i < model.slots.size(); ++i)
+        {
+            const auto& s = model.slots[i];
+            const float lift = juce::jlimit (0.0f, 1.0f, (318.0f - drumY (s)) / 190.0f);
+            fx::glowEllipse (g, juce::Rectangle<float> (70.0f * (1.0f - 0.4f * lift), 12.0f).withCentre ({ xs[i] + 18.0f, 432.0f }),
+                             colours::ink.withAlpha (0.55f * (1.0f - lift) * s.drop));
+            if (s.jerk > 0.02f && ! s.pending)   // a hit lights the boards under it
+                fx::glowEllipse (g, juce::Rectangle<float> (150.0f, 26.0f).withCentre ({ xs[i], 434.0f }), drumColour (s.type).withAlpha (0.3f * s.jerk));
         }
 
         // strings and their drums
@@ -222,51 +288,62 @@ public:
             const auto& s = model.slots[i];
             const float x = xs[i];
             const float y = drumY (s);
+            const bool hot = hoverSlot == static_cast<int> (i) && hover == Target::slot;
+            const auto col = s.pending ? colours::ecto : drumColour (s.type);
             juce::Path str;
-            str.startNewSubPath (x, barY + 6.0f);
-            str.quadraticTo (x + model.sway * 0.6f, (barY + y) * 0.5f, x, y - 34.0f);
-            g.setColour (colours::string.withAlpha (0.85f));
-            g.strokePath (str, juce::PathStrokeType (1.3f));
-            if (s.pending) art::questionTag (g, { x, y }, 64.0f);
-            else art::drum (g, s.type, { x, y }, 64.0f);
-            g.setFont (serif (13.0f, true));
-            g.setColour (colours::gold.withAlpha (s.drop));
-            g.drawText (s.pending ? juce::String ("CHOOSE...") : typeTitle (s.type), juce::Rectangle<float> (xs[i] - 55.0f, y + 36.0f, 110.0f, 18.0f),
-                        juce::Justification::centred);
+            const float twitch = s.jerk * 5.0f * std::sin (static_cast<float> (model.now) * 46.0f + static_cast<float> (i));
+            str.startNewSubPath (x, barY + 9.0f);
+            str.quadraticTo (x + model.sway * 0.6f + twitch + model.slack * 10.0f, (barY + y) * 0.5f + model.slack * 16.0f, x, y - 30.0f);
+            if (s.jerk > 0.05f || hot)
+                fx::glowStroke (g, str, col.withAlpha (juce::jmax (hot ? 0.5f : 0.0f, s.jerk)), 1.0f, juce::jmax (hot ? 0.5f : 0.0f, s.jerk));
+            g.setColour (colours::string.withAlpha (0.7f).interpolatedWith (col, juce::jmin (1.0f, s.jerk * 1.5f)));
+            g.strokePath (str, juce::PathStrokeType (1.1f));
+            if (s.pending) art::questionTag (g, { x, y }, 64.0f, hot ? 1.0f : 0.5f + 0.5f * std::sin (static_cast<float> (model.now) * 3.0f));
+            else art::drum (g, s.type, { x, y }, 64.0f, juce::jmax (s.jerk, hot ? 0.35f : 0.0f));
+            const auto label = s.pending ? juce::String ("CHOOSE") : typeTitle (s.type);
+            g.setFont (caps (9.5f, 0.2f));
+            g.setColour ((hot || s.jerk > 0.3f ? col : colours::boneDim).withMultipliedAlpha (s.drop));
+            g.drawText (label, juce::Rectangle<float> (x - 60.0f, y + 38.0f, 120.0f, 14.0f), juce::Justification::centred, false);
         }
         if (model.slots.empty())
         {
-            g.setFont (serif (18.0f));
-            g.setColour (colours::bone.withAlpha (0.7f));
-            g.drawText (model.listening ? juce::String::fromUTF8 ("Play your loop\xe2\x80\xa6 the master is listening")
-                                        : juce::String ("No strings yet: press LISTEN, or + STRING to hang one"),
-                        juce::Rectangle<float> (250.0f, 260.0f, 600.0f, 30.0f), juce::Justification::centred);
+            const juce::String dots = juce::String ("...").substring (0, 1 + static_cast<int> (std::fmod (model.now * 1.5, 3.0)));
+            g.setFont (whisper (28.0f));
+            g.setColour (colours::bone.withAlpha (0.75f));
+            g.drawText (model.listening ? "Play your loop" + dots : juce::String ("The stage is empty"), juce::Rectangle<float> (250.0f, 238.0f, 600.0f, 36.0f),
+                        juce::Justification::centred, false);
+            g.setFont (caps (9.5f, 0.2f));
+            g.setColour (colours::boneDim);
+            g.drawText (model.listening ? "THE MASTER IS LISTENING" : "PRESS LISTEN, OR + STRING TO HANG ONE", juce::Rectangle<float> (250.0f, 276.0f, 600.0f, 16.0f),
+                        juce::Justification::centred, false);
         }
 
         drawShadowRing (g, model, ringCentre, ringRx, ringRy, 1.0f);
+        if (hover == Target::ring)
+        {
+            g.setFont (caps (9.0f, 0.22f));
+            g.setColour (colours::ecto.withAlpha (0.8f));
+            g.drawText ("SHADOW PLAY  -  CLICK TO ENLARGE", juce::Rectangle<float> (400.0f, 508.0f, 300.0f, 14.0f), juce::Justification::centred, false);
+        }
 
-        // quick mix panel
-        const auto panel = juce::Rectangle<float> (30.0f, 532.0f, 1040.0f, 146.0f);
-        g.setColour (colours::night.withAlpha (0.82f));
-        g.fillRoundedRectangle (panel, 6.0f);
-        g.setColour (colours::goldDim);
-        g.drawRoundedRectangle (panel, 6.0f, 1.0f);
-        g.setFont (serif (15.0f, true));
-        g.setColour (colours::gold);
-        const char* titles[] = { "KICK", "SNARE", "HATS" };
-        const int groupX[3] = { 48, 268, 488 };
-        for (int grp = 0; grp < 3; ++grp)
-            g.drawText (titles[grp], groupX[grp], 540, 196, 18, juce::Justification::centred);
-        g.drawText ("GLOBAL", 786, 540, 276, 18, juce::Justification::centred);
-        g.setColour (colours::goldDim.withAlpha (0.6f));
-        for (float x : { 262.0f, 482.0f, 772.0f })
-            g.drawVerticalLine (juce::roundToInt (x), 544.0f, 668.0f);
+        // the link, lit between the three groups
+        const bool linked = link.getToggleState();
+        for (float x : { 250.0f, 466.0f })
+        {
+            if (linked) fx::glowDot (g, { x, 606.0f }, 12.0f, colours::ecto.withAlpha (0.35f));
+            fx::icon (g, "link", juce::Rectangle<float> (12.0f, 12.0f).withCentre ({ x, 606.0f }), linked ? colours::ecto : colours::boneFaint);
+        }
     }
 
     void mouseMove (const juce::MouseEvent& e) override
     {
-        setMouseCursor (target (e.position) != Target::none ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+        int slot = -1;
+        hover = target (e.position, &slot);
+        hoverSlot = slot;
+        setMouseCursor (hover != Target::none ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
     }
+
+    void mouseExit (const juce::MouseEvent&) override { hover = Target::none; }
 
     void mouseUp (const juce::MouseEvent& e) override
     {
@@ -280,6 +357,18 @@ public:
         }
     }
 
+    /** Called by the editor's timer: the scene above the dock moves every frame; the dock's knobs
+        repaint themselves, and the link glyphs only when LINK changes. */
+    void tick()
+    {
+        repaint (0, 0, baseW, 528);
+        if (link.getToggleState() != lastLinked)
+        {
+            lastLinked = link.getToggleState();
+            repaint (230, 590, 260, 32);
+        }
+    }
+
     /** Where a slot's drum hangs (for the zoom origin). */
     juce::Point<float> slotPosition (int i)
     {
@@ -288,10 +377,59 @@ public:
         return { xs[static_cast<std::size_t> (i)], drumY (model.slots[static_cast<std::size_t> (i)]) };
     }
 
-    juce::TextButton listen { "LISTEN" }, addString { "+ STRING" }, show { "PUPPET SHOW" }, about { "?" };
+    juce::TextButton listen { "LISTEN" }, addString { "STRING" }, show { "PUPPET SHOW" }, about { "" };
 
 private:
     enum class Target { none, slot, puppet, ring };
+
+    void paintBackground (juce::Graphics& g, juce::Image& img, float scale)
+    {
+        const auto r = juce::Rectangle<float> (static_cast<float> (baseW), static_cast<float> (baseH));
+        art::room (g, r);
+        art::oldDrumSet (g, { 975.0f, 406.0f }, 0.68f);
+        fx::vignette (g, r, 0.75f);
+        g.setGradientFill (juce::ColourGradient (colours::ink.withAlpha (0.85f), 0.0f, 0.0f, colours::ink.withAlpha (0.0f), 0.0f, 70.0f, false));   // top bar
+        g.fillRect (r.withHeight (70.0f));
+
+        // the quick-mix dock: frosted dark glass
+        const auto dock = juce::Rectangle<float> (20.0f, 530.0f, 1060.0f, 148.0f);
+        fx::softShadow (g, dock, 18.0f, 0.8f, 20.0f, 8.0f);
+        fx::frost (g, img, scale, dock, 18.0f, 14);
+        fx::glass (g, dock, 18.0f, 0.62f);
+        const char* titles[] = { "KICK", "SNARE", "HATS" };
+        const DrumType types[] = { DrumType::kick, DrumType::snare, DrumType::closedHat };
+        for (int grp = 0; grp < 3; ++grp)
+            drawOverline (g, titles[grp], juce::Rectangle<float> (static_cast<float> (groupX[grp]), 540.0f, 196.0f, 16.0f), drumColour (types[grp]),
+                          juce::Justification::centred);
+        drawOverline (g, "GLOBAL", juce::Rectangle<float> (782.0f, 540.0f, 290.0f, 16.0f), colours::moon, juce::Justification::centred);
+        juce::ColourGradient line (juce::Colours::white.withAlpha (0.0f), 0.0f, 548.0f, juce::Colours::white.withAlpha (0.0f), 0.0f, 664.0f, false);
+        line.addColour (0.5, juce::Colours::white.withAlpha (0.1f));
+        g.setGradientFill (line);
+        for (float x : { 250.0f, 466.0f, 766.0f })   // hairline dividers between the groups
+            g.fillRect (juce::Rectangle<float> (x, 548.0f, 1.0f, 116.0f));
+    }
+
+    void paintTitle (juce::Graphics& g)
+    {
+        drawWordmark (g, { 24.0f, 40.0f }, 30.0f);
+        juce::String status;
+        juce::Colour dot = colours::boneFaint;
+        if (model.slack > 0.5f) { status = "BYPASSED"; dot = colours::blood; }
+        else if (model.listening) { status = "LISTENING"; dot = colours::ecto.withAlpha (0.4f + 0.6f * (0.5f + 0.5f * std::sin (static_cast<float> (model.now) * 4.0f))); }
+        else
+        {
+            int n = 0;
+            for (auto& s : model.slots) if (! s.pending) ++n;
+            status = juce::String (n) + (n == 1 ? " STRING" : " STRINGS");
+            dot = colours::moon;
+        }
+        g.setColour (dot);
+        g.fillEllipse (juce::Rectangle<float> (5.0f, 5.0f).withCentre ({ 27.0f, 55.0f }));
+        if (model.listening || model.slack > 0.5f) fx::glowDot (g, { 27.0f, 55.0f }, 8.0f, dot.withAlpha (0.5f));
+        g.setFont (caps (9.0f, 0.24f));
+        g.setColour (colours::boneDim);
+        g.drawText (status, juce::Rectangle<float> (36.0f, 48.0f, 240.0f, 14.0f), juce::Justification::centredLeft, false);
+    }
 
     void layout()
     {
@@ -307,7 +445,7 @@ private:
 
     float drumY (const StageModel::Slot& s) const
     {
-        return 318.0f - s.jerk * 26.0f - (1.0f - easeOutBounce (s.drop)) * 190.0f;
+        return 318.0f - s.jerk * 26.0f - (1.0f - easeOutBounce (s.drop)) * 190.0f + model.slack * 22.0f;
     }
 
     Target target (juce::Point<float> p, int* slotOut = nullptr)
@@ -324,8 +462,8 @@ private:
                 return Target::slot;
             }
         }
-        const bool onBar = p.y > barY - 90.0f && p.y < barY + 12.0f && p.x > barX1 - 40.0f && p.x < barX2 + 40.0f && p.y > 46.0f;
-        const bool onMask = p.getDistanceFrom ({ 550.0f, 40.0f }) < 95.0f && p.y > 46.0f;
+        const bool onBar = p.y > barY - 90.0f && p.y < barY + 12.0f && p.x > barX1 - 40.0f && p.x < barX2 + 40.0f && p.y > 50.0f;
+        const bool onMask = p.getDistanceFrom ({ 550.0f, 40.0f }) < 95.0f && p.y > 50.0f;
         if (onBar || onMask) return Target::puppet;
         const auto d = (p - ringCentre);
         if ((d.x * d.x) / (ringRx * ringRx) + (d.y * d.y) / (ringRy * ringRy) < 1.1f) return Target::ring;
@@ -337,9 +475,15 @@ private:
     std::vector<std::unique_ptr<Knob>> knobs;
     ParamToggle link { proc.apvts, "qm_link", "LINK" };
     ParamToggle bypass { proc.apvts, "global_bypass", "" };
+    fx::CachedLayer background;
+    juce::Image fog;
     std::vector<float> xs;
+    Target hover = Target::none;
+    int hoverSlot = -1;
+    bool lastLinked = false;
     float barX1 = 430.0f, barX2 = 670.0f;
     const float barY = 168.0f;
+    const int groupX[3] = { 44, 260, 476 };
     const juce::Point<float> ringCentre { 550.0f, 470.0f };
     const float ringRx = 250.0f, ringRy = 50.0f;
 };
@@ -368,7 +512,8 @@ public:
             if (pending) { if (onChooseType) onChooseType (t); }
             else if (t != type) { if (onChangeType) onChangeType (t); }
         };
-        addAndMakeVisible (cut);
+        addAndMakeVisible (styled (cut, "danger", "scissors", colours::blood));
+        cut.setTooltip ("Cut this string: the drum goes back to Misc (neutral)");
         cut.onClick = [this] { if (onCut) onCut(); };
     }
 
@@ -380,86 +525,207 @@ public:
         if (pending) typeBox.setSelectedId (0, juce::dontSendNotification);
         else typeBox.setSelectedId (static_cast<int> (t) + 1, juce::dontSendNotification);
         updating = false;
+        setAccent (typeBox, pending ? colours::ecto : drumColour (t));
         knobs.clear();
-        titles.clear();
+        cards.clear();
+        fader.reset();
         if (! pending)
         {
-            const auto groups = deepEditGroups (t);
-            const int rows = static_cast<int> (groups.size());
-            const int rowH = juce::jmin (124, 610 / juce::jmax (1, rows));
-            int y = 58;
-            for (const auto& gr : groups)
+            const auto accent = drumColour (t);
+            std::vector<KnobGroup> groups;
+            for (auto& gr : deepEditGroups (t))
             {
-                titles.push_back ({ gr.title, y });
-                int x = 440;
-                for (const auto& k : gr.knobs)
+                if (juce::String (gr.title) == "LEVEL")
                 {
-                    auto knob = std::make_unique<Knob> (proc.apvts, k.first, k.second);
-                    const int size = rowH - 26;
-                    knob->setBounds (x, y + 20, juce::jmax (70, size), size);
-                    x += juce::jmax (70, size) + 26;
-                    addAndMakeVisible (*knob);
-                    knobs.push_back (std::move (knob));
+                    fader = std::make_unique<Fader> (proc.apvts, gr.knobs.front().first, accent);
+                    fader->meter = [this] {
+                        for (auto& s : model.slots)
+                            if (! s.pending && s.type == type) return s.jerk;
+                        return 0.0f;
+                    };
+                    addAndMakeVisible (*fader);
+                    fader->setBounds (levelCard.reduced (8, 14).withTrimmedTop (4));
                 }
-                y += rowH;
+                else groups.push_back (gr);
             }
+            layoutCards (groups, accent);
         }
+        background.invalidate();
         repaint();
     }
 
     bool isPending() const noexcept { return pending; }
     DrumType currentType() const noexcept { return type; }
 
+    /** Called by the editor's timer while this page is visible. */
+    void tick()
+    {
+        repaint (0, 0, 440, 540);
+        if (fader != nullptr) fader->repaint();
+    }
+
     void resized() override
     {
-        back.setBounds (20, 14, 110, 30);
-        typeBox.setBounds (60, 548, 300, 32);
-        cut.setBounds (60, 596, 300, 30);
+        back.setBounds (20, 16, 104, 32);
+        typeBox.setBounds (40, 578, 222, 40);
+        cut.setBounds (270, 578, 132, 40);
     }
 
     void paint (juce::Graphics& g) override
     {
-        g.fillAll (colours::wallDark);
-        // cold moonlight spot on the drum
-        g.setGradientFill (juce::ColourGradient (colours::wall.brighter (0.35f), 210.0f, 300.0f, colours::wallDark, 210.0f, 620.0f, true));
-        g.fillEllipse (juce::Rectangle<float> (420.0f, 640.0f).withCentre ({ 210.0f, 330.0f }));
-        g.setColour (colours::goldDim.withAlpha (0.5f));
-        g.drawVerticalLine (400, 30.0f, 660.0f);
+        background.draw (g, baseW, baseH, [this] (juce::Graphics& ig, juce::Image& img, float s) { paintBackground (ig, img, s); });
 
+        const auto col = pending ? colours::ecto : drumColour (type);
         float jerk = 0.0f;
+        int index = 0, count = 0;
         for (auto& s : model.slots)
-            if (s.pending == pending && (pending || s.type == type)) jerk = s.jerk;
-        const float y = 300.0f - jerk * 30.0f;
-        g.setColour (colours::string);
-        g.drawLine (210.0f, 0.0f, 210.0f, y - 100.0f, 1.5f);
-        if (pending) art::questionTag (g, { 210.0f, y }, 200.0f);
-        else art::drum (g, type, { 210.0f, y }, 200.0f);
-
-        g.setFont (serif (30.0f, true));
-        g.setColour (colours::gold);
-        g.drawText (pending ? juce::String ("A NEW STRING") : typeTitle (type), 20, 430, 380, 40, juce::Justification::centred);
-        g.setFont (serif (14.0f, true));
-        g.setColour (colours::goldDim);
-        g.drawText ("THIS STRING IS A", 60, 526, 300, 20, juce::Justification::centredLeft);
-
-        if (pending)
         {
-            g.setFont (serif (22.0f));
-            g.setColour (colours::bone.withAlpha (0.8f));
-            g.drawFittedText (juce::String::fromUTF8 ("Choose what hangs on this string\xe2\x80\xa6\nIts knobs appear here."),
-                              juce::Rectangle<int> (440, 260, 620, 80), juce::Justification::centred, 2);
+            ++count;
+            if (s.pending == pending && (pending || s.type == type)) { jerk = s.jerk; index = count; }
         }
-        g.setFont (serif (16.0f, true));
-        for (const auto& t : titles)
-        {
-            g.setColour (colours::gold);
-            g.drawText (t.first, 440, t.second, 400, 18, juce::Justification::centredLeft);
-            g.setColour (colours::goldDim.withAlpha (0.4f));
-            g.drawHorizontalLine (t.second + 18, 440.0f, 1070.0f);
-        }
+        g.setFont (mono (11.0f));
+        g.setColour (colours::boneFaint);
+        g.drawText (juce::String::formatted ("STRING %02d / %02d", juce::jmax (1, index), juce::jmax (1, count)), juce::Rectangle<float> (250.0f, 16.0f, 160.0f, 32.0f),
+                    juce::Justification::centredRight, false);
+
+        // the drum, still on its string, under the spotlight
+        const float cx = 216.0f, y = 250.0f - jerk * 30.0f;
+        fx::glowEllipse (g, juce::Rectangle<float> (220.0f * (1.0f - 0.25f * jerk), 34.0f).withCentre ({ cx, 396.0f }), colours::ink.withAlpha (0.8f));
+        if (jerk > 0.01f) fx::glowEllipse (g, juce::Rectangle<float> (300.0f, 60.0f).withCentre ({ cx, 396.0f }), col.withAlpha (0.25f * jerk));
+        juce::Path str;
+        str.startNewSubPath (cx, 0.0f);
+        str.lineTo (cx, y - 70.0f);
+        if (jerk > 0.05f) fx::glowStroke (g, str, col.withAlpha (jerk), 1.2f, jerk);
+        g.setColour (colours::string.withAlpha (0.8f));
+        g.strokePath (str, juce::PathStrokeType (1.3f));
+        if (pending) art::questionTag (g, { cx, y }, 190.0f, 0.4f + 0.3f * std::sin (static_cast<float> (model.now) * 2.5f));
+        else art::drum (g, type, { cx, y }, 180.0f, jerk);
+
+        g.setFont (display (66.0f));
+        g.setColour (colours::bone);
+        g.drawText (pending ? juce::String ("A new string") : typeName (type), juce::Rectangle<float> (20.0f, 410.0f, 392.0f, 66.0f), juce::Justification::centred, false);
+        g.setFont (whisper (20.0f));
+        g.setColour (col.withAlpha (0.75f));
+        g.drawText (pending ? juce::String ("what hangs here?") : typeWhisper (type), juce::Rectangle<float> (20.0f, 474.0f, 392.0f, 26.0f), juce::Justification::centred,
+                    false);
     }
 
 private:
+    struct Card { juce::String title; juce::Rectangle<float> r; };
+
+    void layoutCards (const std::vector<KnobGroup>& groups, juce::Colour accent)
+    {
+        // pack the groups into rows of at most five knobs; cards share a row by knob count
+        std::vector<std::vector<const KnobGroup*>> rows;
+        int inRow = 0;
+        for (auto& gr : groups)
+        {
+            const int n = static_cast<int> (gr.knobs.size());
+            if (rows.empty() || inRow + n > 5) { rows.emplace_back(); inRow = 0; }
+            rows.back().push_back (&gr);
+            inRow += n;
+        }
+        const float gap = 14.0f;
+        const auto nRows = static_cast<float> (rows.size());
+        const float rowH = juce::jmin (206.0f, (gridArea.getHeight() - gap * (nRows - 1.0f)) / juce::jmax (1.0f, nRows));
+        float y = gridArea.getY() + (gridArea.getHeight() - (rowH * nRows + gap * (nRows - 1.0f))) * 0.5f;
+        for (auto& row : rows)
+        {
+            int total = 0;
+            for (auto* gr : row) total += static_cast<int> (gr->knobs.size());
+            const float unit = (gridArea.getWidth() - gap * static_cast<float> (row.size() - 1)) / static_cast<float> (total);
+            float x = gridArea.getX();
+            for (auto* gr : row)
+            {
+                const auto n = static_cast<int> (gr->knobs.size());
+                const auto card = juce::Rectangle<float> (x, y, unit * static_cast<float> (n), rowH);
+                cards.push_back ({ gr->title, card });
+                const auto knobArea = card.reduced (10.0f, 0.0f).withTrimmedTop (40.0f).withTrimmedBottom (12.0f);
+                const float cell = knobArea.getWidth() / static_cast<float> (n);
+                const float kw = juce::jmin (cell, 108.0f), kh = juce::jmin (knobArea.getHeight(), kw * 1.22f);
+                for (int k = 0; k < n; ++k)
+                {
+                    const auto& kd = gr->knobs[static_cast<std::size_t> (k)];
+                    auto knob = std::make_unique<Knob> (proc.apvts, kd.first, kd.second, accent);
+                    knob->setBounds (juce::Rectangle<float> (kw, kh)
+                                         .withCentre ({ knobArea.getX() + cell * (static_cast<float> (k) + 0.5f), knobArea.getCentreY() })
+                                         .toNearestInt());
+                    addAndMakeVisible (*knob);
+                    knobs.push_back (std::move (knob));
+                }
+                x += unit * static_cast<float> (n) + gap;
+            }
+            y += rowH + gap;
+        }
+    }
+
+    void paintBackground (juce::Graphics& g, juce::Image& img, float scale)
+    {
+        const auto r = juce::Rectangle<float> (static_cast<float> (baseW), static_cast<float> (baseH));
+        const auto col = pending ? colours::ecto : drumColour (type);
+        g.fillAll (colours::ink);
+        g.setGradientFill (juce::ColourGradient (colours::deep, 760.0f, 300.0f, colours::ink, 1100.0f, 700.0f, true));
+        g.fillRect (r.withLeft (440.0f));
+        // a huge ghost of the name behind the controls
+        g.setFont (display (300.0f));
+        g.setColour (juce::Colours::white.withAlpha (0.022f));
+        g.drawText (pending ? juce::String ("?") : typeName (type), juce::Rectangle<float> (470.0f, 360.0f, 900.0f, 330.0f), juce::Justification::centredLeft, false);
+        // the spotlight from above onto the drum
+        fx::soft (g, r.withRight (440.0f), 4.0f, 7, [&] (juce::Graphics& sg) {
+            juce::Path cone;
+            cone.startNewSubPath (186.0f, -20.0f);
+            cone.lineTo (246.0f, -20.0f);
+            cone.lineTo (370.0f, 400.0f);
+            cone.lineTo (62.0f, 400.0f);
+            cone.closeSubPath();
+            sg.setGradientFill (juce::ColourGradient (colours::moon.withAlpha (0.3f), 0.0f, 0.0f, colours::moon.withAlpha (0.07f), 0.0f, 400.0f, false));
+            sg.fillPath (cone);
+            sg.setColour (colours::moon.withAlpha (0.22f));
+            sg.fillEllipse (juce::Rectangle<float> (330.0f, 70.0f).withCentre ({ 216.0f, 398.0f }));
+            sg.setColour (col.withAlpha (0.08f));
+            sg.fillEllipse (juce::Rectangle<float> (420.0f, 140.0f).withCentre ({ 216.0f, 410.0f }));
+        });
+        fx::vignette (g, r, 0.7f);
+        juce::ColourGradient line (juce::Colours::white.withAlpha (0.0f), 0.0f, 20.0f, juce::Colours::white.withAlpha (0.0f), 0.0f, 668.0f, false);
+        line.addColour (0.5, juce::Colours::white.withAlpha (0.1f));
+        g.setGradientFill (line);
+        g.fillRect (juce::Rectangle<float> (440.0f, 20.0f, 1.0f, 648.0f));
+
+        drawOverline (g, "THIS STRING IS A", juce::Rectangle<float> (40.0f, 552.0f, 300.0f, 16.0f), col);
+
+        if (pending)
+        {
+            for (int i = 0; i < 3; ++i)   // skeleton cards: the knobs will appear here
+            {
+                const auto card = juce::Rectangle<float> (gridArea.getX(), gridArea.getY() + 30.0f + static_cast<float> (i) * 196.0f, gridArea.getWidth() + 120.0f, 176.0f);
+                juce::Path outline;
+                outline.addRoundedRectangle (card, 16.0f);
+                juce::Path dashed;
+                const float dashes[] = { 4.0f, 6.0f };
+                juce::PathStrokeType (1.0f).createDashedStroke (dashed, outline, dashes, 2);
+                g.setColour (juce::Colours::white.withAlpha (0.07f));
+                g.fillPath (dashed);
+            }
+            g.setFont (whisper (32.0f));
+            g.setColour (colours::bone.withAlpha (0.85f));
+            g.drawText (juce::String::fromUTF8 ("Choose what hangs on this string\xe2\x80\xa6"), juce::Rectangle<float> (460.0f, 300.0f, 616.0f, 40.0f),
+                        juce::Justification::centred, false);
+            g.setFont (caps (9.5f, 0.22f));
+            g.setColour (colours::boneDim);
+            g.drawText ("ITS KNOBS APPEAR HERE", juce::Rectangle<float> (460.0f, 344.0f, 616.0f, 16.0f), juce::Justification::centred, false);
+            return;
+        }
+        for (const auto& card : cards)
+        {
+            fx::softShadow (g, card.r, 16.0f, 0.6f, 14.0f, 6.0f);
+            fx::glass (g, card.r, 16.0f, 0.55f);
+            drawOverline (g, card.title, juce::Rectangle<float> (card.r.getX() + 16.0f, card.r.getY() + 14.0f, card.r.getWidth() - 32.0f, 14.0f), col);
+        }
+        fx::softShadow (g, levelCard.toFloat(), 16.0f, 0.6f, 14.0f, 6.0f);
+        fx::glass (g, levelCard.toFloat(), 16.0f, 0.55f);
+        juce::ignoreUnused (img, scale);
+    }
+
     DrumMasterProcessor& proc;
     StageModel& model;
     bool pending = false, updating = false;
@@ -467,7 +733,11 @@ private:
     juce::TextButton back, cut { "CUT STRING" };
     juce::ComboBox typeBox;
     std::vector<std::unique_ptr<Knob>> knobs;
-    std::vector<std::pair<juce::String, int>> titles;
+    std::unique_ptr<Fader> fader;
+    std::vector<Card> cards;
+    fx::CachedLayer background;
+    const juce::Rectangle<float> gridArea { 460.0f, 24.0f, 496.0f, 640.0f };
+    const juce::Rectangle<int> levelCard { 970, 24, 108, 640 };
 };
 
 // ------------------------------------------------------------------------- The Puppet Show
@@ -482,6 +752,8 @@ public:
         auto& s = proc.apvts;
         addAndMakeVisible (styleBack (back));
         back.onClick = [this] { if (onBack) onBack(); };
+        styled (lever, "switch", "", colours::limelight);
+        lever.setTooltip ("The Puppet Show listens all the time; this turns its EQ on");
         addAndMakeVisible (lever);
         genre = dynamic_cast<juce::AudioParameterChoice*> (s.getParameter ("ps_genre"));
         const char* names[] = { "ROCK", "POP", "EDM", "METAL", "HIP-HOP" };
@@ -489,6 +761,8 @@ public:
         {
             auto& b = genres[static_cast<std::size_t> (i)];
             b.setButtonText (names[i]);
+            styled (b, "ticket", "", colours::limelight);
+            b.getProperties().set ("genre", i);
             b.setClickingTogglesState (true);
             b.setRadioGroupId (1);
             b.onClick = [this, i] {
@@ -501,12 +775,12 @@ public:
             };
             addAndMakeVisible (b);
         }
-        depth = std::make_unique<Knob> (s, "ps_depth", "DEPTH");
+        depth = std::make_unique<Knob> (s, "ps_depth", "Depth", colours::limelight);
         addAndMakeVisible (*depth);
         const char* ks[4][2] = { { "ps_bass", "Bass boost" }, { "ps_mud", "Mud control" }, { "ps_presence", "Mid presence" }, { "ps_high", "High control" } };
         for (auto& k : ks)
         {
-            knobs.push_back (std::make_unique<Knob> (s, k[0], k[1]));
+            knobs.push_back (std::make_unique<Knob> (s, k[0], k[1], colours::limelight));
             addAndMakeVisible (*knobs.back());
         }
     }
@@ -520,80 +794,125 @@ public:
             for (int i = 0; i < 5; ++i)
                 genres[static_cast<std::size_t> (i)].setToggleState (i == idx, juce::dontSendNotification);
         }
-        repaint (juce::Rectangle<int> (150, 430, 800, 250));
+        for (std::size_t i = 0; i < shown.size(); ++i)
+        {
+            const float v = meterValue ? juce::jlimit (-8.0f, 8.0f, meterValue (static_cast<int> (i))) : 0.0f;
+            shown[i] += (v - shown[i]) * 0.2f;
+        }
+        repaint (meterPanel.toNearestInt().expanded (4));
+        repaint (marquee.toNearestInt().expanded (30));
     }
 
     void resized() override
     {
-        back.setBounds (20, 14, 110, 30);
-        lever.setBounds (910, 14, 170, 30);
+        back.setBounds (20, 16, 104, 32);
+        lever.setBounds (880, 16, 200, 32);
         for (int i = 0; i < 5; ++i)
-            genres[static_cast<std::size_t> (i)].setBounds (180 + i * 150, 124, 136, 40);
-        depth->setBounds (470, 186, 160, 190);
-        const int kx[4] = { 150, 300, 690, 840 };
+            genres[static_cast<std::size_t> (i)].setBounds (190 + i * 146, 146, 134, 54);
+        depth->setBounds (462, 216, 176, 204);
+        const int kx[4] = { 158, 302, 688, 832 };
         for (int i = 0; i < 4; ++i)
-            knobs[static_cast<std::size_t> (i)]->setBounds (kx[i], 222, 110, 134);
+            knobs[static_cast<std::size_t> (i)]->setBounds (kx[i], 250, 110, 132);
     }
 
     void paint (juce::Graphics& g) override
     {
-        art::stage (g, getLocalBounds().toFloat(), 1.0f);
-        // marquee with bulbs
-        const auto marquee = juce::Rectangle<float> (330.0f, 26.0f, 440.0f, 76.0f);
-        g.setColour (colours::velvetDark);
-        g.fillRoundedRectangle (marquee, 8.0f);
-        g.setColour (colours::gold);
-        g.drawRoundedRectangle (marquee, 8.0f, 2.0f);
-        for (int i = 0; i < 22; ++i)
-        {
-            const float t = static_cast<float> (i) / 22.0f;
-            const auto p = t < 0.5f ? juce::Point<float> (marquee.getX() + 8.0f + (marquee.getWidth() - 16.0f) * t * 2.0f, marquee.getY() + 7.0f)
-                                    : juce::Point<float> (marquee.getX() + 8.0f + (marquee.getWidth() - 16.0f) * (t - 0.5f) * 2.0f, marquee.getBottom() - 7.0f);
-            const bool on = (i + static_cast<int> (juce::Time::getMillisecondCounter() / 250)) % 3 != 0;
-            g.setColour (on ? colours::gold.brighter (0.4f) : colours::goldDim.darker (0.3f));
-            g.fillEllipse (juce::Rectangle<float> (6.0f, 6.0f).withCentre (p));
-        }
-        g.setFont (serif (32.0f, true));
-        g.setColour (colours::bone);
-        g.drawText ("THE PUPPET SHOW", marquee.reduced (10.0f, 14.0f), juce::Justification::centred);
-        g.setFont (serif (14.0f));
-        g.setColour (colours::gold);
-        g.drawText ("pick a genre, set the depth, press play", 300, 170, 500, 18, juce::Justification::centred);
+        background.draw (g, baseW, baseH, [this] (juce::Graphics& ig, juce::Image& img, float s) { paintBackground (ig, img, s); });
 
-        // live band meters: up = boost, down = cut (+-8 dB)
-        const char* names[] = { "KICK SUB", "MUD", "PRESENCE", "KICK CLICK", "AIR" };
-        const auto area = juce::Rectangle<float> (190.0f, 420.0f, 720.0f, 210.0f);
-        g.setColour (colours::night.withAlpha (0.8f));
-        g.fillRoundedRectangle (area.withTrimmedLeft (-44.0f).expanded (14.0f, 10.0f), 6.0f);
-        const float mid = area.getCentreY() - 10.0f, half = 80.0f;
-        g.setColour (colours::goldDim.withAlpha (0.5f));
-        g.drawHorizontalLine (juce::roundToInt (mid), area.getX(), area.getRight());
-        g.setFont (serif (11.0f));
-        for (int db : { 8, 4, -4, -8 })
+        // the marquee: chasing bulbs around a lit sign
+        const bool on = lever.getToggleState();
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff2a0710), 0.0f, marquee.getY(), juce::Colour (0xff12030a), 0.0f, marquee.getBottom(), false));
+        g.fillRoundedRectangle (marquee, 12.0f);
+        g.setColour (colours::brass.withAlpha (0.8f));
+        g.drawRoundedRectangle (marquee, 12.0f, 1.5f);
+        g.drawRoundedRectangle (marquee.reduced (5.0f), 9.0f, 0.6f);
+        const int bulbs = 26;
+        const int step = static_cast<int> (juce::Time::getMillisecondCounter() / 180);
+        for (int i = 0; i < bulbs; ++i)
         {
-            const float y = mid - static_cast<float> (db) / 8.0f * half;
-            g.setColour (colours::goldDim.withAlpha (0.25f));
-            g.drawHorizontalLine (juce::roundToInt (y), area.getX(), area.getRight());
-            g.setColour (colours::goldDim);
-            g.drawText ((db > 0 ? "+" : "") + juce::String (db), juce::Rectangle<float> (area.getX() - 34.0f, y - 7.0f, 28.0f, 14.0f), juce::Justification::centredRight);
+            const float t = static_cast<float> (i) / static_cast<float> (bulbs);
+            const auto inner = marquee.reduced (10.0f, 0.0f);
+            const auto p = t < 0.5f ? juce::Point<float> (inner.getX() + inner.getWidth() * t * 2.0f, marquee.getY() + 8.0f)
+                                    : juce::Point<float> (inner.getRight() - inner.getWidth() * (t - 0.5f) * 2.0f, marquee.getBottom() - 8.0f);
+            const bool lit = (i + step) % 3 != 0;
+            if (lit) fx::glowDot (g, p, 9.0f, colours::limelight.withAlpha (on ? 0.6f : 0.3f));
+            g.setColour (lit ? colours::limelight.brighter (0.3f).withAlpha (on ? 1.0f : 0.7f) : colours::brassDim.darker (0.5f));
+            g.fillEllipse (juce::Rectangle<float> (4.5f, 4.5f).withCentre (p));
         }
+        const auto a = whisper (40.0f), b = display (40.0f);
+        const float wa = textWidth (a, "The "), wb = textWidth (b, "Puppet Show");
+        const float x0 = marquee.getCentreX() - (wa + wb) * 0.5f;
+        g.setFont (a);
+        g.setColour (colours::limelight.withAlpha (0.8f));
+        g.drawText ("The ", juce::Rectangle<float> (x0, marquee.getY() + 12.0f, wa + 4.0f, marquee.getHeight() - 24.0f), juce::Justification::centredLeft, false);
+        g.setFont (b);
+        g.setColour (colours::bone);
+        g.drawText ("Puppet Show", juce::Rectangle<float> (x0 + wa, marquee.getY() + 12.0f, wb + 4.0f, marquee.getHeight() - 24.0f), juce::Justification::centredLeft, false);
+
+        // live band meters: up = boost (warm), down = cut (cold), +-8 dB
+        const char* names[] = { "KICK SUB", "MUD", "PRESENCE", "KICK CLICK", "AIR" };
         for (int i = 0; i < 5; ++i)
         {
-            const float v = meterValue ? juce::jlimit (-8.0f, 8.0f, meterValue (i)) : 0.0f;
-            const float x = area.getX() + 40.0f + static_cast<float> (i) * 144.0f;
-            const float h = std::abs (v) / 8.0f * half;
-            const auto bar = juce::Rectangle<float> (x, v >= 0.0f ? mid - h : mid, 64.0f, h);
-            g.setGradientFill (juce::ColourGradient (colours::glow, x, mid, colours::glow.withAlpha (0.35f), x, v >= 0.0f ? mid - half : mid + half, false));
-            g.fillRect (bar);
-            g.setColour (colours::bone);
-            g.setFont (serif (13.0f, true));
-            g.drawText (names[i], juce::Rectangle<float> (x - 30.0f, area.getBottom() - 16.0f, 124.0f, 16.0f), juce::Justification::centred);
-            g.setFont (serif (12.0f));
-            g.drawText ((v > 0.05f ? "+" : "") + juce::String (v, 1) + " dB", juce::Rectangle<float> (x - 20.0f, mid + (v >= 0.0f ? 6.0f : -20.0f), 104.0f, 14.0f), juce::Justification::centred);
+            const float v = shown[static_cast<std::size_t> (i)];
+            const float x = meterX (i);
+            const float h = std::abs (v) / 8.0f * meterHalf;
+            const auto colr = v >= 0.0f ? colours::limelight : colours::frost;
+            g.setColour (juce::Colours::white.withAlpha (0.04f));
+            g.fillRoundedRectangle (juce::Rectangle<float> (14.0f, meterHalf * 2.0f).withCentre ({ x, meterMid }), 7.0f);
+            if (h > 0.5f)
+            {
+                const auto bar = juce::Rectangle<float> (x - 7.0f, v >= 0.0f ? meterMid - h : meterMid, 14.0f, h);
+                const auto endP = juce::Point<float> (x, v >= 0.0f ? bar.getY() : bar.getBottom());
+                fx::glowDot (g, endP, 26.0f, colr.withAlpha (on ? 0.35f : 0.15f));
+                g.setGradientFill (juce::ColourGradient (colr.withAlpha (on ? 0.25f : 0.12f), x, meterMid, colr.withAlpha (on ? 0.95f : 0.45f), endP.x, endP.y, false));
+                g.fillRoundedRectangle (bar, 7.0f);
+                g.setColour (juce::Colours::white.withAlpha (on ? 0.9f : 0.4f));
+                g.fillRoundedRectangle (juce::Rectangle<float> (10.0f, 2.0f).withCentre (endP.translated (0.0f, v >= 0.0f ? 3.0f : -3.0f)), 1.0f);
+            }
+            g.setFont (mono (11.0f));
+            g.setColour (on ? colr.brighter (0.2f) : colours::boneDim);
+            const juce::String txt = formatValue (static_cast<double> (v), "dB", true);
+            g.drawText (txt, juce::Rectangle<float> (x + 12.0f, (v >= 0.0f ? meterMid - h : meterMid + h) - 7.0f, 70.0f, 14.0f), juce::Justification::centredLeft, false);
+            g.setFont (caps (9.5f, 0.2f));
+            g.setColour (colours::bone.withAlpha (0.8f));
+            g.drawText (names[i], juce::Rectangle<float> (x - 70.0f, meterPanel.getBottom() - 30.0f, 140.0f, 14.0f), juce::Justification::centred, false);
         }
     }
 
 private:
+    float meterX (int i) const { return meterPanel.getX() + 120.0f + static_cast<float> (i) * 145.0f; }
+
+    void paintBackground (juce::Graphics& g, juce::Image& img, float scale)
+    {
+        const auto r = juce::Rectangle<float> (static_cast<float> (baseW), static_cast<float> (baseH));
+        art::theatre (g, r);
+        fx::softShadow (g, marquee, 12.0f, 0.9f, 22.0f, 10.0f);
+        g.setFont (whisper (18.0f));
+        g.setColour (colours::boneDim);
+        g.drawText ("pick a genre, set the depth, press play", juce::Rectangle<float> (300.0f, 112.0f, 500.0f, 24.0f), juce::Justification::centred, false);
+
+        fx::softShadow (g, meterPanel, 18.0f, 0.8f, 20.0f, 8.0f);
+        fx::frost (g, img, scale, meterPanel, 18.0f, 14);
+        fx::glass (g, meterPanel, 18.0f, 0.7f, juce::Colour (0xff1e1014));
+        drawOverline (g, "LIVE  -  WHAT THE SHOW IS DOING", juce::Rectangle<float> (meterPanel.getX() + 20.0f, meterPanel.getY() + 16.0f, 400.0f, 14.0f),
+                      colours::limelight);
+        g.setFont (mono (9.5f));
+        for (int db : { 8, 4, 0, -4, -8 })
+        {
+            const float y = meterMid - static_cast<float> (db) / 8.0f * meterHalf;
+            const float dashes[] = { 2.0f, 5.0f };
+            juce::Path line, dashed;
+            line.startNewSubPath (meterPanel.getX() + 58.0f, y);
+            line.lineTo (meterPanel.getRight() - 24.0f, y);
+            juce::PathStrokeType (1.0f).createDashedStroke (dashed, line, dashes, 2);
+            g.setColour (juce::Colours::white.withAlpha (db == 0 ? 0.2f : 0.07f));
+            g.fillPath (dashed);
+            g.setColour (db == 0 ? colours::boneDim : colours::boneFaint);
+            g.drawText ((db > 0 ? "+" : "") + juce::String (db), juce::Rectangle<float> (meterPanel.getX() + 16.0f, y - 7.0f, 34.0f, 14.0f), juce::Justification::centredRight,
+                        false);
+        }
+    }
+
     DrumMasterProcessor& proc;
     juce::TextButton back;
     ParamToggle lever { proc.apvts, "ps_enabled", "THE SHOW IS OFF" };
@@ -601,6 +920,11 @@ private:
     std::array<juce::TextButton, 5> genres;
     std::unique_ptr<Knob> depth;
     std::vector<std::unique_ptr<Knob>> knobs;
+    std::array<float, 5> shown {};
+    fx::CachedLayer background;
+    const juce::Rectangle<float> marquee { 330.0f, 40.0f, 440.0f, 70.0f };
+    const juce::Rectangle<float> meterPanel { 150.0f, 432.0f, 800.0f, 222.0f };
+    const float meterMid = 544.0f, meterHalf = 58.0f;
 };
 
 // ---------------------------------------------------------------------- the master's hands
@@ -608,12 +932,13 @@ class AdvancedPage final : public juce::Component
 {
 public:
     std::function<void()> onBack, onForget;
+    float sway = 0.0f, breathe = 0.0f, time = 0.0f, flicker = 1.0f;
 
     explicit AdvancedPage (DrumMasterProcessor& p) : proc (p)
     {
         addAndMakeVisible (styleBack (back));
         back.onClick = [this] { if (onBack) onBack(); };
-        addAndMakeVisible (forget);
+        addAndMakeVisible (styled (forget, "pill", "forget", colours::ecto));
         forget.setTooltip ("Forget what was learned about this loop (which drums are present and how they sound)");
         forget.onClick = [this] {
             if (onForget) onForget();
@@ -622,38 +947,79 @@ public:
         const char* ks[4][2] = { { "adv_drive", "Distortion" }, { "adv_sat", "Saturation" }, { "adv_hpf", "High-pass" }, { "adv_lpf", "Low-pass" } };
         for (auto& k : ks)
         {
-            knobs.push_back (std::make_unique<Knob> (proc.apvts, k[0], k[1]));
+            knobs.push_back (std::make_unique<Knob> (proc.apvts, k[0], k[1], colours::ecto));
             addAndMakeVisible (*knobs.back());
         }
+        strings.setInterceptsMouseClicks (false, false);
+        strings.page = this;
+        addAndMakeVisible (strings);
     }
 
     void resized() override
     {
-        back.setBounds (20, 14, 110, 30);
+        back.setBounds (20, 16, 104, 32);
+        const int kx[4] = { 176, 368, 592, 784 }, ky[4] = { 388, 420, 420, 388 };
         for (int i = 0; i < 4; ++i)
-            knobs[static_cast<std::size_t> (i)]->setBounds (230 + i * 170, 380, 130, 158);
-        forget.setBounds (440, 590, 220, 34);
+            knobs[static_cast<std::size_t> (i)]->setBounds (kx[i], ky[i], 140, 170);
+        forget.setBounds (430, 620, 240, 38);
+        strings.setBounds (getLocalBounds());
     }
 
     void paint (juce::Graphics& g) override
     {
-        art::room (g, getLocalBounds().toFloat(), 1.0f, 0.0f);
-        art::legs (g, 550.0f, 452.0f, 0.0f, 1.0f);
-        art::hand (g, { 330.0f, 250.0f }, 150.0f, true, 0.0f, 440.0f);
-        art::hand (g, { 770.0f, 250.0f }, 150.0f, false, 0.0f, 660.0f);
-        art::mask (g, 550.0f, 110.0f, 230.0f, 0.0f);
-        g.setFont (serif (30.0f, true));
-        g.setColour (colours::gold);
-        g.drawText ("THE MASTER'S HANDS", 250, 318, 600, 40, juce::Justification::centred);
-        g.setFont (serif (14.0f));
-        g.setColour (colours::boneShadow);
-        g.drawText ("on the whole bus, after every drum", 250, 350, 600, 20, juce::Justification::centred);
+        const auto r = getLocalBounds().toFloat();
+        background.draw (g, baseW, baseH, [r] (juce::Graphics& ig, juce::Image&, float) {
+            art::room (ig, r, 0.75f);
+            ig.setColour (colours::ink.withAlpha (0.45f));
+            ig.fillRect (r);
+            fx::vignette (ig, r, 0.9f);
+            ig.setFont (whisper (19.0f));
+            ig.setColour (colours::boneDim);
+            ig.drawText ("on the whole bus, after every drum", juce::Rectangle<float> (250.0f, 336.0f, 600.0f, 24.0f), juce::Justification::centred, false);
+        });
+        if (fog.isNull()) fog = art::makeFogSprite();
+        art::roomLive (g, r, time, flicker, fog);
+        tipsL = art::hand (g, { 316.0f, 214.0f }, 150.0f, true, sway, 430.0f, 0.25f);
+        tipsR = art::hand (g, { 784.0f, 214.0f }, 150.0f, false, -sway, 670.0f, 0.25f);
+        art::mask (g, 550.0f, 112.0f + breathe, 240.0f, breathe, 0.2f);
+        g.setFont (display (54.0f));
+        g.setColour (colours::bone);
+        g.drawText ("The Master's Hands", juce::Rectangle<float> (250.0f, 276.0f, 600.0f, 60.0f), juce::Justification::centred, false);
     }
 
 private:
+    /** Strings from the master's fingertips to each knob's pointer: he turns them. */
+    struct Strings final : public juce::Component
+    {
+        AdvancedPage* page = nullptr;
+        void paint (juce::Graphics& g) override
+        {
+            if (page == nullptr) return;
+            const std::array<juce::Point<float>, 4> from { page->tipsL[0], page->tipsL[3], page->tipsR[0], page->tipsR[3] };
+            for (std::size_t i = 0; i < 4; ++i)
+            {
+                auto* k = page->knobs[i].get();
+                const auto to = k->pointerTip();
+                const bool hot = k->slider.isMouseOverOrDragging();
+                juce::Path s;
+                s.startNewSubPath (from[i]);
+                s.quadraticTo ((from[i].x + to.x) * 0.5f + page->sway * 2.0f, (from[i].y + to.y) * 0.5f + 10.0f, to.x, to.y);
+                if (hot) fx::glowStroke (g, s, colours::ecto.withAlpha (0.8f), 1.0f, 0.8f);
+                g.setColour (colours::string.withAlpha (hot ? 1.0f : 0.6f));
+                g.strokePath (s, juce::PathStrokeType (1.0f));
+                g.setColour (colours::brass);
+                g.drawEllipse (juce::Rectangle<float> (5.0f, 5.0f).withCentre (to), 1.2f);
+            }
+        }
+    };
+
     DrumMasterProcessor& proc;
     juce::TextButton back, forget { "FORGET THIS LOOP" };
     std::vector<std::unique_ptr<Knob>> knobs;
+    Strings strings;
+    std::array<juce::Point<float>, 4> tipsL {}, tipsR {};
+    fx::CachedLayer background;
+    juce::Image fog;
 };
 
 // ------------------------------------------------------------------------------------ about
@@ -666,30 +1032,65 @@ public:
         addAndMakeVisible (styleBack (back));
         back.onClick = [this] { if (onBack) onBack(); };
     }
-    void resized() override { back.setBounds (20, 14, 110, 30); }
+    void resized() override { back.setBounds (20, 16, 104, 32); }
     void paint (juce::Graphics& g) override
     {
-        art::room (g, getLocalBounds().toFloat(), 1.0f, 0.0f);
-        art::oldDrumSet (g, { 975.0f, 406.0f }, 0.68f, 0.8f);
-        g.setFont (serif (34.0f, true));
-        g.setColour (colours::gold);
-        g.drawText ("THE DRUM MASTER", 200, 110, 700, 44, juce::Justification::centred);
-        g.setFont (serif (16.0f));
-        g.setColour (colours::bone);
-        g.drawText (juce::String ("version ") + JucePlugin_VersionString, 200, 156, 700, 22, juce::Justification::centred);
-        const juce::String credits =
-            "The hit classifier was trained in part on the Groove MIDI Dataset\n"
-            "(Gillick, Roberts, Engel, Tsao and Bamman, 2019) and the Expanded Groove MIDI Dataset\n"
-            "(Callender, Hawthorne and Engel, 2020), Magenta, Google - both CC BY 4.0,\n"
-            "and on our own synthetic drum loops.\n\n"
-            "Every drum is detected 50 ms ahead and shaped only in its own frequency range.\n"
-            "Misc hits stay neutral: a wrong guess should never sound bad.";
-        g.setFont (serif (17.0f));
-        g.drawFittedText (credits, juce::Rectangle<int> (150, 230, 800, 220), juce::Justification::centred, 8);
+        background.draw (g, baseW, baseH, [] (juce::Graphics& ig, juce::Image& img, float s) {
+            const auto r = juce::Rectangle<float> (static_cast<float> (baseW), static_cast<float> (baseH));
+            art::room (ig, r, 0.8f);
+            art::oldDrumSet (ig, { 975.0f, 406.0f }, 0.68f);
+            fx::vignette (ig, r, 0.9f);
+            const auto card = juce::Rectangle<float> (230.0f, 64.0f, 640.0f, 568.0f);
+            fx::softShadow (ig, card, 22.0f, 0.9f, 24.0f, 10.0f);
+            fx::frost (ig, img, s, card, 22.0f, 18);
+            fx::glass (ig, card, 22.0f, 0.72f);
+
+            drawOverline (ig, "ABOUT", juce::Rectangle<float> (card.getX(), card.getY() + 34.0f, card.getWidth(), 14.0f), colours::ecto, juce::Justification::centred);
+            drawWordmark (ig, { card.getCentreX(), card.getY() + 110.0f }, 58.0f, juce::Justification::centred);
+            const juce::String version = juce::String ("VERSION ") + JucePlugin_VersionString;
+            ig.setFont (mono (11.0f));
+            const float vw = textWidth (mono (11.0f), version) + 26.0f;
+            const auto pill = juce::Rectangle<float> (vw, 24.0f).withCentre ({ card.getCentreX(), card.getY() + 146.0f });
+            ig.setColour (juce::Colours::white.withAlpha (0.05f));
+            ig.fillRoundedRectangle (pill, 12.0f);
+            ig.setColour (juce::Colours::white.withAlpha (0.14f));
+            ig.drawRoundedRectangle (pill, 12.0f, 1.0f);
+            ig.setColour (colours::boneDim);
+            ig.drawText (version, pill, juce::Justification::centred, false);
+
+            struct Section { const char* title; juce::Colour dot; const char* text; };
+            const Section sections[] = {
+                { "HOW IT HEARS", drumColour (DrumType::kick),
+                  "Every drum is detected 50 ms ahead and shaped only in its own frequency range.\n"
+                  "Misc hits stay neutral: a wrong guess should never sound bad." },
+                { "TRAINING DATA", drumColour (DrumType::closedHat),
+                  "The hit classifier was trained in part on the Groove MIDI Dataset (Gillick, Roberts, Engel, Tsao and Bamman, 2019) "
+                  "and the Expanded Groove MIDI Dataset (Callender, Hawthorne and Engel, 2020), Magenta, Google - both CC BY 4.0, "
+                  "and on our own synthetic drum loops." },
+                { "TYPE", drumColour (DrumType::crash),
+                  "Instrument Serif (The Instrument Serif Project Authors), Geist and Geist Mono (The Geist Project Authors), "
+                  "all under the SIL Open Font License 1.1." },
+            };
+            float y = card.getY() + 190.0f;
+            for (const auto& sec : sections)
+            {
+                drawOverline (ig, sec.title, juce::Rectangle<float> (card.getX() + 56.0f, y, 400.0f, 14.0f), sec.dot);
+                ig.setFont (sans (14.0f));
+                ig.setColour (colours::bone.withAlpha (0.78f));
+                ig.drawFittedText (sec.text, juce::Rectangle<float> (card.getX() + 56.0f, y + 22.0f, card.getWidth() - 112.0f, 70.0f).toNearestInt(),
+                                   juce::Justification::topLeft, 4, 1.0f);
+                y += 110.0f;
+            }
+            ig.setFont (whisper (18.0f));
+            ig.setColour (colours::boneDim);
+            ig.drawText ("made away from home, late at night", juce::Rectangle<float> (card.getX(), card.getBottom() - 50.0f, card.getWidth(), 24.0f),
+                         juce::Justification::centred, false);
+        });
     }
 
 private:
     juce::TextButton back;
+    fx::CachedLayer background;
 };
 
 /** Red velvet curtains over everything (The Puppet Show's entrance). */
@@ -709,31 +1110,46 @@ public:
     explicit ShadowOverlay (StageModel& m) : model (m) {}
     void paint (juce::Graphics& g) override
     {
-        g.fillAll (colours::night);
-        g.setGradientFill (juce::ColourGradient (colours::stageLight, 550.0f, 380.0f, colours::night, 550.0f, 700.0f, true));
-        g.fillEllipse (juce::Rectangle<float> (1100.0f, 640.0f).withCentre ({ 550.0f, 380.0f }));
-        g.setFont (serif (22.0f, true));
-        g.setColour (colours::gold);
-        g.drawText ("SHADOW PLAY", 0, 20, getWidth(), 30, juce::Justification::centred);
-        g.setFont (serif (13.0f));
-        g.setColour (colours::boneShadow);
-        g.drawText ("what the master hears - one bar, hits fade like smoke - click to close", 0, 50, getWidth(), 18, juce::Justification::centred);
-        drawShadowRing (g, model, { 550.0f, 380.0f }, 460.0f, 250.0f, 2.2f);
-        const DrumType types[] = { DrumType::kick, DrumType::snare, DrumType::closedHat, DrumType::openHat, DrumType::crash,
-                                   DrumType::ride, DrumType::rimshot, DrumType::clap, DrumType::misc };
-        for (int i = 0; i < 9; ++i)   // legend
-        {
-            const float x = 90.0f + static_cast<float> (i) * 112.0f;
-            art::shadowShape (g, types[i], { x, 656.0f }, 18.0f, shapeColour (types[i]));
-            g.setColour (colours::bone);
-            g.setFont (serif (12.0f));
-            g.drawText (plugin_dsp::drumTypeName (types[i]), juce::Rectangle<float> (x + 14.0f, 648.0f, 90.0f, 16.0f), juce::Justification::centredLeft);
-        }
+        background.draw (g, baseW, baseH, [] (juce::Graphics& ig, juce::Image&, float) {
+            const auto r = juce::Rectangle<float> (static_cast<float> (baseW), static_cast<float> (baseH));
+            ig.fillAll (colours::ink);
+            fx::soft (ig, r, 4.0f, 10, [&] (juce::Graphics& sg) {
+                sg.setColour (colours::ecto.withAlpha (0.05f));
+                sg.fillEllipse (juce::Rectangle<float> (1000.0f, 520.0f).withCentre ({ 550.0f, 372.0f }));
+                sg.setColour (colours::moon.withAlpha (0.05f));
+                for (int i = 0; i < 8; ++i)
+                    sg.fillEllipse (juce::Rectangle<float> (300.0f, 60.0f).withCentre ({ 1100.0f * art::hash01 (i + 3000), 600.0f + 80.0f * art::hash01 (i + 3100) }));
+            });
+            fx::vignette (ig, r, 0.9f);
+            ig.setFont (display (42.0f));
+            ig.setColour (colours::bone);
+            ig.drawText ("Shadow Play", juce::Rectangle<float> (0.0f, 14.0f, r.getWidth(), 48.0f), juce::Justification::centred, false);
+            ig.setFont (whisper (18.0f));
+            ig.setColour (colours::boneDim);
+            ig.drawText (juce::String::fromUTF8 ("what the master hears \xe2\x80\x94 one bar, hits fade like smoke \xe2\x80\x94 click to close"),
+                         juce::Rectangle<float> (0.0f, 60.0f, r.getWidth(), 24.0f), juce::Justification::centred, false);
+            const DrumType types[] = { DrumType::kick, DrumType::snare, DrumType::closedHat, DrumType::openHat, DrumType::crash,
+                                       DrumType::ride, DrumType::rimshot, DrumType::clap, DrumType::misc };
+            for (int i = 0; i < 9; ++i)   // legend chips
+            {
+                const auto chip = juce::Rectangle<float> (46.0f + static_cast<float> (i) * 113.0f, 632.0f, 104.0f, 30.0f);
+                ig.setColour (juce::Colours::white.withAlpha (0.04f));
+                ig.fillRoundedRectangle (chip, 15.0f);
+                ig.setColour (juce::Colours::white.withAlpha (0.1f));
+                ig.drawRoundedRectangle (chip, 15.0f, 1.0f);
+                art::shadowShape (ig, types[i], { chip.getX() + 18.0f, chip.getCentreY() }, 13.0f, drumColour (types[i]), 0.6f);
+                ig.setFont (caps (9.0f, 0.16f));
+                ig.setColour (colours::bone.withAlpha (0.8f));
+                ig.drawText (typeTitle (types[i]), chip.withTrimmedLeft (32.0f), juce::Justification::centredLeft, false);
+            }
+        });
+        drawShadowRing (g, model, { 550.0f, 360.0f }, 440.0f, 226.0f, 2.1f);
     }
     void mouseUp (const juce::MouseEvent&) override { if (onClose) onClose(); }
 
 private:
     StageModel& model;
+    fx::CachedLayer background;
 };
 } // namespace ui
 
@@ -772,10 +1188,11 @@ public:
     ~DrumMasterEditor() override
     {
         stopTimer();
+        ui::fx::freezeCaches() = false;
         setLookAndFeel (nullptr);
     }
 
-    void paint (juce::Graphics& g) override { g.fillAll (ui::colours::night); }
+    void paint (juce::Graphics& g) override { g.fillAll (ui::colours::ink); }
 
     void resized() override
     {
@@ -868,12 +1285,12 @@ private:
         deep.show (s.pending, s.type);
         if (! s.pending) proc.setUiPage (plugin_dsp::drumTypeName (s.type));
         zoomOrigin = stage.slotPosition (i);
-        start (Anim::zoomIn, Page::deep, 0.32);
+        start (Anim::zoomIn, Page::deep, 0.34);
     }
 
-    void zoomOut() { start (Anim::zoomOut, Page::stage, 0.28); }
-    void fadeTo (Page p) { start (Anim::fadeTo, p, 0.2); }
-    void curtainTo (Page p) { start (Anim::curtainTo, p, 0.95); }
+    void zoomOut() { start (Anim::zoomOut, Page::stage, 0.3); }
+    void fadeTo (Page p) { start (Anim::fadeTo, p, 0.24); }
+    void curtainTo (Page p) { start (Anim::curtainTo, p, 1.0); }
 
     void start (Anim a, Page target, double seconds)
     {
@@ -882,6 +1299,7 @@ private:
         animT = 0.0;
         animDuration = seconds;
         switched = false;
+        ui::fx::freezeCaches() = a == Anim::zoomIn || a == Anim::zoomOut;
         auto& to = pageComponent (target);
         if (a == Anim::zoomIn || a == Anim::fadeTo)
         {
@@ -908,7 +1326,7 @@ private:
         if (anim == Anim::none) return;
         animT = juce::jmin (1.0, animT + dt / animDuration);
         const auto t = static_cast<float> (animT);
-        const float e = t * t * (3.0f - 2.0f * t);   // smoothstep
+        const float e = t < 0.5f ? 4.0f * t * t * t : 1.0f - std::pow (-2.0f * t + 2.0f, 3.0f) * 0.5f;   // ease in-out cubic
         switch (anim)
         {
             case Anim::zoomIn:
@@ -925,8 +1343,10 @@ private:
                 pageComponent (animTarget).setAlpha (e);
                 break;
             case Anim::curtainTo:
-                // close in ~0.4 s, switch the page behind, open in ~0.55 s
-                curtain.progress = t < 0.42f ? t / 0.42f : juce::jmax (0.0f, 1.0f - (t - 0.42f) / 0.58f);
+            {
+                // close in ~0.42 s (ease in), switch the page behind, open in ~0.58 s (ease out)
+                const float closeT = juce::jmin (1.0f, t / 0.42f), openT = juce::jmax (0.0f, (t - 0.42f) / 0.58f);
+                curtain.progress = t < 0.42f ? closeT * closeT * (3.0f - 2.0f * closeT) : 1.0f - openT * openT * (3.0f - 2.0f * openT);
                 if (t >= 0.42f && ! switched)
                 {
                     setPageNow (animTarget);
@@ -935,6 +1355,7 @@ private:
                 }
                 curtain.repaint();
                 break;
+            }
             case Anim::none: break;
         }
         if (animT >= 1.0)
@@ -943,6 +1364,7 @@ private:
             curtain.setVisible (false);
             curtain.progress = 0.0f;
             anim = Anim::none;
+            ui::fx::freezeCaches() = false;
         }
     }
 
@@ -969,6 +1391,7 @@ private:
     void onHit (ui::DrumType type, float level01, float confidence, float phase)
     {
         if (auto* s = model.slotFor (type)) s->jerk = juce::jmax (s->jerk, 0.35f + 0.65f * level01);
+        if (type == ui::DrumType::kick) model.pulse = juce::jmax (model.pulse, level01);
         model.addHit ({ type, phase, level01, juce::jlimit (0.25f, 1.0f, confidence), model.now });
     }
 
@@ -1001,6 +1424,7 @@ private:
         using ui::DrumType;
         demoTypes = plugin_dsp::bit (DrumType::kick) | plugin_dsp::bit (DrumType::snare) | plugin_dsp::bit (DrumType::closedHat)
                     | plugin_dsp::bit (DrumType::openHat) | plugin_dsp::bit (DrumType::clap) | plugin_dsp::bit (DrumType::ride);
+        if (demo == "listen") demoTypes = 0;   // a fresh instance: an empty stage, listening
         syncSlots();
         for (auto& s : model.slots) s.drop = 1.0f;
         model.now = 100.0;
@@ -1059,25 +1483,42 @@ private:
             const int step = static_cast<int> (clock / 0.125);
             for (; demoLastStep < step; ++demoLastStep) demoStep (demoLastStep + 1, model.now);
             model.playPhase = static_cast<float> (std::fmod (clock / 2.0, 1.0));
-            model.listening = false;
+            model.listening = demo == "listen";
         }
         stage.listen.setToggleState (model.listening, juce::dontSendNotification);
+        if (model.listening)
+        {
+            stage.listen.getProperties().set ("pulse", 0.5 + 0.5 * std::sin (model.now * 4.0));
+            stage.listen.repaint();
+        }
         syncSlots();
 
-        // animations: jerks settle, new strings drop in, the master sways and breathes, the light flickers
+        // animations: jerks settle, new strings drop in, the master sways and breathes, the moon flickers
+        const auto fdt = static_cast<float> (dt);
         for (auto& s : model.slots)
         {
-            s.jerk *= static_cast<float> (std::exp (-dt / 0.11));
-            s.drop = juce::jmin (1.0f, s.drop + static_cast<float> (dt / 0.7));
+            s.jerk *= std::exp (-fdt / 0.11f);
+            s.drop = juce::jmin (1.0f, s.drop + fdt / 0.7f);
         }
+        model.pulse *= std::exp (-fdt / 0.22f);
+        const bool bypassed = proc.apvts.getRawParameterValue ("global_bypass")->load() > 0.5f;
+        model.slack += ((bypassed ? 1.0f : 0.0f) - model.slack) * juce::jmin (1.0f, fdt * 5.0f);
         model.sway = 3.0f * std::sin (static_cast<float> (model.now) * 0.55f);
         model.breathe = 1.6f * std::sin (static_cast<float> (model.now) * 0.9f);
-        model.flicker = random.nextFloat() < 0.004f ? 0.3f : juce::jmin (1.0f, model.flicker + static_cast<float> (dt * 2.0));
+        model.flicker = random.nextFloat() < 0.004f ? 0.3f : juce::jmin (1.0f, model.flicker + fdt * 2.0f);
 
         stepAnimation (dt);
-        if (stage.isVisible()) stage.repaint();
-        if (deep.isVisible()) deep.repaint (0, 0, 400, 520);
+        if (stage.isVisible()) stage.tick();
+        if (deep.isVisible()) deep.tick();
         if (show.isVisible()) show.refresh();
+        if (advanced.isVisible())
+        {
+            advanced.sway = model.sway * 2.0f;
+            advanced.breathe = model.breathe;
+            advanced.time = static_cast<float> (model.now);
+            advanced.flicker = model.flicker;
+            if ((++frame & 1) == 0) advanced.repaint();   // a slow sway: 30 fps is plenty
+        }
         if (shadow.isVisible()) shadow.repaint();
     }
 
@@ -1113,7 +1554,7 @@ private:
     Anim anim = Anim::none;
     double animT = 0.0, animDuration = 0.3, lastTime = 0.0, blockSeenAt = 0.0, demoClockStart = 0.0;
     std::int64_t lastBlockStart = -1;
-    int demoLastStep = 0;
+    int demoLastStep = 0, frame = 0;
     bool switched = false;
     juce::Point<float> zoomOrigin { 550.0f, 300.0f };
     juce::String demo;

@@ -13,13 +13,14 @@
 - Last known-good commit:        8c56559 on this branch (full v1: DSP + learned classifier + The Puppet Show + puppet-stage UI; CI run 35 green on Linux + Windows incl. DSP tests + pluginval; Windows VST3 in the run's artifacts)
 
 ## Current trip
-- Pipeline phase:                4 — UI built (docs/04-ui-concept.md, screenshots in docs/screenshots/); phase 3 DSP done
-- Branch: claude/away-from-home-protocol-pc5bni (session-assigned; stands in for `remote/<feature>`)
+- Pipeline phase:                4 — UI built, then redesigned ("v2 look": modern, creepy, eerie; docs/04-ui-concept.md "Look (v2)", screenshots in docs/screenshots/); phase 3 DSP done
+- Branch: ccr-7db4799d-xb6ed3 (session-assigned, UI v2; stands in for `remote/<feature>`). Previous trip: claude/away-from-home-protocol-pc5bni (merged as PR #1)
 - Goal: phase 3 done in code (detector, learned classifier, tracker, processors, engine, 97-param plugin, The Puppet Show engine). Waiting on: agents' answers to prompt 04 (Puppet Show), home test in FL, review of docs/03-decisions-for-review.md. User away ~1 week and delegated decisions: every one is listed in docs/03-decisions-for-review.md
 
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
 |---|---|---|---|
+| [untested] ui: v2 look - modern, creepy, eerie (embedded fonts, moonlit room, glass controls, per-drum colours) | Source/PluginEditor.h, Source/ui/{Theme.h, Art.h, Widgets.h} (rewritten), Source/ui/{Fx.h, LookAndFeel.h, FontData.h} (new, header-only), Source/ui/fonts/*-OFL.txt, research/ui-fonts/make_font_header.py, research/ui-screenshots.sh, docs/04-ui-concept.md, docs/03-decisions-for-review.md, docs/screenshots/* (+ listen.png), REMOTE_LOG.md | 2 | User: "looks like 2016, make it 2026, modern but creepy; only the UI". Built in sandbox (Linux Release+LTO, no warnings; clang -Wconversion/-Wshadow-all clean); pluginval strictness 5 SUCCESS incl. Editor, Open editor whilst processing, Editor Automation; DSP tests 12/12; resize to 1600x1000 checked. No parameter/DSP/processor change. CMakeLists.txt NOT touched |
 | [untested] ui: late-night grey-blue room with an old drum set; the very tall master's legs in the room | Source/ui/{Art.h, Theme.h}, Source/PluginEditor.h, docs/04-ui-concept.md, docs/03-decisions-for-review.md, docs/screenshots/*, REMOTE_LOG.md | 2 | Built in sandbox, screenshots re-taken (user's art direction 2026-09-30) |
 | [untested] ui: phase 4 - the puppet stage editor (strings, Shadow Play, quick mix, deep edit, Puppet Show curtain, advanced, about) + screenshots | Source/PluginEditor.h, Source/ui/{Theme.h, Art.h, Widgets.h} (new, header-only), Source/PluginProcessor.* (string/transport/forget API, fresh instance listens), docs/04-ui-concept.md, docs/screenshots/*, docs/02-parameters.md (detect_mode default), docs/03-decisions-for-review.md, research/ui-screenshots.sh, REMOTE_LOG.md | 3 | Built in sandbox (Linux Release+LTO, no warnings from our code); pluginval strictness 5 SUCCESS incl. editor tests; screenshots from the Standalone under Xvfb. CMakeLists.txt NOT touched; CI run 35 (8c56559) green Linux + Windows |
 | [untested] dsp: The Puppet Show engine (listen, correct, glide) + targets in the plugin's scale | PuppetShow.h (new), DrumEngine.h, DrumChannel.h (11 EQ slots, 8-10 reserved), test_puppet_show.cpp, research/puppet-show/{measure_kits.py, measure_rise.cpp, run_on_loops.cpp}, docs/05-puppet-show-targets-v1.md, docs/05-features.md, docs/03-decisions-for-review.md, REMOTE_LOG.md | 3 | gcc, clang, ASan/UBSan 12/12; plugin rebuilt, pluginval strictness 5 SUCCESS; bit-exact transparent with Puppet Show on and nothing measured; CI run 32 (0f3ba40) green Linux + Windows |
@@ -63,7 +64,7 @@
 3. The Puppet Show: v1 targets + engine done (D-C15, D-C16). Listen at home (Mud row least trusted). v2: re-measure targets from the user's genre-named packs (measure_kits.py + measure_rise.cpp).
 4. At home (level 4): load the VST3 in FL Studio — latency 50 ms compensated, transport stop ends auto detect, CPU, and listen to every knob on real loops (all VERIFY markers below). Review docs/03-decisions-for-review.md.
 5. v2 (user, 2026-09-30): the user will give access to their own sample packs (named by genre) once v1 runs. Use them to (a) set The Puppet Show's genre targets by measurement (analysis only, lowest licence risk) and (b) train or test the classifier on real one-shots. Check each pack's EULA before training shipped weights; packs that forbid it are evaluation-only.
-6. Phase 4 (UI): built (D-C17). Next: the user reviews the screenshots; later swap in hand-made/AI art per function in Source/ui/Art.h if wanted.
+6. Phase 4 (UI): built (D-C17), then redesigned as the v2 look (user's brief, 2026-09-30). Next: the user reviews docs/screenshots/; at home, open it in FL (Direct2D renderer, HiDPI, CPU). Hand-made/AI art can still replace any function in Source/ui/Art.h.
 
 ## Open VERIFY markers
 | Marker | File | What to check at home |
@@ -74,6 +75,7 @@
 | VERIFY(dsp) | DrumEngine.h (D-C12) | Spectral shares: a bass note under the kick moves with kick settings; ±10 ms smear on hard edges |
 | VERIFY(host) | DrumEngine.h (D-C12) | CPU in FL on the i7-11700K (sandbox: ~21 % of one core, stereo 48 kHz) |
 | VERIFY(host) | PluginEditor.h (D-C17) | Shadow Play ring position vs FL's latency compensation; editor CPU at 60 fps; HiDPI scaling in FL |
+| VERIFY(ui) | Source/ui/Fx.h, Theme.h (D-C17 v2) | v2 look under FL on Windows: Direct2D renderer draws the cached scenery, blur and grain like the Linux screenshots; embedded fonts load (Instrument Serif / Geist); sharp at HiDPI and when resizing; editor CPU (sandbox: stage 48 % of a core, software renderer) |
 | VERIFY(dsp) | PuppetShow.h (D-C16) | Puppet Show on real loops per genre: Mud row least trusted (reads -10..-13 on MDB rock -> full +3.7 dB boost) |
 | VERIFY(dsp) | HitClassifier.h (D-C1) | Open/closed hat, crash/ride, clap and noisy-snare labels on real loops (see the results table in docs/03) |
 | VERIFY(host) | PluginProcessor.cpp (D-C13) | FL shows 50 ms latency (pluginval reads 0 before prepare, as with the template); Link with FL automation; transport stop ends auto detect |

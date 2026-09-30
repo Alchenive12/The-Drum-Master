@@ -413,7 +413,16 @@ edit, and strings side by side and centred. Claude decided the rest:
   - a wooden control bar.
 - **Colours:** black, maroon velvet, bone, dim gold, and a sickly green for "alive" things.
 - **Update (user):** the background is now a late-night grey-blue room with an old drum set, and the master is very tall, with his skinny legs standing in the room. The velvet stays only for The Puppet Show.
-- **Font:** the system serif.
+- **Update (user, v2 look):** "looks like a 2016 plugin; make it a modern 2026 look, modern but
+  creepy and eerie; change only the UI, decide the specifics". Claude redesigned every page (full
+  spec: `docs/04-ui-concept.md`, "Look (v2)"): embedded fonts (Instrument Serif, Geist, Geist Mono,
+  all SIL OFL 1.1) instead of the system serif; moonlit room with god rays, fog, grain and frosted
+  glass panels; one colour per drum type; a glowing crack in the mask that flares on kicks;
+  skeletal hands; drums that light up on hits; glass knobs and pills; genre tickets; a level fader
+  per drum; strings from the master's fingers to the advanced knobs. No parameter, page or
+  behaviour was removed. `VERIFY(ui)`: how it all looks under FL Studio's Direct2D renderer on
+  Windows, at HiDPI, and its CPU at 60 fps.
+- **Font:** the system serif (v1; v2 embeds its own, see below).
 - **Top bar:** LISTEN (auto detect: clears the strings and forgets the loop), + STRING,
   PUPPET SHOW, bypass (power symbol), ? (about).
 - **Quick mix** at the bottom in 3 groups plus LINK, with GLOBAL on the right.
