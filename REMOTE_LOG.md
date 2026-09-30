@@ -31,6 +31,7 @@
 | [untested] docs: approve mix settings, add detection prompt 02 + Claude's blind answer | docs/02-mix-settings.md, prompts/02-detection-algorithm.md, prompts/answers/02-claude.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: agent answers to prompt 02 + algorithm comparison | prompts/answers/02-agent1.md, 02-agent2.md, docs/02-algorithm.md, REMOTE_LOG.md | 0 | Docs only; some agent formulas lost in paste (marked) |
 | [untested] research: engine shootout STFT mask vs time bands + review prompt 03 | research/engine-shootout/*, docs/02-algorithm.md, prompts/03-review-claude-engine.md, REMOTE_LOG.md | 2 | Pure C++ compiled + run in sandbox; not in plugin build/CI |
+| [untested] docs: approve F1/F2 short phase 1 (genres, drum-aware, bipolar, one Depth; Shadow Play layout) | docs/05-features.md, docs/02-parameters.md, REMOTE_LOG.md | 0 | Docs only (2 commits: first one missed the params/log update) |
 | [untested] docs: Puppet Show knobs + always-listening; visualizer named Shadow Play | docs/05-features.md, docs/02-parameters.md, docs/01-concept.md, REMOTE_LOG.md | 0 | Docs only; open Q3, Q4, Q5–Q7, Q9, Q10 |
 | [untested] docs: features F1 The Puppet Show + F2 shape visualizer | docs/05-features.md, docs/01-concept.md, docs/02-parameters.md, REMOTE_LOG.md | 0 | Docs only; short phase 1 drafts with open questions Q1–Q8 |
 | [untested] dsp: streaming STFT (exact latency N-1) | StreamingStft.h, test_streaming_stft.cpp | 3 | -Werror + ASan/UBSan (gcc), clang Release; CI run 16 (b93f70e) green Linux + Windows (MSVC /W4 /WX), pluginval |
@@ -73,6 +74,8 @@
 - Engine shootout v1 (superseded): time-domain bands beat STFT masks on transient (−20 vs −11 dB), compression (−25 vs −19 dB), saturation (−40 vs impossible), tie on level; decay-shortening ~−4 dB for all (mixed-audio limit). Hybrid ≈ bands.
 - APPROVED 2026-09-30: parameter table (90 host params, docs/02-parameters.md) → phase 2 closed.
 - Features added to v1 (user OK with the delay; user away ~1 week): F1 The Puppet Show — genre-aware smart EQ, OFF by default, workflow "open it first, genre + depth, then tweak drums"; DECIDED: always listens actively like Guardian Angel → its own dynamic EQ stage with live band meters (does not move user knobs); knobs Genre, Depth, Bass boost, High control, Mud control, Mid presence. F2 Shadow Play (name chosen) — hits drawn as shapes (kick circle, snare triangle…) rebuilding the loop; feed = detector events via lock-free queue. Core hook: detector keeps per-type long-term spectra.
+- F1 answers: drum-aware bands (bass→kick, mud→bodies, presence→snare/clap/kick click, high→hats/cymbals); knobs bipolar −100..+100 (0 = genre target); genres Rock/Pop/EDM/Metal/Hip-hop; one general Depth. Next for F1: its phase 2 (genre targets + band math).
+- F2 Shadow Play (Claude's choice, user delegated): ring layout synced to playhead, stage floor under the puppet master, click to enlarge.
 - Inspiration for F1: Guardian Angel (HarmonyEngine repo, read-only) — port ideas not code (dsp/ stays JUCE-free).
 - UI mood: creepy, FNaF-puppet feeling — original character/art only (no copying the copyrighted design).
 - APPROVED 2026-09-30: D1 hybrid dual-res engine; D2 fixed 50 ms lookahead (user trusted the measurements).

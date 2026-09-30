@@ -125,16 +125,16 @@ Anything more is added in phase 5.
 | `adv_hpf` | High-pass filter | 20 – 1000 | **20 = off** | Hz |
 | `adv_lpf` | Low-pass filter | 1000 – 20000 | **20000 = off** | Hz |
 
-## 4b. The Puppet Show (IDs reserved; ranges are set after its short phase 1/2, docs/05-features.md)
+## 4b. The Puppet Show (docs/05-features.md; off by default, always listening when on)
 | ID | Name | Range | Default | Unit |
 |---|---|---|---|---|
 | `ps_enabled` | The Puppet Show on/off | off / on | **off** | — |
-| `ps_genre` | Genre | choice (list = F1 Q3) | first entry | — |
+| `ps_genre` | Genre | Rock / Pop / EDM / Metal / Hip-hop | Rock | — |
 | `ps_depth` | Depth | 0 – 100 | 50 | % (only acts when enabled) |
-| `ps_bass` | Bass boost | 0 – 100 (maybe −100 – +100, F1 Q10) | 50 | % |
-| `ps_high` | High control | 0 – 100 (maybe bipolar, Q10) | 50 | % |
-| `ps_mud` | Mud control | 0 – 100 (maybe bipolar, Q10) | 50 | % |
-| `ps_presence` | Mid presence | 0 – 100 (maybe bipolar, Q10) | 50 | % |
+| `ps_bass` | Bass boost | −100 – +100 | 0 = genre target | % |
+| `ps_high` | High control | −100 – +100 | 0 = genre target | % |
+| `ps_mud` | Mud control | −100 – +100 | 0 = genre target | % |
+| `ps_presence` | Mid presence | −100 – +100 | 0 = genre target | % |
 
 ## 5. Plugin state (saved, not automatable)
 | Key | What | Default |
