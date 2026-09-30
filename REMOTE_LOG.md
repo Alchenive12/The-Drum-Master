@@ -15,7 +15,7 @@
 ## Current trip
 - Pipeline phase:                3 — DSP core in dsp/ (phase 2 closed: concept, mix settings, algorithm, parameters all approved)
 - Branch: claude/away-from-home-protocol-pc5bni (session-assigned; stands in for `remote/<feature>`)
-- Goal: phase 3 step 1 — engine building blocks (FFT, streaming STFT, linear-phase split, dual-res estimator) with tests
+- Goal: phase 3 step 2 — synthetic drum generator + onset detection (STFT analysis, per-band flux)
 
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
@@ -31,6 +31,9 @@
 | [untested] docs: approve mix settings, add detection prompt 02 + Claude's blind answer | docs/02-mix-settings.md, prompts/02-detection-algorithm.md, prompts/answers/02-claude.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: agent answers to prompt 02 + algorithm comparison | prompts/answers/02-agent1.md, 02-agent2.md, docs/02-algorithm.md, REMOTE_LOG.md | 0 | Docs only; some agent formulas lost in paste (marked) |
 | [untested] research: engine shootout STFT mask vs time bands + review prompt 03 | research/engine-shootout/*, docs/02-algorithm.md, prompts/03-review-claude-engine.md, REMOTE_LOG.md | 2 | Pure C++ compiled + run in sandbox; not in plugin build/CI |
+| [untested] dsp: streaming STFT (exact latency N-1) | StreamingStft.h, test_streaming_stft.cpp | 2 | -Werror + ASan/UBSan (gcc), clang Release |
+| [untested] dsp: complementary linear-phase split 1.5 kHz | LinearPhaseSplit.h, test_linear_phase_split.cpp | 2 | Perfect reconstruction at 44.1/48/96 kHz, ~2.6 ms |
+| [untested] dsp: dual-resolution estimator (multi-output STFT) | DualResEstimator.h, StreamingStft.h (MultiOutputStft), test_dual_res_estimator.cpp, REMOTE_LOG.md | 2 | Latency 20–30 ms at all rates (fits 50 ms); complementary shares sum to delayed input |
 | [untested] dsp: radix-2 FFT + tests; docs: creepy UI mood, phase 3 plan | dsp/include/plugin_dsp/Fft.h, dsp/tests/test_fft.cpp, docs/01-concept.md, REMOTE_LOG.md | 2 | Built with -Werror + ASan/UBSan in sandbox, vs naive DFT |
 | [untested] docs: approve D1/D2, parameter table | docs/02-algorithm.md, docs/02-parameters.md, REMOTE_LOG.md | 0 | Docs only; 90 host parameters with permanent IDs |
 | [untested] research: lookahead detection test on real drums | research/lookahead-test/*, docs/02-algorithm.md, REMOTE_LOG.md | 2 | MDB Drums (23 acoustic tracks) + electronic loops from held-out one-shots; knee 40–50 ms |
