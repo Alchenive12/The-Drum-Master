@@ -1,9 +1,9 @@
 <!-- File: docs/01-concept.md -->
 # The Drum Master — Phase 1: Concept
 
-> Status: **answers integrated, waiting for final approval**. No math and no code in this phase, only
-> what the plugin does and how it should feel. The items marked *(to confirm)* are Claude's
-> reading of your answers.
+> Status: **approved (2026-09-30)**. No math and no code in this phase, only what the plugin does
+> and how it should feel. The deep-edit settings for the drums other than kick and snare are
+> decided in phase 2 (`prompts/01-per-drum-mix-settings.md`).
 
 ## One sentence
 An effect that sits on a drum bus or on the insert of a drum loop. It recognises each drum hit as it
@@ -57,7 +57,7 @@ is inspired by Addictive Drums 2, but it works on audio you already have.
    detection more reliable.
 
 Either way you end up with a list of the drum types the plugin should expect, and each one has its
-own mix settings. *(To confirm: you can still add or remove types by hand after auto detect.)*
+own mix settings. You can still add or remove types by hand after auto detect.
 
 ## Mixing: three layers
 ### 1. Quick mix (main screen)
@@ -67,11 +67,12 @@ go into any drum.
 | Group | Covers |
 |---|---|
 | Kick | Kick |
-| Snare | Snare, plus rimshot and clap *(to confirm)* |
-| Hats | Closed hat, open hat *(to confirm: ride and crash too?)* |
+| Snare | Snare, rimshot, clap |
+| Hats | Closed hat, open hat, ride, crash |
 
-*(To confirm: each group gets volume plus one or two "character" knobs, for example punch and
-tone.)*
+Each group gets **volume** plus one or two **character knobs** (for example punch and tone).
+A **Link** switch ties the group volumes together: with Link on, adding or removing dB on one group
+does the same to the others, so the balance between them stays the same.
 
 **Global controls** (also on the main screen): **dry/wet**, **output gain**, **detection
 sensitivity**, **punch**, **clip**, **bypass**.
@@ -81,8 +82,8 @@ Clicking a string **zooms in on the drum hanging from it** and opens that drum's
 
 **Kick**
 - **Low-end boost**: adds weight and sub.
-- **Top**: the beater click and attack at the front of the kick. *(To confirm: this is your "top".)*
-- **Bottom**: the body and boom behind the attack. *(To confirm: this is your "bottom".)*
+- **Top**: the beater click and attack at the front of the kick.
+- **Bottom**: the body and boom behind the attack.
 - **Compression**
 - **Saturation**
 - **Clipping**
@@ -102,8 +103,9 @@ Clicking a string **zooms in on the drum hanging from it** and opens that drum's
   The knobs **blend**. For example, half Rockify plus a little Dubstepify mixes both characters.
   In phase 2 we'll decide exactly which hidden settings each knob moves.
 
-**Other drums** (closed hat, open hat, crash, ride, rimshot, clap, misc): *(To confirm: for now they
-get a basic set of volume, EQ, compression and saturation. Special knobs can come in phase 5.)*
+**Other drums** (closed hat, open hat, crash, ride, rimshot, clap, misc): their settings are decided
+in phase 2. Other models are asked with `prompts/01-per-drum-mix-settings.md`, and the answers are
+compared fairly against Claude's own answer (`prompts/answers/claude.md`, written first).
 
 ### 3. Advanced global (click the puppet master)
 Clicking the **puppet master himself** opens the advanced global page. It works on the whole bus:

@@ -13,9 +13,9 @@
 - Last known-good commit:        main after PR #2 (CI green on Linux, macOS, Windows)
 
 ## Current trip
-- Pipeline phase:                1 — answers integrated into concept, waiting for final approval + 6 small confirms
+- Pipeline phase:                2 — concept approved; prompt 01 (per-drum mix settings) out to other models
 - Branch: claude/away-from-home-protocol-pc5bni (session-assigned; stands in for `remote/<feature>`)
-- Goal: approve docs/01-concept.md, then rename template in CMakeLists.txt and start phase 2
+- Goal: collect answers to prompts/01, compare vs prompts/answers/claude.md, fix per-drum controls
 
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
@@ -24,13 +24,14 @@
 | CI: add JUCE 9 Linux deps (PR #2) | build.yml | 3 | libxi-dev + libegl-dev; fixed the Linux build |
 | [untested] docs: phase 1 concept draft | docs/01-concept.md, REMOTE_LOG.md | 0 | Docs only; dsp tests re-run in sandbox (level 2, pass) |
 | [untested] docs: concept answers (1b, AD2-style mixing, puppet clicks) | docs/01-concept.md, REMOTE_LOG.md | 0 | Docs only |
+| [untested] docs: approve concept, add prompt 01 + Claude's blind answer | docs/01-concept.md, prompts/, REMOTE_LOG.md | 0 | Docs only |
 
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
 ## Next steps
-1. Confirm the *(to confirm)* items in docs/01-concept.md and approve the concept.
-2. Rename `AwayTemplate` / `PRODUCT_NAME` / `PLUGIN_CODE` in CMakeLists.txt (announced CMake change).
-3. Phase 2: write prompts/ for other models from the concept only, then Claude's plan + comparison → parameter table.
+1. Paste other models' answers to prompts/01 → save to prompts/answers/<model>.md.
+2. Fair comparison vs prompts/answers/claude.md → per-drum controls decided.
+3. Phase 2 continues: detection algorithm prompts + docs/02-algorithm.md → parameter table (ID, range, default, unit).
 
 ## Open VERIFY markers
 | Marker | File | What to check at home |
@@ -48,6 +49,8 @@
 - Auto detect ends on playback stop (host transport).
 - Three mixing layers: quick mix (kick/snare/hats + globals) · deep edit per drum (click string) · advanced global (click puppet master).
 - Snare genre macros Dubstepify / Popify / Rockify / Rimify: blendable, each drives a hidden parameter set.
+- Quick-mix groups: Kick / Snare (+rim, clap) / Hats (+ride, crash); volume + 1–2 character knobs; Link switch keeps dB offsets moving together.
+- Deep-edit controls for hats, cymbals, rim, clap, misc: decided from prompt 01 answers (Claude answered blind first).
 
 ## Known risks
 - JUCE 9 is newer than Claude's training data (e.g. module split into juce_audio_processors_headless): verify APIs against the 9.0.3 source.
