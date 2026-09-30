@@ -10,7 +10,7 @@
 - Formats:                       VST3 / AU (macOS only) / Standalone
 - Platforms built at home:       Windows (FL Studio, i7-11700K, RTX 3060 Ti) — VST3
 - CI:                            .github/workflows/build.yml (Linux, Windows + DSP tests + pluginval; macOS dropped)
-- Last known-good commit:        b93f70e on this branch (dsp engine blocks; CI run 16 green on Linux + Windows incl. pluginval)
+- Last known-good commit:        959d327 on this branch (hit classifier; CI run 23 green on Linux + Windows incl. pluginval; run 22 = 933bbcc onset detector also green)
 
 ## Current trip
 - Pipeline phase:                3 — DSP core in dsp/ (phase 2 closed: concept, mix settings, algorithm, parameters all approved)
@@ -20,6 +20,7 @@
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
 |---|---|---|---|
+| [untested] dsp: per-drum processor chain + knob mapping; E-GMD fetcher; decisions doc | DrumChannel.h, DrumParams.h, DrumMapping.h, test_drum_channel.cpp, test_drum_mapping.cpp, research/classifier-train/{fetch_egmd.py, prep_gmd.py, train.py, README.md}, docs/03-decisions-for-review.md, REMOTE_LOG.md | 2 | gcc Release, clang, ASan/UBSan 10/10; neutral = exactly nothing; every knob touches only its drum(s); macros bounded |
 | [untested] dsp: hit tracker (per-type gates) + learned-classifier groundwork (log-mel features, tiny MLP, training/eval tools) | HitTracker.h, HitFeatures.h, TinyMlp.h, HitClassifier.h (extra measurements), test_hit_tracker.cpp, research/classifier-eval/*, research/classifier-train/*, .gitignore, REMOTE_LOG.md | 2 | gcc Release, clang, ASan/UBSan: 8/8 tests; tracker: exact 2 ms pre-roll, kick tail end ~0.52 s, closed hat 134 ms vs open hat 719 ms, retrigger, weights, 1 s cap |
 | Add away-from-home template (PR #1) | all | 3 | JUCE 9.0.3 APIs checked vs source; CI build + DSP tests + pluginval green on all 3 platforms |
 | CI: add JUCE 9 Linux deps (PR #2) | build.yml | 3 | libxi-dev + libegl-dev; fixed the Linux build |

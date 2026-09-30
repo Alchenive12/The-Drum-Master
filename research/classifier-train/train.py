@@ -7,8 +7,8 @@
 #   evaluate: held-out Groove performances, MDB Drums (acoustic, CC BY-NC-SA: evaluation only),
 #             Dirt-Samples loops (electronic, licence unclear: evaluation only)
 #
-# Usage: python3 train.py <scratch_dir> <header_out> [--hidden 48]
-import sys, csv, time
+# Usage: python3 train.py <scratch_dir> <header_out> [--hidden 48] [--aug 1]
+import os, sys, time
 import numpy as np
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import f1_score
@@ -16,13 +16,37 @@ from sklearn.metrics import f1_score
 TYPES = ["kick", "snare", "closedHat", "openHat", "crash", "ride", "rimshot", "clap", "misc"]
 
 def load(path):
+    cache = path + ".npz"
+    if os.path.exists(cache) and os.path.getmtime(cache) > os.path.getmtime(path):
+        d = np.load(cache)
+        return d["files"], d["X"], d["y"]
     with open(path) as f:
-        r = csv.reader(f); header = next(r)
-        rows = list(r)
-    files = np.array([x[0] for x in rows])
-    y = np.array([[int(v) for v in x[2:11]] for x in rows], dtype=np.int8)
-    X = np.array([[float(v) for v in x[11:]] for x in rows], dtype=np.float32)
+        ncol = len(f.readline().split(","))
+        files = np.array([line.split(",", 1)[0] for line in f])
+    data = np.loadtxt(path, delimiter=",", skiprows=1, usecols=range(2, ncol), dtype=np.float32)
+    X, y = data[:, 9:], data[:, :9].astype(np.int8)
+    np.savez(cache, files=files, X=X, y=y)
     return files, X, y
+
+MELS, SEGS = 32, 7
+
+def augment(X, rng):
+    """Random static EQ (tilt + two bumps, +-9 dB) and level (+-12 dB) applied in the feature domain:
+    the same dB curve is added to every time segment, then the features are re-referenced to the
+    new post-onset peak exactly like HitFeatures::extract does. Teaches the net that a kick is a kick
+    on any kit, desk or mix."""
+    n = len(X)
+    m = np.linspace(-1, 1, MELS)[None, :]
+    curve = rng.uniform(-6, 6, (n, 1)) * m
+    for _ in range(2):
+        c = rng.uniform(-1, 1, (n, 1)); w = rng.uniform(0.1, 0.4, (n, 1)); g = rng.uniform(-6, 6, (n, 1))
+        curve += g * np.exp(-0.5 * ((m - c) / w) ** 2)
+    rel = X[:, :-1].reshape(n, SEGS, MELS) + curve[:, None, :]
+    shift = rel[:, 1:, :].reshape(n, -1).max(1)
+    out = np.empty_like(X)
+    out[:, :-1] = np.maximum(rel - shift[:, None, None], -80.0).reshape(n, -1)
+    out[:, -1] = X[:, -1] + shift + rng.uniform(-12, 12, n)
+    return out
 
 def report(name, y, p, thr=0.5):
     pred = (p >= thr).astype(int)
@@ -39,15 +63,28 @@ def main():
     fs, Xs, ys = load(f"{S}/X_syn.csv")
     fa, Xa, ya = load(f"{S}/X_ac.csv")
     fe, Xe, ye = load(f"{S}/X_el.csv")
-    print("events: gmd", len(yg), "synth", len(ys), "acoustic", len(ya), "electronic", len(ye))
-    print("gmd label counts:", dict(zip(TYPES, yg.sum(0))), "synth:", dict(zip(TYPES, ys.sum(0))))
+    have_egmd = os.path.exists(f"{S}/X_egmd.csv")
+    if have_egmd:
+        fk, Xk, yk = load(f"{S}/X_egmd.csv")
+    print("events: gmd", len(yg), "e-gmd", len(yk) if have_egmd else 0, "synth", len(ys), "acoustic", len(ya), "electronic", len(ye))
 
     # Hold out ~15 % of Groove performances (by file) for validation.
     rng = np.random.default_rng(0)
     uf = np.unique(fg); rng.shuffle(uf)
     val_files = set(uf[: len(uf) * 15 // 100])
     vmask = np.array([f in val_files for f in fg])
-    Xtr = np.vstack([Xg[~vmask], Xs]); ytr = np.vstack([yg[~vmask], ys])
+    parts_X, parts_y = [Xg[~vmask], Xs], [yg[~vmask], ys]
+    if have_egmd:
+        # Hold out whole kits (never heard in training) to measure what matters: unseen kits.
+        import csv as _csv
+        kit_of = {os.path.splitext(r["audio_filename"])[0].replace("/", "_"): r["kit_name"]
+                  for r in _csv.DictReader(open(f"{S}/egmd/subset.csv"))}
+        kits = np.array([kit_of.get(f, "?") for f in fk])
+        held_kits = {"Acoustic Kit", "808 Simple", "Heavy Metal", "Nu RNB", "Cassette (Lo-Fi Compress)", "Jazz"}
+        kmask = np.array([k in held_kits for k in kits])
+        parts_X.append(Xk[~kmask]); parts_y.append(yk[~kmask])
+    Xtr = np.vstack(parts_X); ytr = np.vstack(parts_y)
+    print("train label counts:", dict(zip(TYPES, ytr.sum(0))))
 
     # Oversample rows with rare labels so every type gets comparable weight.
     counts = ytr.sum(0) + 1
@@ -57,6 +94,10 @@ def main():
         if counts[t] < target: rep[ytr[:, t] == 1] = np.maximum(rep[ytr[:, t] == 1], min(8.0, target / counts[t]))
     idx = np.repeat(np.arange(len(ytr)), np.round(rep).astype(int))
     Xtr, ytr = Xtr[idx], ytr[idx]
+    copies = int(sys.argv[sys.argv.index("--aug") + 1]) if "--aug" in sys.argv else 1
+    if copies > 0:
+        Xtr = np.vstack([Xtr] + [augment(Xtr, rng) for _ in range(copies)]); ytr = np.vstack([ytr] * (copies + 1))
+    print("training rows:", len(ytr))
 
     mean = Xtr.mean(0); std = Xtr.std(0) + 1e-3
     norm = lambda X: (X - mean) / std
@@ -66,10 +107,15 @@ def main():
     clf.fit(norm(Xtr), ytr)
     print(f"trained in {time.time() - t0:.0f} s, {clf.n_iter_} epochs")
 
-    for name, X, y in (("groove held-out (train domain)", Xg[vmask], yg[vmask]),
-                       ("MDB acoustic (never seen)", Xa, ya), ("electronic loops (never seen)", Xe, ye)):
+    evals = [("groove held-out (train domain)", Xg[vmask], yg[vmask])]
+    if have_egmd:
+        evals.append(("e-gmd held-out kits (never seen)", Xk[kmask], yk[kmask]))
+    evals += [("MDB acoustic (never seen)", Xa, ya), ("electronic loops (never seen)", Xe, ye)]
+    for name, X, y in evals:
         report(name, y, clf.predict_proba(norm(X)))
 
+    import pickle
+    pickle.dump((clf, mean, std), open(header_out + ".pkl", "wb"))
     w1, w2 = clf.coefs_; b1, b2 = clf.intercepts_
     fl = lambda a: ", ".join(f"{float(v):.6g}f" for v in np.ravel(a))
     with open(header_out, "w") as f:
