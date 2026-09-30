@@ -4,13 +4,13 @@
 > Updated in every commit made away from home.
 
 ## Project facts
-- Plugin name:                   The Drum Master (code still says `AwayTemplate` — rename after concept approval)
+- Plugin name:                   The Drum Master (target `DrumMaster`, class `DrumMasterProcessor`, plugin code `Drmr`, manufacturer `Alch`)
 - JUCE version / tag:            9.0.3 (FetchContent, pinned in CMakeLists.txt)
 - Build system:                  CMake
 - Formats:                       VST3 / AU (macOS only) / Standalone
 - Platforms built at home:       Windows (FL Studio, i7-11700K, RTX 3060 Ti) — VST3
 - CI:                            .github/workflows/build.yml (Linux, Windows + DSP tests + pluginval; macOS dropped)
-- Last known-good commit:        main after PR #2 (CI green on Linux, macOS, Windows)
+- Last known-good commit:        main (template, CI green on Linux, macOS, Windows)
 
 ## Current trip
 - Pipeline phase:                2 — concept approved; prompt 01 (per-drum mix settings) out to other models
@@ -26,6 +26,7 @@
 | [untested] docs: concept answers (1b, AD2-style mixing, puppet clicks) | docs/01-concept.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] docs: approve concept, add prompt 01 + Claude's blind answer | docs/01-concept.md, prompts/, REMOTE_LOG.md | 0 | Docs only |
 | [untested] CI: drop macOS job | build.yml, REMOTE_LOG.md | 0 | Approved by user; how to re-add is in the build.yml header |
+| [untested] Rename template to The Drum Master | CMakeLists.txt, Source/*, README.md, REMOTE_LOG.md | 0 | Mechanical rename; CI to confirm (level 3) |
 
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 

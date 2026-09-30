@@ -1,16 +1,16 @@
 // File: Source/PluginProcessor.h
-// Template processor: one smoothed gain parameter, DSP math from dsp/ (plugin_dsp),
-// generic editor until phase 4 (UI). Replace per plugin.
+// The Drum Master processor. Still the template body: one smoothed gain parameter, DSP from dsp/,
+// generic editor until phase 4 (UI). Replaced in phase 3 once the parameter table exists.
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <atomic>
 
-class AwayTemplateProcessor final : public juce::AudioProcessor
+class DrumMasterProcessor final : public juce::AudioProcessor
 {
 public:
-    AwayTemplateProcessor();
-    ~AwayTemplateProcessor() override = default;
+    DrumMasterProcessor();
+    ~DrumMasterProcessor() override = default;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -44,5 +44,5 @@ private:
     std::atomic<float>* gainDbParam = nullptr;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> gainSmoothed;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AwayTemplateProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DrumMasterProcessor)
 };

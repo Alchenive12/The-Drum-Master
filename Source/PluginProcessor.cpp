@@ -8,7 +8,7 @@ namespace ParamIDs
     static constexpr const char* gain = "gain";
 }
 
-AwayTemplateProcessor::AwayTemplateProcessor()
+DrumMasterProcessor::DrumMasterProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
@@ -18,7 +18,7 @@ AwayTemplateProcessor::AwayTemplateProcessor()
     jassert (gainDbParam != nullptr);
 }
 
-juce::AudioProcessorValueTreeState::ParameterLayout AwayTemplateProcessor::createParameterLayout()
+juce::AudioProcessorValueTreeState::ParameterLayout DrumMasterProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
@@ -32,13 +32,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout AwayTemplateProcessor::creat
     return layout;
 }
 
-void AwayTemplateProcessor::prepareToPlay (double sampleRate, int /*maximumExpectedSamplesPerBlock*/)
+void DrumMasterProcessor::prepareToPlay (double sampleRate, int /*maximumExpectedSamplesPerBlock*/)
 {
     gainSmoothed.reset (sampleRate, 0.02);   // 20 ms ramp
     gainSmoothed.setCurrentAndTargetValue (plugin_dsp::dbToGain (gainDbParam->load()));
 }
 
-bool AwayTemplateProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+bool DrumMasterProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto& out = layouts.getMainOutputChannelSet();
 
@@ -48,7 +48,7 @@ bool AwayTemplateProcessor::isBusesLayoutSupported (const BusesLayout& layouts) 
     return layouts.getMainInputChannelSet() == out;
 }
 
-void AwayTemplateProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
 
@@ -78,19 +78,19 @@ void AwayTemplateProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     }
 }
 
-juce::AudioProcessorEditor* AwayTemplateProcessor::createEditor()
+juce::AudioProcessorEditor* DrumMasterProcessor::createEditor()
 {
     // Phase 3: generic editor, so the plugin is fully testable before any custom UI exists.
     return new juce::GenericAudioProcessorEditor (*this);
 }
 
-void AwayTemplateProcessor::getStateInformation (juce::MemoryBlock& destData)
+void DrumMasterProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     if (auto xml = apvts.copyState().createXml())
         copyXmlToBinary (*xml, destData);
 }
 
-void AwayTemplateProcessor::setStateInformation (const void* data, int sizeInBytes)
+void DrumMasterProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
@@ -99,5 +99,5 @@ void AwayTemplateProcessor::setStateInformation (const void* data, int sizeInByt
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new AwayTemplateProcessor();
+    return new DrumMasterProcessor();
 }
