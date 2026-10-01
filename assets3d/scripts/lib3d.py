@@ -224,26 +224,56 @@ def ellipsoid(name, axes, center=(0, 0, 0), mat=None, u=64, v=32):
     smooth(ob, 180)
     return ob
 
-def tube(name, pts, radii, mat=None, order=4, res_u=16, bevel_res=6, caps=True):
-    """Smooth tube through control points with a radius per point (NURBS curve, bevelled)."""
+def tube(name, pts, radii, mat=None, order=4, res_u=16, bevel_res=6, caps=True, kind="NURBS"):
+    """Tube through points with a radius per point. kind="NURBS": smooth, the points are control
+    points. kind="POLY": passes exactly through densely sampled points (see bony())."""
     cu = bpy.data.curves.new(name, "CURVE")
     cu.dimensions = "3D"
     cu.bevel_depth = 1.0
     cu.bevel_resolution = bevel_res
     cu.resolution_u = res_u
     cu.use_fill_caps = caps
-    sp = cu.splines.new("NURBS")
+    sp = cu.splines.new(kind)
     sp.points.add(len(pts) - 1)
     for p, co, r in zip(sp.points, pts, radii):
         p.co = (co[0], co[1], co[2], 1.0)
         p.radius = r
-    sp.order_u = min(order, len(pts))
-    sp.use_endpoint_u = True
+    if kind == "NURBS":
+        sp.order_u = min(order, len(pts))
+        sp.use_endpoint_u = True
     sp.use_smooth = True
     ob = link(bpy.data.objects.new(name, cu))
     if mat is not None:
         ob.data.materials.append(mat)
     return ob
+
+def catmull_rom(points, samples_per_seg=14):
+    """Smooth path through every point. Returns (positions, segment index, t within segment)."""
+    P = [Vector(p) for p in points]
+    P = [P[0] + (P[0] - P[1])] + P + [P[-1] + (P[-1] - P[-2])]
+    out = []
+    for i in range(1, len(P) - 2):
+        p0, p1, p2, p3 = P[i - 1], P[i], P[i + 1], P[i + 2]
+        last = i == len(P) - 3
+        for k in range(samples_per_seg + (1 if last else 0)):
+            t = k / samples_per_seg
+            t2, t3 = t * t, t * t * t
+            pos = 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
+            out.append((tuple(pos), i - 1, t))
+    return out
+
+def bony(name, joints, mids, knobs, mat, width=0.13, samples=14):
+    """A limb of bones: thin in the middle of each segment, bulging at every joint.
+    joints: N points; mids: N-1 mid-bone radii; knobs: N joint radii."""
+    path = catmull_rom(joints, samples)
+    pts, radii = [], []
+    for pos, seg, t in path:
+        r_mid = mids[seg]
+        r = r_mid + (knobs[seg] - r_mid) * math.exp(-(t / width) ** 2) \
+                  + (knobs[seg + 1] - r_mid) * math.exp(-((1.0 - t) / width) ** 2)
+        pts.append(pos)
+        radii.append(max(r, 0.0005))
+    return tube(name, pts, radii, mat, kind="POLY", res_u=2, bevel_res=6)
 
 def smooth(obj, angle_deg=35.0):
     if obj.type != "MESH":

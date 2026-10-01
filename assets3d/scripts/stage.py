@@ -179,7 +179,7 @@ def mat_porcelain():
     set_in(b, ["Subsurface Weight", "Subsurface"], 0.05)
     edges = voronoi_edges(nt, mapping(nt, co, scale=(1.0, 1.0, 1.6)), 3.2)
     crack_line = ramp(nt, edges, [(0.0, gray(1.0)), (0.016, gray(0.0))])
-    where = ramp(nt, noise(nt, co, 2.0, 4.0, 0.5), [(0.42, gray(0.0)), (0.55, gray(1.0))])
+    where = ramp(nt, noise(nt, co, 2.0, 4.0, 0.5), [(0.56, gray(0.0)), (0.64, gray(1.0))])
     crack = math_node(nt, "MULTIPLY", crack_line, where)
     link_in(nt, bump(nt, math_node(nt, "SUBTRACT", 1.0, crack), 0.6, 0.004), b, ["Normal"])
     dark = principled(nt, (0.02, 0.016, 0.012), 0.9)
@@ -395,49 +395,59 @@ hands = [tube("Bar", [(-0.8, BAR_Y, BAR_Z), (0.8, BAR_Y, BAR_Z)], [0.03, 0.03], 
 
 nail_mat = mat_simple("Nail", (0.03, 0.028, 0.025), 0.25, coat=0.6)
 
-def finger(name, base_x, s, k, length, curl, splay):
-    """Bony finger: up from the knuckle behind the bar, over it, down in front, the long last
-    joints splaying outwards and hooking back towards the camera. Bulges at every joint."""
-    L = length
-    j = lambda dy, dz, dx=0.0: (base_x + dx * s * splay, BAR_Y + dy * K, BAR_Z + dz * K)
-    pts = [j(0.09, 0.07), j(0.065, 0.078), j(0.035, 0.075),          # knuckle, first bone
-           j(0.005, 0.062), j(-0.025, 0.045),                         # joint over the bar
-           j(-0.05, 0.012), j(-0.058, -0.03 * L, 0.004),              # front of the bar
-           j(-0.06, -0.075 * L, 0.009), j(-0.058, -0.12 * L, 0.014),  # second joint, long bone
-           j(-0.062, -0.165 * L, 0.02), j(-0.08 - 0.03 * curl, -0.205 * L, 0.026),
-           j(-0.11 - 0.05 * curl, -0.23 * L, 0.03)]
-    radii = [r * K * 0.85 for r in (0.013, 0.0095, 0.0085, 0.0118, 0.0082, 0.0078, 0.0105,
-                                    0.0068, 0.0062, 0.0088, 0.0052, 0.0026)]
-    parts = [tube(name, pts, radii, skin, order=3, res_u=24)]
-    a, b = Vector(pts[-2]), Vector(pts[-1])
-    tip = b + (b - a).normalized() * 0.012 * K
-    parts.append(tube(name + "_nail", [tuple(a.lerp(b, 0.35)), tuple(b), tuple(tip)],
-                      [0.0042 * K, 0.0032 * K, 0.0006 * K], nail_mat, order=3))
+def P(wx, dx, dy, dz):
+    return (wx + dx * K, BAR_Y + dy * K, BAR_Z + dz * K)
+
+def hand(s, wx):
+    parts = []
+    wrist = Vector(P(wx, 0.0, 0.2, 0.135))
+    parts.append(tube(f"Sleeve{s}", [(wx * 1.3, BAR_Y + 1.2, BAR_Z + 1.8), (wx * 1.15, BAR_Y + 0.55, BAR_Z + 0.65),
+                                      tuple(wrist + Vector((0, 0.05, 0.03)))], [0.075, 0.07, 0.06], sleeve_mat, order=3))
+    parts.append(bony(f"Wrist{s}", [tuple(wrist + Vector((0, 0.06, 0.035))), tuple(wrist)], [0.026 * K], [0.024 * K, 0.03 * K], skin))
+    knuckles = []
+    for k, off in enumerate((-0.062, -0.021, 0.021, 0.062)):
+        kn = Vector(P(wx, s * off, 0.075, 0.075))
+        knuckles.append(kn)
+        # metacarpal: a visible bony ridge from the wrist to the knuckle
+        parts.append(bony(f"Meta{s}{k}", [tuple(wrist), tuple(wrist.lerp(kn, 0.5) + Vector((0, 0, 0.006 * K))), tuple(kn)],
+                          [0.0075 * K, 0.0068 * K], [0.012 * K, 0.0085 * K, 0.0115 * K], skin))
+        L = (1.0, 1.3, 1.18, 0.82)[k]
+        splay = (-1.6, -0.5, 0.6, 1.8)[k] * s
+        curl = random.uniform(0.2, 1.0)
+        joints = [tuple(kn),
+                  P(wx, s * off + 0.002 * splay, -0.04, 0.042),                 # over the front of the bar
+                  P(wx, s * off + 0.008 * splay, -0.062, -0.085 * L),           # middle joint
+                  P(wx, s * off + 0.02 * splay, -0.075 - 0.02 * curl, -0.18 * L),  # last joint
+                  P(wx, s * off + 0.03 * splay, -0.11 - 0.05 * curl, -0.225 * L)]  # tip, hooked forward
+        parts.append(bony(f"Finger{s}{k}", joints, [r * K for r in (0.0072, 0.0062, 0.0052, 0.0042)],
+                          [r * K for r in (0.0115, 0.0105, 0.0092, 0.0078, 0.0022)], skin))
+        a, b = Vector(joints[-2]), Vector(joints[-1])
+        tip = b + (b - a).normalized() * 0.012 * K
+        parts.append(tube(f"Nail{s}{k}", [tuple(a.lerp(b, 0.4)), tuple(b), tuple(tip)],
+                          [0.0042 * K, 0.0032 * K, 0.0006 * K], nail_mat, order=3))
+    # thin skin stretched over the metacarpals (the bones still show through as ridges)
+    mid = (knuckles[1] + knuckles[2]) * 0.5
+    web_c = wrist.lerp(mid, 0.55) + Vector((0, 0, -0.004 * K))
+    web = ellipsoid(f"HandBack{s}", (0.062 * K, 0.06 * K, 0.009 * K), (0, 0, 0), skin, 32, 16)
+    web.location = web_c
+    web.rotation_euler = (mid - wrist).to_track_quat("Y", "Z").to_euler()
+    parts.append(web)
+    # thumb, wrapping under the bar from behind
+    thumb = [tuple(wrist + Vector((-s * 0.04 * K, -0.01 * K, -0.02 * K))), P(wx, -s * 0.085, 0.07, 0.0),
+             P(wx, -s * 0.08, 0.035, -0.07), P(wx, -s * 0.07, 0.0, -0.12), P(wx, -s * 0.06, -0.02, -0.15)]
+    parts.append(bony(f"Thumb{s}", thumb, [r * K for r in (0.009, 0.0075, 0.006, 0.0045)],
+                      [r * K for r in (0.012, 0.012, 0.0105, 0.0085, 0.0025)], skin))
     return parts
 
 for s in (-1, 1):
-    wx = s * 0.42
-    hands.append(tube(f"Sleeve{s}", [(wx * 1.3, BAR_Y + 1.2, BAR_Z + 1.8), (wx * 1.15, BAR_Y + 0.55, BAR_Z + 0.65),
-                                      (wx, BAR_Y + 0.2 * K, BAR_Z + 0.13 * K)],
-                      [0.075, 0.07, 0.062], sleeve_mat, order=3))
-    hands.append(ellipsoid(f"Palm{s}", (0.05 * K, 0.035 * K, 0.06 * K), (wx, BAR_Y + 0.12 * K, BAR_Z + 0.09 * K), skin, 32, 16))
-    hands.append(tube(f"Wrist{s}", [(wx, BAR_Y + 0.12 * K, BAR_Z + 0.09 * K), (wx, BAR_Y + 0.2 * K, BAR_Z + 0.13 * K)],
-                      [0.03 * K, 0.026 * K], skin, order=2))   # bony wrist into the sleeve
-    for k, off in enumerate((-0.062, -0.021, 0.021, 0.062)):
-        length = (1.0, 1.3, 1.18, 0.82)[k]
-        splay = (-1.6, -0.5, 0.6, 1.8)[k]
-        hands += finger(f"Finger{s}{k}", wx + s * off * K, s, k, length, random.uniform(0.2, 1.0), splay)
-    tb = lambda dx, dy, dz: (wx - s * dx * K, BAR_Y + dy * K, BAR_Z + dz * K)
-    hands.append(tube(f"Thumb{s}", [tb(0.05, 0.1, 0.06), tb(0.075, 0.065, -0.01), tb(0.075, 0.03, -0.07),
-                                     tb(0.065, 0.0, -0.13), tb(0.055, -0.02, -0.15)],
-                      [r * K for r in (0.015, 0.012, 0.012, 0.008, 0.003)], skin, order=3))
+    hands += hand(s, s * 0.42)
 
 # ---------------------------------------------------------------- the mask (only its bottom shows)
 MASK_Y = -0.4
 A, B, C = 0.4, 0.2, 0.58             # half-width, half-depth (flat mask), half-height
 def chin(z):
     """Width factor: the lower face narrows to a pointed chin."""
-    return 1.0 - 0.38 * (max(-z, 0.0) / C) ** 1.4
+    return 1.0 - 0.26 * (max(-z, 0.0) / C) ** 1.4
 
 mask = ellipsoid("Mask", (A, B, C), (0, 0, 0), mat_porcelain(), 96, 48)
 for v in mask.data.vertices:
@@ -480,9 +490,17 @@ set_in(bg, ["Color"], (0.004, 0.006, 0.012, 1.0))
 set_in(bg, ["Strength"], 1.0)
 
 moon = sun("Moon", tuple(moon_dir), 4.5, (0.5, 0.64, 1.0), 0.4)
-stage = spot("StageLamp", (0.0, -3.6, BAR_Z + 1.4), (0.0, BAR_Y, BAR_Z - 0.2), 160.0, (1.0, 0.72, 0.45), 50.0, 0.7, 0.3)
+stage = spot("StageLamp", (0.0, -3.6, BAR_Z + 1.4), (0.0, BAR_Y, BAR_Z - 0.2), 110.0, (1.0, 0.86, 0.72), 50.0, 0.7, 0.3)
 room_fill = area("RoomFill", (0.0, 2.0, H - 0.1), (0.0, 2.0, 0.0), 4.0, 30.0, (0.5, 0.6, 0.85))
-rim = area("MasterRim", (0.0, 0.8, BAR_Z + 1.3), (0.0, BAR_Y - 0.3, BAR_Z - 0.1), 1.5, 260.0, (0.55, 0.68, 1.0))
+rim = spot("MasterRim", (0.0, 1.3, BAR_Z + 1.5), (0.0, BAR_Y, BAR_Z - 0.1), 320.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.4)
+try:                               # light linking (Blender 4.0+): the rim light only touches the master
+    rim_coll = bpy.data.collections.new("RimReceivers")
+    for o in hands + mask_objs:
+        rim_coll.objects.link(o)
+    rim.light_linking.receiver_collection = rim_coll
+except Exception as e:
+    print("[stage] light linking unavailable, rim light off:", e)
+    rim.data.energy = 0.0
 corner = spot("CornerGlint", (0.5, 1.5, 3.8), (2.8, 4.0, 0.5), 110.0, (0.6, 0.7, 1.0), 32.0, 0.9, 0.3)
 
 haze = box_minmax("Haze", (X0, Y0, 0.0), (X1, Y1, H), mat_volume())
