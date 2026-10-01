@@ -29,6 +29,13 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--out", default="assets3d/renders/knob_test")
 ap.add_argument("--samples", type=int, default=128)
 ap.add_argument("--res", type=int, default=640)
+ap.add_argument("--frames", type=int, default=0,
+                help="0 = three test views; N = filmstrip of N evenly spaced positions, transparent background")
+ap.add_argument("--cols", type=int, default=8, help="filmstrip grid columns")
+ap.add_argument("--offset", type=float, default=0.0,
+                help="shift positions by a fraction of a step (0.5 = the in-between frames for a finer strip later)")
+ap.add_argument("--steps", type=int, default=0,
+                help="intervals from min to max (default frames-1); for the in-between set: --frames 63 --steps 63 --offset 0.5")
 args = ap.parse_args(argv)
 os.makedirs(args.out, exist_ok=True)
 
@@ -460,9 +467,50 @@ def save(name):
     bpy.data.images["Render Result"].save_render(path, scene=scene)
     print("[knob_test] wrote", path)
 
-for value, tag in ((0.0, "v000"), (1.0, "v100"), (0.5, "v050")):
-    rig.rotation_euler = (0.0, 0.0, angle_for(value))
-    scene.view_settings.exposure = 0.0
-    bpy.ops.render.render(write_still=False)
-    save(f"knob_{tag}.png")
-
+if args.frames <= 0:
+    for value, tag in ((0.0, "v000"), (1.0, "v100"), (0.5, "v050")):
+        rig.rotation_euler = (0.0, 0.0, angle_for(value))
+        scene.view_settings.exposure = 0.0
+        bpy.ops.render.render(write_still=False)
+        save(f"knob_{tag}.png")
+else:
+    # ---- filmstrip: transparent background, the panel only catches the knob's shadow
+    import json
+    import numpy as np
+    panel.is_shadow_catcher = True
+    scene.render.film_transparent = True
+    scene.render.image_settings.color_mode = "RGBA"
+    n, cols, size = args.frames, args.cols, args.res
+    rows = (n + cols - 1) // cols
+    sheet = np.zeros((rows * size, cols * size, 4), dtype=np.float32)
+    tmp = os.path.join(args.out, "_frame.png")
+    values = []
+    for k in range(n):
+        steps = args.steps if args.steps > 0 else max(n - 1, 1)
+        value = min(1.0, (k + args.offset) / steps)
+        values.append(value)
+        rig.rotation_euler = (0.0, 0.0, angle_for(value))
+        bpy.ops.render.render(write_still=False)
+        bpy.data.images["Render Result"].save_render(tmp, scene=scene)
+        img = bpy.data.images.load(tmp, check_existing=False)
+        px = np.empty(size * size * 4, dtype=np.float32)
+        img.pixels.foreach_get(px)
+        bpy.data.images.remove(img)
+        px = px.reshape(size, size, 4)                    # Blender rows start at the bottom
+        r, c = k // cols, k % cols
+        y0 = (rows - 1 - r) * size                         # first frame ends up top-left in the PNG
+        sheet[y0:y0 + size, c * size:(c + 1) * size] = px
+        print(f"[knob_test] frame {k + 1}/{n} value {value:.4f}")
+    os.remove(tmp)
+    tag = f"knob_filmstrip_{n}" + ("" if args.offset == 0.0 else f"_off{round(args.offset * 100):03d}")
+    out_img = bpy.data.images.new(tag, width=cols * size, height=rows * size, alpha=True, float_buffer=False)
+    out_img.pixels.foreach_set(sheet.ravel())
+    out_img.filepath_raw = os.path.join(args.out, tag + ".png")
+    out_img.file_format = "PNG"
+    out_img.save()
+    meta = {"frames": n, "cols": cols, "rows": rows, "frame_size": size, "order": "row-major, top-left first",
+            "values": [round(v, 6) for v in values], "angle_min_deg": -135.0, "angle_max_deg": 135.0,
+            "background": "transparent, with contact shadow"}
+    with open(os.path.join(args.out, tag + ".json"), "w") as f:
+        json.dump(meta, f, indent=2)
+    print("[knob_test] wrote", out_img.filepath_raw)
