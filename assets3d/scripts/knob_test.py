@@ -229,9 +229,13 @@ def mat_lacquer():
     set_in(b, ["Coat Weight", "Clearcoat"], 1.0)
     link_in(nt, scr_r.outputs["Color"], b, ["Coat Roughness", "Clearcoat Roughness"])
     # abandoned: a film of dust settled on the cap, thicker in patches
-    dust_mask = ramp(nt, noise(nt, co, 3.0, 8.0, 0.65).outputs["Fac"], [(0.42, (0, 0, 0)), (0.72, (1, 1, 1))])
+    # fine grain, light overall, heavier where it collects: the rim of the cap and around the pointer
+    grain = ramp(nt, noise(nt, co, 40.0, 6.0, 0.7).outputs["Fac"], [(0.45, (0, 0, 0)), (0.65, (1, 1, 1))])
+    soft = ramp(nt, noise(nt, co, 4.0, 6.0, 0.6).outputs["Fac"], [(0.3, (0.25, 0.25, 0.25)), (0.7, (0.6, 0.6, 0.6))])
+    corners = math_node(nt, "MULTIPLY", ao_dirt(nt, 0.25), 1.5)
+    amount = math_node(nt, "MINIMUM", math_node(nt, "ADD", math_node(nt, "MULTIPLY", soft.outputs["Color"], 0.35), corners), 1.0)
     dust = principled(nt, (0.12, 0.115, 0.1), 0.95)
-    mix = mix_shaders(nt, math_node(nt, "MULTIPLY", dust_mask.outputs["Color"], 0.75), b, dust)
+    mix = mix_shaders(nt, math_node(nt, "MULTIPLY", amount, grain.outputs["Color"]), b, dust)
     nt.links.new(mix.outputs[0], out.inputs["Surface"])
     return m
 

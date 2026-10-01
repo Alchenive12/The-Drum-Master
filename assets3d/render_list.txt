@@ -5,7 +5,7 @@
 # knob: abandoned pass, DRAFT quality
 assets3d/scripts/knob_test.py assets3d/renders/knob_test --samples 32 --res 400
 
-# stage background: FINAL, 2x resolution, no preview strings, three lamp levels for the flicker
-assets3d/scripts/stage.py assets3d/renders/stage --layers background --width 2200 --samples 64
-assets3d/scripts/stage.py assets3d/renders/stage --layers background --width 2200 --samples 64 --lamp 0.5
-assets3d/scripts/stage.py assets3d/renders/stage --layers background --width 2200 --samples 64 --lamp 0.15
+# stage background: FINAL (done, committed), 2x resolution, no preview strings, three lamp levels for the flicker
+# assets3d/scripts/stage.py assets3d/renders/stage --layers background --width 2200 --samples 64
+# assets3d/scripts/stage.py assets3d/renders/stage --layers background --width 2200 --samples 64 --lamp 0.5
+# assets3d/scripts/stage.py assets3d/renders/stage --layers background --width 2200 --samples 64 --lamp 0.15
