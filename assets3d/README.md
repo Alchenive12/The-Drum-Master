@@ -11,18 +11,22 @@ Same designs and layout as `assets/ui/` (the SVG pack); only the rendering chang
 3. Review the renders in the PR, adjust, push again.
 
 ## Status
-- **Knob** (`scripts/knob_test.py`): round 2 approved as a direction; the user wants the
-  **abandoned** look (cracked yellowed bone, heavier grime and verdigris, moonlight). Final
-  filmstrip later.
-- **Stage** (`scripts/stage.py`): first draft of the room (wallpaper, floorboards, cracked window with
-  moonlight and dust, old drum set) and the master (legs, hands with elongated fingers on the control
-  bar, cracked porcelain mask with a stitched smile). **Round 6: no mask** (from below it read like a belly):
-  the frame shows him up to the shoulders, head always out of view. **Round 7:** the hands and the
-  control bar are above the frame too; his arms rise out of view and only the strings fall in (drawn
-  by the plugin, so their number doesn't affect the art). Original design, not FNaF's Puppet: no rosy
-  cheeks, tear streaks or striped cuffs.
-- **Flicker:** `stage.py --lamp <level>` renders the same frame with the warm lamp dimmed (the moon
-  stays). The plugin will crossfade between a few levels (e.g. 100% / 50% / 15%) at random moments
-  for an occasional flicker. Round 5 renders 100% and 15% to judge the effect.
-- `render_list.txt` picks which scripts CI renders, to save minutes.
-- Shared helpers: `scripts/lib3d.py`.
+- **Stage, body: final (round 9).** The master is seen up to the shoulders: arms raised out of frame,
+  holding the control bar above the plugin; only the strings fall in, drawn by the plugin (any number,
+  sway, jerk on hits). No mask, no hands in frame. Original design, not FNaF's Puppet.
+  Known small issues, to tackle later if at all: jacket reads light grey under the warm lamp; the pale
+  neck stub between the arms draws the eye; leg folds are subtle.
+- **Stage backgrounds: final renders** at 2x (2200x1376), no preview strings, in three lamp levels:
+  `stage_background.png` (100%), `stage_background_lamp050.png`, `stage_background_lamp015.png`.
+  The plugin crossfades between them at random moments for an occasional flicker (the moon stays).
+- **Knob:** abandoned pass in progress (dusty lacquer, yellowed cracked bone, more verdigris, stronger
+  moonlight), drafted at low quality. Then the filmstrip: every position, transparent background with
+  its own shadow.
+- **Next:** name plates (normal / hover / active), lever switches (up / down), LEDs (off / on) in 3D;
+  icons probably stay 2D. Optional: a realistic string texture for the plugin to stretch.
+- **Then (separate PR):** wire the renders into the UI code, update `docs/04-ui-concept.md` (no mask /
+  hands layers; strings from the top edge).
+
+## Minutes
+Drafts run at low samples / resolution; only finals get full quality. `render_list.txt` picks what
+renders on each push. Renders are committed to the branch (no artifact upload).
