@@ -401,6 +401,8 @@ for s in (-1, 1):
                                       (wx, BAR_Y + 0.2 * K, BAR_Z + 0.13 * K)],
                       [0.075, 0.07, 0.062], sleeve_mat, order=3))
     hands.append(ellipsoid(f"Palm{s}", (0.05 * K, 0.035 * K, 0.06 * K), (wx, BAR_Y + 0.12 * K, BAR_Z + 0.09 * K), skin, 32, 16))
+    hands.append(tube(f"Wrist{s}", [(wx, BAR_Y + 0.12 * K, BAR_Z + 0.09 * K), (wx, BAR_Y + 0.2 * K, BAR_Z + 0.13 * K)],
+                      [0.03 * K, 0.026 * K], skin, order=2))   # bony wrist into the sleeve
     for k, off in enumerate((-0.05, -0.017, 0.017, 0.05)):
         length = (1.0, 1.25, 1.15, 0.85)[k]
         hands.append(finger(f"Finger{s}{k}", wx + s * off * K, s, k, length, random.uniform(0.3, 1.0)))
