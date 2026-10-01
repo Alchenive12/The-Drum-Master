@@ -36,9 +36,16 @@ jobs:
           blender --version
 
       - name: Render knob test
-        run: blender -b --factory-startup -P assets3d/scripts/knob_test.py -- --out assets3d/renders/knob_test
+        # Full output goes to a log file that is committed even on failure, so it can be read
+        # from the branch (job logs can't be fetched from Claude's sandbox).
+        run: |
+          mkdir -p assets3d/renders/knob_test
+          set -o pipefail
+          blender -b --factory-startup -P assets3d/scripts/knob_test.py --python-exit-code 1 \
+            -- --out assets3d/renders/knob_test 2>&1 | tee assets3d/renders/knob_test/render.log
 
       - name: Commit renders to this branch
+        if: always()
         run: |
           git config user.name  "render-bot"
           git config user.email "render-bot@users.noreply.github.com"
@@ -49,6 +56,7 @@ jobs:
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Upload renders
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: renders
