@@ -57,14 +57,14 @@ jobs:
           done < /tmp/list.txt
 
       - name: Commit renders to this branch
-        if: always()
+        if: success() || failure()     # not when cancelled: a newer run replaces this one
         run: |
           git config user.name  "render-bot"
           git config user.email "render-bot@users.noreply.github.com"
           git add assets3d/renders
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
           git commit -m "renders: from ${GITHUB_SHA::7}"
-          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git pull --rebase -X theirs origin "${GITHUB_REF_NAME}"   # on a render conflict, this run (newest) wins
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Upload renders
