@@ -386,11 +386,14 @@ scene.render.engine = "CYCLES"
 scene.cycles.device = "CPU"
 scene.cycles.samples = args.samples
 scene.cycles.use_adaptive_sampling = True
-try:
-    scene.cycles.use_denoising = True
+# Distro builds (e.g. Ubuntu's apt Blender) can lack OpenImageDenoise; rendering then fails if
+# denoising is on. Without it, fall back to 4x the samples.
+HAS_OIDN = bool(getattr(bpy.app.build_options, "openimagedenoise", False))
+scene.cycles.use_denoising = HAS_OIDN
+if HAS_OIDN:
     try_set(scene.cycles, "denoiser", ["OPENIMAGEDENOISE"])
-except Exception:
-    scene.cycles.use_denoising = False
+else:
+    scene.cycles.samples = args.samples * 4
 scene.render.resolution_x = args.res
 scene.render.resolution_y = args.res
 scene.render.resolution_percentage = 100

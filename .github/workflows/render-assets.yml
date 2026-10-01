@@ -29,11 +29,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Blender
+      - name: Install Blender (official build, includes OpenImageDenoise)
+        # Ubuntu's apt Blender is built without the denoiser. Latest 4.5 LTS patch from blender.org.
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender
-          blender --version
+          sudo apt-get install -y libxrender1 libxxf86vm1 libxfixes3 libxi6 libxkbcommon0 libsm6 libgl1 libegl1
+          BASE=https://download.blender.org/release/Blender4.5/
+          FILE=$(curl -s "$BASE" | grep -o 'blender-4\.5\.[0-9]*-linux-x64\.tar\.xz' | sort -V | tail -n 1)
+          echo "Downloading $FILE"
+          curl -sSL "$BASE$FILE" | tar -xJ -C "$HOME"
+          echo "$HOME/${FILE%.tar.xz}" >> "$GITHUB_PATH"
+
+      - name: Blender version
+        run: blender --version
 
       - name: Render knob test
         # Full output goes to a log file that is committed even on failure, so it can be read
