@@ -199,15 +199,15 @@ def mat_brass():
     m, nt, out = new_material("Brass_Tarnished")
     co = obj_coords(nt)
     n1 = noise(nt, co, 6.0, 10.0, 0.6)
-    brass = principled(nt, (0.42, 0.29, 0.11), 0.32, metal=1.0)
-    brass_col = ramp(nt, n1.outputs["Fac"], [(0.3, (0.22, 0.14, 0.05)), (0.55, (0.42, 0.29, 0.11)), (0.75, (0.5, 0.37, 0.16))])
+    brass = principled(nt, (0.32, 0.21, 0.08), 0.38, metal=1.0)
+    brass_col = ramp(nt, n1.outputs["Fac"], [(0.3, (0.14, 0.09, 0.03)), (0.55, (0.3, 0.2, 0.08)), (0.75, (0.4, 0.29, 0.12))])
     link_in(nt, brass_col.outputs["Color"], brass, ["Base Color"])
     rough = ramp(nt, n1.outputs["Fac"], [(0.3, (0.22, 0.22, 0.22)), (0.8, (0.5, 0.5, 0.5))])
     link_in(nt, rough.outputs["Color"], brass, ["Roughness"])
     verd = principled(nt, (0.09, 0.2, 0.16), 0.85)
     dirt = principled(nt, (0.025, 0.02, 0.014), 0.9)
     crevice = ao_dirt(nt, 0.15)
-    patches = ramp(nt, noise(nt, co, 2.5, 8.0, 0.65).outputs["Fac"], [(0.55, (0, 0, 0)), (0.62, (1, 1, 1))])
+    patches = ramp(nt, noise(nt, co, 2.5, 8.0, 0.65).outputs["Fac"], [(0.47, (0, 0, 0)), (0.58, (1, 1, 1))])
     verd_mask = math_node(nt, "MINIMUM", math_node(nt, "ADD", math_node(nt, "MULTIPLY", crevice, 0.8), math_node(nt, "MULTIPLY", patches.outputs["Color"], 0.7)), 1.0)
     a = mix_shaders(nt, verd_mask, brass, verd)
     dirty = mix_shaders(nt, math_node(nt, "MULTIPLY", crevice, 0.6), a, dirt)
@@ -228,19 +228,32 @@ def mat_lacquer():
     link_in(nt, smudge.outputs["Color"], b, ["Roughness"])
     set_in(b, ["Coat Weight", "Clearcoat"], 1.0)
     link_in(nt, scr_r.outputs["Color"], b, ["Coat Roughness", "Clearcoat Roughness"])
-    nt.links.new(b.outputs[0], out.inputs["Surface"])
+    # abandoned: a film of dust settled on the cap, thicker in patches
+    dust_mask = ramp(nt, noise(nt, co, 3.0, 8.0, 0.65).outputs["Fac"], [(0.42, (0, 0, 0)), (0.72, (1, 1, 1))])
+    dust = principled(nt, (0.12, 0.115, 0.1), 0.95)
+    mix = mix_shaders(nt, math_node(nt, "MULTIPLY", dust_mask.outputs["Color"], 0.75), b, dust)
+    nt.links.new(mix.outputs[0], out.inputs["Surface"])
     return m
 
 def mat_bone():
     m, nt, out = new_material("Bone_Ivory")
     co = obj_coords(nt)
     n1 = noise(nt, co, 9.0, 10.0, 0.6)
-    b = principled(nt, (0.74, 0.68, 0.53), 0.45)
-    col = ramp(nt, n1.outputs["Fac"], [(0.3, (0.55, 0.48, 0.34)), (0.55, (0.74, 0.68, 0.53)), (0.8, (0.82, 0.77, 0.64))])
+    b = principled(nt, (0.58, 0.49, 0.32), 0.55)
+    col = ramp(nt, n1.outputs["Fac"], [(0.3, (0.42, 0.34, 0.2)), (0.55, (0.58, 0.49, 0.32)), (0.8, (0.66, 0.58, 0.42))])
     link_in(nt, col.outputs["Color"], b, ["Base Color"])
-    set_in(b, ["Subsurface Weight", "Subsurface"], 0.12)
-    dirt = principled(nt, (0.08, 0.06, 0.035), 0.8)
-    mix = mix_shaders(nt, math_node(nt, "MULTIPLY", ao_dirt(nt, 0.1), 0.85), b, dirt)
+    set_in(b, ["Subsurface Weight", "Subsurface"], 0.1)
+    dirt = principled(nt, (0.06, 0.045, 0.025), 0.85)
+    mix = mix_shaders(nt, math_node(nt, "MINIMUM", math_node(nt, "MULTIPLY", ao_dirt(nt, 0.1), 1.2), 1.0), b, dirt)
+    # hairline cracks
+    vor = nt.nodes.new("ShaderNodeTexVoronoi")
+    vor.feature = "DISTANCE_TO_EDGE"
+    set_in(vor, ["Scale"], 28.0)
+    nt.links.new(co, vor.inputs["Vector"])
+    crack_line = ramp(nt, vor.outputs["Distance"], [(0.0, (1, 1, 1)), (0.025, (0, 0, 0))])
+    where = ramp(nt, noise(nt, co, 4.0, 4.0, 0.5).outputs["Fac"], [(0.45, (0, 0, 0)), (0.55, (1, 1, 1))])
+    crack = math_node(nt, "MULTIPLY", crack_line.outputs["Color"], where.outputs["Color"])
+    mix = mix_shaders(nt, crack, mix, principled(nt, (0.025, 0.018, 0.01), 0.9))
     nt.links.new(mix.outputs[0], out.inputs["Surface"])
     return m
 
@@ -374,7 +387,7 @@ def spot(name, loc, energy, color, size_deg, blend):
     return ob
 
 spot("KeyLamp", (-6.0, 5.0, 14.0), 3800.0, (1.0, 0.74, 0.48), 16.0, 0.9)    # pool of warm light
-spot("MoonRim", (16.0, -2.0, 2.2), 12000.0, (0.45, 0.62, 1.0), 20.0, 0.7)  # cold, grazing
+spot("MoonRim", (16.0, -2.0, 1.6), 18000.0, (0.45, 0.62, 1.0), 20.0, 0.7)  # cold, grazing
 area("Softbox", (-3.0, 3.0, 12.0), 2.5, 260.0, (1.0, 0.85, 0.7))            # highlight in the lacquer
 area("Fill", (4.0, -10.0, 9.0), 8.0, 40.0, (0.55, 0.65, 0.9))
 
