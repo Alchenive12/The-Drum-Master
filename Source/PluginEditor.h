@@ -38,7 +38,10 @@ struct StageModel
         DrumType type = DrumType::misc;
         float jerk = 0.0f;             // 0..1, decays after a hit
         float drop = 1.0f;             // 0 = just appeared (falls in), 1 = arrived
+        float swing = 0.0f;            // px, sideways swing of the string's middle (shivers, landings)
+        float swingVel = 0.0f;
     };
+    static constexpr float landAt = 0.32f;   // drop phase where a falling drum reaches its string's length
     struct Hit { DrumType type = DrumType::misc; float phase = 0.0f, level = 0.5f, confidence = 1.0f; double born = 0.0; };
 
     std::vector<Slot> slots;
@@ -195,16 +198,25 @@ public:
     void paint (juce::Graphics& g) override
     {
         const auto r = getLocalBounds().toFloat();
-        art::room (g, r, model.flicker, static_cast<float> (model.now));
-        art::oldDrumSet (g, { 975.0f, 406.0f }, 0.68f, model.flicker * 0.8f);
-        art::legs (g, 550.0f, 452.0f, model.sway * 1.5f, 1.0f);   // the master is very tall: his legs stand in the room
-
         layout();
-        // the master: mask above, arms reaching down, hands holding the bar
-        art::hand (g, { barX1 + 18.0f, barY }, 74.0f, true, model.sway, 400.0f);
-        art::hand (g, { barX2 - 18.0f, barY }, 74.0f, false, -model.sway, 700.0f);
-        art::mask (g, 550.0f, 92.0f + model.breathe, 190.0f, model.breathe);   // the head in front of the arms
-        art::controlBar (g, barX1, barX2, barY + model.sway * 0.3f, 13.0f);
+        const bool rendered = background.isAvailable();
+        if (rendered)
+        {
+            // the 3D room with the master in it (arms raised, holding the bar above the window);
+            // three lamp levels crossfade for the flicker, the moonlight stays
+            background.draw (g, r, model.flicker);
+        }
+        else
+        {
+            art::room (g, r, model.flicker, static_cast<float> (model.now));
+            art::oldDrumSet (g, { 975.0f, 406.0f }, 0.68f, model.flicker * 0.8f);
+            art::legs (g, 550.0f, 452.0f, model.sway * 1.5f, 1.0f);   // the master is very tall: his legs stand in the room
+            // the master: mask above, arms reaching down, hands holding the bar
+            art::hand (g, { barX1 + 18.0f, barY }, 74.0f, true, model.sway, 400.0f);
+            art::hand (g, { barX2 - 18.0f, barY }, 74.0f, false, -model.sway, 700.0f);
+            art::mask (g, 550.0f, 92.0f + model.breathe, 190.0f, model.breathe);   // the head in front of the arms
+            art::controlBar (g, barX1, barX2, barY + model.sway * 0.3f, 13.0f);
+        }
 
         g.setFont (serif (24.0f, true));
         g.setColour (colours::gold);
@@ -222,13 +234,17 @@ public:
             const auto& s = model.slots[i];
             const float x = xs[i];
             const float y = drumY (s);
+            const float top = rendered ? -6.0f : barY + 6.0f;      // the bar is above the window in the 3D art
             juce::Path str;
-            str.startNewSubPath (x, barY + 6.0f);
-            str.quadraticTo (x + model.sway * 0.6f, (barY + y) * 0.5f, x, y - 34.0f);
+            str.startNewSubPath (x, top);
+            str.quadraticTo (x + model.sway * 0.6f + s.swing, (top + y) * 0.5f, x, y - 34.0f);
             g.setColour (colours::string.withAlpha (0.85f));
             g.strokePath (str, juce::PathStrokeType (1.3f));
+            const float appear = juce::jmin (1.0f, s.drop * 2.5f);  // a new drum fades in as it falls
+            if (appear < 1.0f) g.beginTransparencyLayer (appear);
             if (s.pending) art::questionTag (g, { x, y }, 64.0f);
             else art::drum (g, s.type, { x, y }, 64.0f);
+            if (appear < 1.0f) g.endTransparencyLayer();
             g.setFont (serif (13.0f, true));
             g.setColour (colours::gold.withAlpha (s.drop));
             g.drawText (s.pending ? juce::String ("CHOOSE...") : typeTitle (s.type), juce::Rectangle<float> (xs[i] - 55.0f, y + 36.0f, 110.0f, 18.0f),
@@ -247,10 +263,13 @@ public:
 
         // quick mix panel
         const auto panel = juce::Rectangle<float> (30.0f, 532.0f, 1040.0f, 146.0f);
-        g.setColour (colours::night.withAlpha (0.82f));
-        g.fillRoundedRectangle (panel, 6.0f);
-        g.setColour (colours::goldDim);
-        g.drawRoundedRectangle (panel, 6.0f, 1.0f);
+        if (! art3d::drawImageIn (g, art3d::panel(), panel))
+        {
+            g.setColour (colours::night.withAlpha (0.82f));
+            g.fillRoundedRectangle (panel, 6.0f);
+            g.setColour (colours::goldDim);
+            g.drawRoundedRectangle (panel, 6.0f, 1.0f);
+        }
         g.setFont (serif (15.0f, true));
         g.setColour (colours::gold);
         const char* titles[] = { "KICK", "SNARE", "HATS" };
@@ -305,9 +324,23 @@ private:
         barX2 = 550.0f + juce::jmax (120.0f, half);
     }
 
+    /** Drop-in: falls from above the window (accelerating), then the drum bobs on its string like a
+        weight on a spring and settles. drop runs 0 -> 1; returns px from the rest position. */
+    static float dropOffset (float x)
+    {
+        constexpr float fall = StageModel::landAt, height = 360.0f;
+        if (x < fall)
+        {
+            const float u = x / fall;
+            return -(1.0f - u * u) * height;
+        }
+        const float t = (x - fall) / (1.0f - fall);
+        return 0.11f * height * std::exp (-5.0f * t) * std::sin (2.0f * art::pi * 2.6f * t) * (1.0f - t);
+    }
+
     float drumY (const StageModel::Slot& s) const
     {
-        return 318.0f - s.jerk * 26.0f - (1.0f - easeOutBounce (s.drop)) * 190.0f;
+        return 318.0f - s.jerk * 26.0f + dropOffset (s.drop);
     }
 
     Target target (juce::Point<float> p, int* slotOut = nullptr)
@@ -317,7 +350,7 @@ private:
         {
             const float y = drumY (model.slots[i]);
             const bool onDrum = p.getDistanceFrom ({ xs[i], y }) < 40.0f;
-            const bool onString = std::abs (p.x - xs[i]) < 12.0f && p.y > barY + 8.0f && p.y < y;
+            const bool onString = std::abs (p.x - xs[i]) < 12.0f && p.y > (background.isAvailable() ? 46.0f : barY + 8.0f) && p.y < y;
             if (onDrum || onString)
             {
                 if (slotOut) *slotOut = static_cast<int> (i);
@@ -326,7 +359,8 @@ private:
         }
         const bool onBar = p.y > barY - 90.0f && p.y < barY + 12.0f && p.x > barX1 - 40.0f && p.x < barX2 + 40.0f && p.y > 46.0f;
         const bool onMask = p.getDistanceFrom ({ 550.0f, 40.0f }) < 95.0f && p.y > 46.0f;
-        if (onBar || onMask) return Target::puppet;
+        const bool onMaster = juce::Rectangle<float> (480.0f, 46.0f, 140.0f, 230.0f).contains (p);   // 3D art: his torso
+        if (background.isAvailable() ? onMaster : (onBar || onMask)) return Target::puppet;
         const auto d = (p - ringCentre);
         if ((d.x * d.x) / (ringRx * ringRx) + (d.y * d.y) / (ringRy * ringRy) < 1.1f) return Target::ring;
         return Target::none;
@@ -341,6 +375,7 @@ private:
     float barX1 = 430.0f, barX2 = 670.0f;
     const float barY = 168.0f;
     const juce::Point<float> ringCentre { 550.0f, 470.0f };
+    art3d::StageBackground background;
     const float ringRx = 250.0f, ringRy = 50.0f;
 };
 
@@ -1065,14 +1100,35 @@ private:
         syncSlots();
 
         // animations: jerks settle, new strings drop in, the master sways and breathes, the light flickers
-        for (auto& s : model.slots)
+        const float fdt = static_cast<float> (dt);
+        for (std::size_t i = 0; i < model.slots.size(); ++i)
         {
+            auto& s = model.slots[i];
             s.jerk *= static_cast<float> (std::exp (-dt / 0.11));
-            s.drop = juce::jmin (1.0f, s.drop + static_cast<float> (dt / 0.7));
+            const float before = s.drop;
+            s.drop = juce::jmin (1.0f, s.drop + fdt / 0.95f);
+            if (before < ui::StageModel::landAt && s.drop >= ui::StageModel::landAt)
+            {
+                // it landed: the bar above jolts, the neighbouring strings shiver
+                s.swingVel += (i % 2 == 0 ? 1.0f : -1.0f) * 160.0f;
+                for (std::size_t j : { i - 1, i + 1 })                // i - 1 wraps for i == 0: skipped
+                    if (j < model.slots.size())
+                    {
+                        model.slots[j].jerk = juce::jmax (model.slots[j].jerk, 0.28f);
+                        model.slots[j].swingVel += (j < i ? -1.0f : 1.0f) * 90.0f;
+                    }
+            }
+        }
+        for (auto& s : model.slots)                                    // damped spring for the swings
+        {
+            s.swingVel += (-120.0f * s.swing - 7.0f * s.swingVel) * fdt;
+            s.swing += s.swingVel * fdt;
         }
         model.sway = 3.0f * std::sin (static_cast<float> (model.now) * 0.55f);
         model.breathe = 1.6f * std::sin (static_cast<float> (model.now) * 0.9f);
-        model.flicker = random.nextFloat() < 0.004f ? 0.3f : juce::jmin (1.0f, model.flicker + static_cast<float> (dt * 2.0));
+        // now and then the warm lamp nearly goes out and comes back (the 3D art crossfades lamp levels)
+        model.flicker = random.nextFloat() < 0.0015f ? 0.18f + 0.15f * random.nextFloat()
+                                                     : juce::jmin (1.0f, model.flicker + static_cast<float> (dt * 2.0));
 
         stepAnimation (dt);
         if (stage.isVisible()) stage.repaint();

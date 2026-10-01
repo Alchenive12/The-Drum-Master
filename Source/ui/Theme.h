@@ -6,6 +6,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "Art3D.h"
+
 namespace ui
 {
 namespace colours
@@ -78,8 +80,10 @@ public:
         g.setColour (s.isEnabled() ? colours::blood.brighter (s.isMouseOverOrDragging() ? 0.3f : 0.0f) : colours::goldDim);
         g.strokePath (value, juce::PathStrokeType (thick, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-        // the knob: dark disc, bone rim, subtle top light
+        // the knob: the rendered 3D filmstrip; the code-drawn disc below is the fallback
         const float kr = r * 0.72f;
+        if (art3d::drawKnob (g, c, kr, pos, s.isEnabled()))
+            return;
         const auto knob = juce::Rectangle<float> (kr * 2.0f, kr * 2.0f).withCentre (c);
         g.setGradientFill (juce::ColourGradient (colours::stageLight.brighter (0.25f), c.x, c.y - kr,
                                                  colours::night, c.x, c.y + kr, false));
@@ -98,6 +102,8 @@ public:
     {
         auto r = b.getLocalBounds().toFloat().reduced (1.0f);
         const bool on = b.getToggleState();
+        if (art3d::drawPlaque (g, b.getLocalBounds().toFloat(), (on || down) ? 2 : (over ? 1 : 0)))
+            return;   // rendered brass plaque; the rounded box below is the fallback
         g.setColour (on ? colours::velvet : colours::night);
         g.fillRoundedRectangle (r, 3.0f);
         g.setColour (on ? colours::gold : (over ? colours::gold : colours::goldDim));

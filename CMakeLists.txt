@@ -43,8 +43,24 @@ target_compile_definitions(DrumMaster
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0)
 
+# rendered 3D UI art (assets/ui3d, made by assets3d/scripts/*.py) -> DrumMasterArt.h
+juce_add_binary_data(DrumMasterArt
+    HEADER_NAME DrumMasterArt.h
+    NAMESPACE DrumMasterArt
+    SOURCES
+        assets/ui3d/stage_bg_lamp100.jpg
+        assets/ui3d/stage_bg_lamp050.jpg
+        assets/ui3d/stage_bg_lamp015.jpg
+        assets/ui3d/knob_filmstrip_64.png
+        assets/ui3d/button_off_2x.png
+        assets/ui3d/button_hover_2x.png
+        assets/ui3d/button_on_2x.png
+        assets/ui3d/panel_2x.png)
+set_target_properties(DrumMasterArt PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+
 target_link_libraries(DrumMaster
     PRIVATE
+        DrumMasterArt
         plugin_dsp
         juce::juce_audio_utils
     PUBLIC

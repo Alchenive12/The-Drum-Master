@@ -153,3 +153,23 @@ master is listening" [Claude].
 - The plugin builds (Linux, Release, LTO) with no warnings from our code.
 - pluginval passes at strictness 5 **including its editor tests**: opening, and opening the
   editor while audio is processing.
+
+## Update: rendered 3D art (October 2026)
+
+The stage now uses pre-rendered 3D art (Blender, `assets3d/scripts/`, rendered in CI; the shipped
+files are in `assets/ui3d/`, loaded from BinaryData by `Source/ui/Art3D.h`). The code-drawn art in
+`Art.h` stays as the fallback if an image is missing.
+
+- **The master** is seen only up to the shoulders: no mask, no hands. His arms rise out of the top
+  of the window; he holds the control bar *above* the plugin, so only the strings fall in. The
+  strings start at the top edge, so any number of them works (no bar to stretch).
+- **Background:** the room and the master in one image, in three lamp levels (100 % / 50 % / 15 %).
+  Now and then the warm lamp nearly goes out and the levels crossfade (the moonlight stays). The
+  levels are cached at the window's pixel size, so a normal frame is one image copy.
+- **New string drop-in:** the drum falls in from above the window, bobs on its string like a weight on
+  a spring and settles (about a second); when it lands the bar jolts, so its neighbours shiver and
+  the strings swing sideways on a damped spring. The drum fades in while it falls.
+- **Controls:** knobs use a 64-frame filmstrip (the red value arc is still drawn in code); buttons
+  are brass plaques (off / hover / on) drawn in three slices so the screws never stretch; the quick-mix
+  panel is an image, labels and dividers stay in code.
+- Rendered but not used yet: `lever_off/on` (the Puppet Show switch is still a text button).
