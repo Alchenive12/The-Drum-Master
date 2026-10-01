@@ -47,8 +47,8 @@ def mat_wallpaper(axis):
     co = coords(nt)
     # faded stripes: wide grey-blue band, narrow darker band, thin pale pinstripe
     stripes = wave_bands(nt, co, 2.6, axis)
-    col = ramp(nt, stripes, [(0.0, (0.075, 0.085, 0.095)), (0.55, (0.05, 0.058, 0.066)),
-                             (0.9, (0.11, 0.115, 0.115)), (0.94, (0.075, 0.085, 0.095))], "CONSTANT")
+    col = ramp(nt, stripes, [(0.0, (0.13, 0.145, 0.16)), (0.55, (0.085, 0.095, 0.11)),
+                             (0.9, (0.19, 0.195, 0.19)), (0.94, (0.13, 0.145, 0.16))], "CONSTANT")
     # yellow-brown damp stains running down from the top, and darker damp near the floor
     streak_co = mapping(nt, co, scale=(2.2, 2.2, 0.35) if axis == "X" else (2.2, 2.2, 0.35))
     stain = ramp(nt, noise(nt, streak_co, 1.4, 8.0, 0.62), [(0.48, gray(0.0)), (0.66, gray(1.0))])
@@ -69,8 +69,8 @@ def mat_floor():
     co = mapping(nt, coords(nt), rot=(0, 0, math.radians(90)))
     br = nt.nodes.new("ShaderNodeTexBrick")
     br.offset = 0.37
-    set_in(br, ["Color1"], (0.055, 0.036, 0.022, 1))
-    set_in(br, ["Color2"], (0.035, 0.024, 0.016, 1))
+    set_in(br, ["Color1"], (0.09, 0.06, 0.037, 1))
+    set_in(br, ["Color2"], (0.06, 0.041, 0.027, 1))
     set_in(br, ["Mortar"], (0.004, 0.003, 0.002, 1))
     set_in(br, ["Scale"], 1.8)
     set_in(br, ["Mortar Size"], 0.006)
@@ -134,8 +134,8 @@ def mat_trousers():
     m, nt, out = new_material("PinstripeTrousers")
     co = coords(nt)
     stripes = wave_bands(nt, co, 22.0, "X")
-    col = ramp(nt, stripes, [(0.0, (0.022, 0.022, 0.024)), (0.9, (0.022, 0.022, 0.024)),
-                             (0.93, (0.09, 0.09, 0.095)), (0.96, (0.022, 0.022, 0.024))], "CONSTANT")
+    col = ramp(nt, stripes, [(0.0, (0.012, 0.012, 0.014)), (0.88, (0.012, 0.012, 0.014)),
+                             (0.92, (0.12, 0.12, 0.125)), (0.95, (0.012, 0.012, 0.014))], "CONSTANT")
     worn = ramp(nt, noise(nt, co, 6.0, 8.0, 0.6), [(0.4, gray(0.0)), (0.75, gray(0.5))])
     col = mix_color(nt, worn, col, (0.05, 0.048, 0.045))
     b = principled(nt, (0, 0, 0), 0.8)
@@ -248,7 +248,7 @@ def mat_dust_sheet():
 def mat_volume():
     m, nt, out = new_material("RoomHaze")
     v = nt.nodes.new("ShaderNodeVolumePrincipled")
-    set_in(v, ["Density"], 0.035)
+    set_in(v, ["Density"], 0.05)
     set_in(v, ["Anisotropy"], 0.45)
     set_in(v, ["Color"], (0.8, 0.85, 1.0, 1))
     nt.links.new(v.outputs[0], out.inputs["Volume"])
@@ -256,7 +256,7 @@ def mat_volume():
 
 # ================================================================ camera
 cam_data = bpy.data.cameras.new("Cam")
-cam_data.lens = 22.0
+cam_data.lens = 24.0
 cam_data.sensor_width = 36.0
 cam_data.sensor_fit = "HORIZONTAL"
 cam = link(bpy.data.objects.new("Cam", cam_data))
@@ -314,7 +314,7 @@ kit = []
 # bass drum on its side, front head (towards the camera) split
 bd = cylinder("BassShell", 0.3, 0.42, (0, 0, 0), 64, wrap)
 bd.rotation_euler = (math.radians(90), 0, math.radians(-12))
-bd.location = (2.85, 5.0, 0.31)
+bd.location = (2.55, 3.9, 0.31)
 kit.append(bd)
 bdh = cylinder("BassHead", 0.29, 0.01, (0, 0, 0.215), 64, split_head)   # faces the camera
 bdh.parent = bd
@@ -325,7 +325,7 @@ for k, z in enumerate((-0.2, 0.2)):
     hoop.parent = bd
     kit.append(hoop)
 # floor tom under a dust sheet
-sheet = cylinder("DustSheet", 0.25, 0.62, (3.85, 4.55, 0.31), 48, mat_dust_sheet(), radius2=0.2)
+sheet = cylinder("DustSheet", 0.25, 0.62, (3.45, 3.55, 0.31), 48, mat_dust_sheet(), radius2=0.2)
 sub = sheet.modifiers.new("Sub", "SUBSURF")
 sub.levels = sub.render_levels = 2
 tex = bpy.data.textures.new("SheetWrinkles", "CLOUDS")
@@ -347,8 +347,8 @@ def cymbal_stand(name, base, height, tilt_deg, radius):
     c.rotation_euler = (math.radians(tilt_deg), math.radians(tilt_deg * 0.5), 0)
     parts.append(c)
     return parts
-kit += cymbal_stand("Crash", (2.35, 5.35), 1.25, 18, 0.23)
-kit += cymbal_stand("Ride", (3.95, 5.45), 1.05, 11, 0.27)
+kit += cymbal_stand("Crash", (2.0, 4.35), 1.25, 18, 0.23)
+kit += cymbal_stand("Ride", (3.55, 4.45), 1.05, 11, 0.27)
 room += kit
 
 # ---------------------------------------------------------------- dust in the moonlight
@@ -366,45 +366,52 @@ for i in range(260):
 trousers, leather = mat_trousers(), mat_leather()
 legs = []
 for s in (-1, 1):
-    pts = [(s * 0.3, 2.95, 5.2), (s * 0.48, 2.9, 3.7), (s * 0.63, 2.85, 2.35),
-           (s * 0.56, 2.82, 1.25), (s * 0.4, 2.8, 0.16)]
-    legs.append(tube(f"Leg{s}", pts, [0.085, 0.07, 0.1, 0.055, 0.047], trousers))
-    shoe = [(s * 0.4, 2.9, 0.07), (s * 0.41, 2.65, 0.065), (s * 0.43, 2.32, 0.06),
-            (s * 0.45, 2.12, 0.1), (s * 0.45, 2.16, 0.2), (s * 0.44, 2.24, 0.22)]
-    legs.append(tube(f"Shoe{s}", shoe, [0.07, 0.062, 0.036, 0.02, 0.01, 0.004], leather, order=3))
+    pts = [(s * 0.28, 2.95, 6.0), (s * 0.5, 2.92, 4.4), (s * 0.78, 2.88, 2.9), (s * 0.9, 2.86, 2.3),
+           (s * 0.82, 2.85, 1.7), (s * 0.58, 2.82, 0.75), (s * 0.42, 2.8, 0.17)]
+    legs.append(tube(f"Leg{s}", pts, [0.09, 0.075, 0.07, 0.125, 0.06, 0.045, 0.045], trousers, order=3))
+    shoe = [(s * 0.42, 2.92, 0.08), (s * 0.43, 2.62, 0.075), (s * 0.45, 2.22, 0.065),
+            (s * 0.48, 1.95, 0.1), (s * 0.49, 1.88, 0.22), (s * 0.47, 1.98, 0.3), (s * 0.45, 2.06, 0.28)]
+    legs.append(tube(f"Shoe{s}", shoe, [0.08, 0.072, 0.045, 0.026, 0.016, 0.009, 0.003], leather, order=3))
 room += legs
 
 # ---------------------------------------------------------------- control bar + hands (foreground)
-BAR_Y = 0.25
-BAR_Z = solve_height(cam, 0.0, BAR_Y, 0.8)
+BAR_Y = -1.5
+BAR_Z = solve_height(cam, 0.0, BAR_Y, 0.76)
+K = 1.7                                    # hand scale: inhumanly large and long
 skin, sleeve_mat = mat_skin(), mat_trousers()
 bar_wood = mat_old_wood("ControlBar", (0.07, 0.042, 0.024))
-hands = [tube("Bar", [(-0.75, BAR_Y, BAR_Z), (0.75, BAR_Y, BAR_Z)], [0.028, 0.028], bar_wood, order=2),
-         tube("BarCross", [(0.0, BAR_Y - 0.28, BAR_Z + 0.03), (0.0, BAR_Y + 0.28, BAR_Z + 0.03)], [0.022, 0.022], bar_wood, order=2)]
+hands = [tube("Bar", [(-0.8, BAR_Y, BAR_Z), (0.8, BAR_Y, BAR_Z)], [0.03, 0.03], bar_wood, order=2),
+         tube("BarCross", [(0.0, BAR_Y - 0.3, BAR_Z + 0.032), (0.0, BAR_Y + 0.3, BAR_Z + 0.032)], [0.024, 0.024], bar_wood, order=2)]
+
+def finger(name, base_x, s, k, length, curl):
+    """Knobbly finger: rises from the knuckle behind the bar, drapes over it, hangs down in
+    front and hooks back towards the camera at the tip."""
+    j = lambda dy, dz, dx=0.0: (base_x + dx * s, BAR_Y + dy * K, BAR_Z + dz * K)
+    L = length
+    pts = [j(0.09, 0.07), j(0.05, 0.075), j(-0.01, 0.06),
+           j(-0.045, 0.02), j(-0.055, -0.06 * L, 0.004),
+           j(-0.05, -0.13 * L, 0.008), j(-0.07 - 0.03 * curl, -0.2 * L, 0.012),
+           j(-0.1 - 0.05 * curl, -0.235 * L, 0.014)]
+    radii = [r * K for r in (0.0125, 0.011, 0.0118, 0.0085, 0.0098, 0.0072, 0.0058, 0.0022)]
+    return tube(name, pts, radii, skin, order=3)
+
 for s in (-1, 1):
-    wx = s * 0.4
-    wrist = Vector((wx, BAR_Y + 0.16, BAR_Z + 0.12))
-    hands.append(tube(f"Sleeve{s}", [(wx * 1.25, BAR_Y + 0.9, BAR_Z + 1.6), (wx * 1.1, BAR_Y + 0.45, BAR_Z + 0.55), tuple(wrist + Vector((0, 0.04, 0.05)))],
-                      [0.055, 0.05, 0.044], sleeve_mat, order=3))
-    hands.append(ellipsoid(f"Palm{s}", (0.05, 0.03, 0.06), tuple(wrist + Vector((0, -0.04, -0.02))), skin, 32, 16))
+    wx = s * 0.42
+    hands.append(tube(f"Sleeve{s}", [(wx * 1.3, BAR_Y + 1.2, BAR_Z + 1.8), (wx * 1.15, BAR_Y + 0.55, BAR_Z + 0.65),
+                                      (wx, BAR_Y + 0.2 * K, BAR_Z + 0.13 * K)],
+                      [0.075, 0.07, 0.062], sleeve_mat, order=3))
+    hands.append(ellipsoid(f"Palm{s}", (0.05 * K, 0.035 * K, 0.06 * K), (wx, BAR_Y + 0.12 * K, BAR_Z + 0.09 * K), skin, 32, 16))
     for k, off in enumerate((-0.05, -0.017, 0.017, 0.05)):
-        fx = wx + s * off
-        sway = random.uniform(-0.015, 0.015)
-        length = 1.0 + 0.12 * (1.5 - abs(k - 1.5))          # middle fingers longest
-        pts = [(fx, BAR_Y + 0.11, BAR_Z + 0.08),
-               (fx, BAR_Y + 0.05, BAR_Z + 0.065),
-               (fx + sway * 0.3, BAR_Y - 0.035, BAR_Z + 0.05),
-               (fx + sway * 0.6, BAR_Y - 0.075, BAR_Z - 0.02),
-               (fx + sway, BAR_Y - 0.065, BAR_Z - 0.13 * length),
-               (fx + sway * 1.4, BAR_Y - 0.04, BAR_Z - 0.26 * length)]
-        hands.append(tube(f"Finger{s}{k}", pts, [0.014, 0.011, 0.0135, 0.009, 0.0105, 0.0035], skin, order=3))
-    thumb = [(wx - s * 0.05, BAR_Y + 0.1, BAR_Z + 0.05), (wx - s * 0.075, BAR_Y + 0.06, BAR_Z - 0.03),
-             (wx - s * 0.07, BAR_Y + 0.02, BAR_Z - 0.1), (wx - s * 0.06, BAR_Y - 0.01, BAR_Z - 0.17)]
-    hands.append(tube(f"Thumb{s}", thumb, [0.015, 0.012, 0.01, 0.004], skin, order=3))
+        length = (1.0, 1.25, 1.15, 0.85)[k]
+        hands.append(finger(f"Finger{s}{k}", wx + s * off * K, s, k, length, random.uniform(0.3, 1.0)))
+    tb = lambda dx, dy, dz: (wx - s * dx * K, BAR_Y + dy * K, BAR_Z + dz * K)
+    hands.append(tube(f"Thumb{s}", [tb(0.05, 0.1, 0.06), tb(0.075, 0.065, -0.01), tb(0.075, 0.03, -0.07),
+                                     tb(0.065, 0.0, -0.13), tb(0.055, -0.02, -0.15)],
+                      [r * K for r in (0.015, 0.012, 0.012, 0.008, 0.003)], skin, order=3))
 
 # ---------------------------------------------------------------- the mask (only its bottom shows)
-MASK_Y = 1.35
-A, B, C = 0.24, 0.16, 0.32           # half-width, half-depth, half-height
+MASK_Y = -0.4
+A, B, C = 0.42, 0.28, 0.56           # half-width, half-depth, half-height
 mask = ellipsoid("Mask", (A, B, C), (0, 0, 0), mat_porcelain())
 mask.rotation_euler = (math.radians(14), 0, 0)    # head bowed
 
@@ -412,22 +419,22 @@ def on_face(x, z, lift=0.004):
     t = 1.0 - (x / A) ** 2 - (z / C) ** 2
     return (x, -B * math.sqrt(max(t, 0.0)) - lift, z)
 
-mouth = [on_face(x, -0.17 + 0.075 * (x / 0.16) ** 2) for x in [i * 0.016 for i in range(-10, 11)]]
+mouth = [on_face(x, -0.3 + 0.13 * (x / 0.28) ** 2) for x in [i * 0.028 for i in range(-10, 11)]]
 thread = mat_simple("Thread", (0.03, 0.02, 0.015), 0.8)
 groove = mat_simple("Groove", (0.003, 0.002, 0.002), 1.0)
-mask_parts = [tube("Smile", mouth, [0.006] * len(mouth), groove, order=3)]
+mask_parts = [tube("Smile", mouth, [0.01] * len(mouth), groove, order=3)]
 for k, (x, _, z) in enumerate(mouth[1:-1:2]):
-    a, b = on_face(x - 0.004, z + 0.028, 0.006), on_face(x + 0.004, z - 0.028, 0.006)
-    mask_parts.append(tube(f"Stitch{k}", [a, b], [0.0028, 0.0028], thread, order=2))
+    a, b = on_face(x - 0.007, z + 0.05, 0.01), on_face(x + 0.007, z - 0.05, 0.01)
+    mask_parts.append(tube(f"Stitch{k}", [a, b], [0.005, 0.005], thread, order=2))
 for p in mask_parts:
     p.parent = mask
-mask_mouth_local = Vector(on_face(0.0, -0.17))
+mask_mouth_local = Vector(on_face(0.0, -0.3))
 lo, hi = 0.0, 12.0
 for _ in range(50):              # place the mask so its smile sits just inside the top edge
     mid = (lo + hi) / 2.0
     mask.location = (0.0, MASK_Y, mid)
     bpy.context.view_layer.update()
-    if view_y(cam, mask.matrix_world @ mask_mouth_local) < 0.94:
+    if view_y(cam, mask.matrix_world @ mask_mouth_local) < 0.9:
         lo = mid
     else:
         hi = mid
@@ -441,10 +448,10 @@ bg = world.node_tree.nodes.get("Background")
 set_in(bg, ["Color"], (0.004, 0.006, 0.012, 1.0))
 set_in(bg, ["Strength"], 1.0)
 
-moon = sun("Moon", tuple(moon_dir), 5.0, (0.5, 0.64, 1.0), 0.4)
-stage = spot("StageLamp", (0.0, -2.6, 4.2), (0.0, 0.7, BAR_Z - 0.3), 420.0, (1.0, 0.72, 0.45), 42.0, 0.7, 0.3)
-room_fill = area("RoomFill", (0.0, 2.0, H - 0.1), (0.0, 2.0, 0.0), 3.0, 35.0, (0.5, 0.6, 0.85))
-corner = spot("CornerGlint", (1.0, 2.5, 3.8), (3.1, 5.1, 0.6), 60.0, (0.6, 0.7, 1.0), 30.0, 0.9, 0.2)
+moon = sun("Moon", tuple(moon_dir), 3.0, (0.5, 0.64, 1.0), 0.4)
+stage = spot("StageLamp", (0.0, -3.6, BAR_Z + 1.4), (0.0, BAR_Y, BAR_Z - 0.2), 160.0, (1.0, 0.72, 0.45), 50.0, 0.7, 0.3)
+room_fill = area("RoomFill", (0.0, 2.0, H - 0.1), (0.0, 2.0, 0.0), 4.0, 140.0, (0.5, 0.6, 0.85))
+corner = spot("CornerGlint", (0.5, 1.5, 3.8), (2.8, 4.0, 0.5), 260.0, (0.6, 0.7, 1.0), 32.0, 0.9, 0.3)
 
 haze = box_minmax("Haze", (X0, Y0, 0.0), (X1, Y1, H), mat_volume())
 room.append(haze)
