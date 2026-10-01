@@ -190,6 +190,10 @@ def mat_jacket(ty, sh_z):
     sh = mix_shaders(nt, tie, sh, tie_s)
     sh = mix_shaders(nt, lapel, sh, lapel_s)
     sh = mix_shaders(nt, buttons, sh, button_s)
+    collar = M("GREATER_THAN", z, sh_z + 0.09)          # shirt collar round the neck
+    neck = M("GREATER_THAN", z, sh_z + 0.2)             # then bare neck, up out of frame
+    sh = mix_shaders(nt, collar, sh, shirt_s)
+    sh = mix_shaders(nt, neck, sh, principled(nt, (0.4, 0.38, 0.35), 0.5))
     finish(nt, out, dusty(nt, sh, 0.3, 25.0))
     return m
 
@@ -442,8 +446,8 @@ for i in range(260):
 # ---------------------------------------------------------------- the master's body (up to the shoulders)
 # The head is always out of frame: the shoulders sit at the top edge, the neck runs up out of view.
 TY = 0.6                                         # where he stands, just behind the control bar
-SH_Z = solve_height(cam, 0.0, TY - 0.12, 0.95)   # shoulder joints; the shrug rises above them
-HIP_Z = SH_Z - 1.2                               # long, very thin torso
+SH_Z = solve_height(cam, 0.0, TY - 0.09, 0.9)    # shoulders clearly in frame; arms rise out of view
+HIP_Z = SH_Z - 1.05                              # tall and thin, but closer to human
 trousers, leather = mat_trousers(), mat_leather()
 jacket = mat_jacket(TY, SH_Z)
 
@@ -469,15 +473,16 @@ def lofted(name, rings, segs=32, mat=None):
 
 L_T = SH_Z - HIP_Z
 torso = lofted("Torso", [
-    (HIP_Z - 0.05,       0.15, 0.10,  0.00),     # hips
-    (HIP_Z + 0.22 * L_T, 0.13, 0.09,  0.00),
-    (HIP_Z + 0.42 * L_T, 0.10, 0.075, -0.03),    # wasp waist
-    (HIP_Z + 0.62 * L_T, 0.15, 0.095, -0.07),    # ribs
-    (HIP_Z + 0.82 * L_T, 0.23, 0.105, -0.11),    # upper chest
-    (HIP_Z + 0.94 * L_T, 0.29, 0.095, -0.13),    # shoulders
-    (SH_Z + 0.06,        0.25, 0.09,  -0.13),    # shrugged up: holding the bar above the frame
-    (SH_Z + 0.16,        0.13, 0.078, -0.12),    # thick base of the neck
-    (SH_Z + 0.55,        0.07, 0.06,  -0.1),     # neck, out of frame
+    (HIP_Z - 0.28,       0.19, 0.125, 0.01),     # jacket hem: covers the hips
+    (HIP_Z - 0.05,       0.17, 0.115, 0.00),     # hips
+    (HIP_Z + 0.22 * L_T, 0.15, 0.10,  0.00),
+    (HIP_Z + 0.42 * L_T, 0.13, 0.09,  -0.02),    # slim waist
+    (HIP_Z + 0.62 * L_T, 0.165, 0.1,  -0.05),    # ribs
+    (HIP_Z + 0.82 * L_T, 0.22, 0.11,  -0.08),    # chest
+    (HIP_Z + 0.94 * L_T, 0.255, 0.1,  -0.09),    # shoulders
+    (SH_Z + 0.05,        0.22, 0.095, -0.09),    # shrugged up: holding the bar above the frame
+    (SH_Z + 0.13,        0.085, 0.075, -0.08),   # collar / base of the neck
+    (SH_Z + 0.6,         0.065, 0.06, -0.06),    # neck, out of frame
 ], mat=jacket)
 body = [torso]
 body.append(ellipsoid("Pelvis", (0.16, 0.105, 0.13), (0.0, TY, HIP_Z), trousers, 32, 16))
@@ -489,19 +494,19 @@ for s_ in (-1, 1):                               # long coat tails hanging behin
     body.append(tail)
 
 for s_ in (-1, 1):
-    arm = [(s_ * 0.26, TY - 0.13, SH_Z - 0.03), (s_ * 0.33, TY - 0.17, SH_Z + 0.1),
-           (s_ * 0.42, TY - 0.45, SH_Z + 0.6), (s_ * 0.5, TY - 0.95, SH_Z + 1.3)]
-    body.append(tube(f"Arm{s_}", arm, [0.085, 0.08, 0.06, 0.055], mat_trousers(), order=3))
+    arm = [(s_ * 0.24, TY - 0.09, SH_Z - 0.03), (s_ * 0.3, TY - 0.12, SH_Z + 0.1),
+           (s_ * 0.36, TY - 0.35, SH_Z + 0.6), (s_ * 0.42, TY - 0.75, SH_Z + 1.3)]
+    body.append(tube(f"Arm{s_}", arm, [0.08, 0.075, 0.058, 0.052], mat_trousers(), order=3))
 
 legs = []
 for s_ in (-1, 1):
-    pts = [(s_ * 0.08, TY, HIP_Z + 0.1), (s_ * 0.18, TY + 0.01, HIP_Z - 0.35), (s_ * 0.34, TY + 0.02, 0.72 * HIP_Z),
-           (s_ * 0.42, TY + 0.03, 0.52 * HIP_Z), (s_ * 0.38, TY + 0.04, 0.36 * HIP_Z), (s_ * 0.3, TY + 0.05, 0.17 * HIP_Z),
-           (s_ * 0.24, TY + 0.06, 0.17)]
-    legs.append(tube(f"Leg{s_}", pts, [0.085, 0.075, 0.065, 0.11, 0.055, 0.045, 0.042], trousers, order=3))
-    shoe = [(s_ * 0.24, TY + 0.14, 0.08), (s_ * 0.25, TY - 0.15, 0.075), (s_ * 0.27, TY - 0.5, 0.065),
-            (s_ * 0.29, TY - 0.75, 0.1), (s_ * 0.3, TY - 0.82, 0.22), (s_ * 0.29, TY - 0.73, 0.3), (s_ * 0.28, TY - 0.66, 0.28)]
-    legs.append(tube(f"Shoe{s_}", shoe, [0.08, 0.072, 0.045, 0.026, 0.016, 0.009, 0.003], leather, order=3))
+    pts = [(s_ * 0.09, TY, HIP_Z + 0.05), (s_ * 0.13, TY, HIP_Z - 0.35), (s_ * 0.17, TY - 0.02, 0.55 * HIP_Z),
+           (s_ * 0.2, TY - 0.045, 0.5 * HIP_Z), (s_ * 0.18, TY - 0.02, 0.3 * HIP_Z), (s_ * 0.16, TY, 0.12 * HIP_Z),
+           (s_ * 0.15, TY + 0.02, 0.15)]
+    legs.append(tube(f"Leg{s_}", pts, [0.095, 0.088, 0.07, 0.075, 0.06, 0.048, 0.045], trousers, order=3))
+    shoe = [(s_ * 0.15, TY + 0.12, 0.08), (s_ * 0.155, TY - 0.12, 0.07), (s_ * 0.16, TY - 0.38, 0.06),
+            (s_ * 0.165, TY - 0.55, 0.08), (s_ * 0.17, TY - 0.6, 0.14), (s_ * 0.165, TY - 0.56, 0.18)]
+    legs.append(tube(f"Shoe{s_}", shoe, [0.075, 0.068, 0.045, 0.025, 0.012, 0.004], leather, order=3))
 legs += body
 room += legs
 
