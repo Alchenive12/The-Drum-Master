@@ -16,4 +16,4 @@
 # assets3d/scripts/stage.py assets3d/renders/stage --layers background --width 2200 --samples 64 --lamp 0.15
 
 # controls: plaque buttons (off/hover/on), levers (off/on), quick-mix panel - same sizes as the SVG pack
-assets3d/scripts/controls.py assets3d/renders/controls --samples 64
+assets3d/scripts/controls.py assets3d/renders/controls --samples 64 --only button

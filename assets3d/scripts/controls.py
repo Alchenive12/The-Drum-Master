@@ -63,13 +63,21 @@ def mat_window(state):
     co = coords(nt)
     glass = principled(nt, (0.01, 0.008, 0.008), 0.08)
     set_in(glass, ["Coat Weight", "Clearcoat"], 1.0)
-    if state == "on":
-        set_in(glass, ["Base Color"], (0.35, 0.02, 0.015, 1.0))
-        set_in(glass, ["Emission Color", "Emission"], (1.0, 0.07, 0.04, 1.0))
-        set_in(glass, ["Emission Strength"], 2.2)
-    elif state == "hover":
-        set_in(glass, ["Emission Color", "Emission"], (1.0, 0.55, 0.25, 1.0))
-        set_in(glass, ["Emission Strength"], 0.25)
+    if state in ("on", "hover"):
+        # glow from behind the glass: strongest in the middle, falling off towards the frame
+        sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+        nt.links.new(coords(nt, "Generated"), sep.inputs[0])
+        cx_ = math_node(nt, "SUBTRACT", 1.0, math_node(nt, "ABSOLUTE", math_node(nt, "MULTIPLY", math_node(nt, "SUBTRACT", sep.outputs["X"], 0.5), 2.0)))
+        cy_ = math_node(nt, "SUBTRACT", 1.0, math_node(nt, "ABSOLUTE", math_node(nt, "MULTIPLY", math_node(nt, "SUBTRACT", sep.outputs["Y"], 0.5), 2.0)))
+        falloff = math_node(nt, "POWER", math_node(nt, "MULTIPLY", math_node(nt, "POWER", cx_, 0.35), math_node(nt, "POWER", cy_, 0.8)), 1.5)
+        if state == "on":
+            set_in(glass, ["Base Color"], (0.12, 0.005, 0.004, 1.0))
+            set_in(glass, ["Emission Color", "Emission"], (0.85, 0.025, 0.012, 1.0))
+            peak = 0.75
+        else:
+            set_in(glass, ["Emission Color", "Emission"], (1.0, 0.5, 0.22, 1.0))
+            peak = 0.07
+        link_in(nt, math_node(nt, "MULTIPLY", falloff, peak), glass, ["Emission Strength"])
     smudge = ramp(nt, noise(nt, co, 2.0, 6.0, 0.6), [(0.4, gray(0.05)), (0.75, gray(0.35))])
     link_in(nt, smudge, glass, ["Coat Roughness", "Clearcoat Roughness"])
     finish(nt, out, dusty(nt, glass, 0.25, 12.0))
