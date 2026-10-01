@@ -12,8 +12,7 @@
 # Units: 1 Blender unit = 1 cm. The knob is 3.4 cm across.
 #
 # Output (in --out):
-#   knob_v000.png, knob_v050.png, knob_v100.png    knob at min / mid / max, normal exposure
-#   knob_v050_dark.png, knob_v050_bright.png       mid position at -1 / +1 stop (same render)
+#   knob_v000.png, knob_v050.png, knob_v100.png    knob at min / mid / max
 
 import argparse
 import math
@@ -174,12 +173,19 @@ def mat_panel():
     big = noise(nt, co, 0.35, 10.0, 0.62)          # where paint is chipped
     fine = noise(nt, co, 4.0, 14.0, 0.7)           # rust grain
     grime = noise(nt, co, 1.2, 6.0, 0.5)           # streaky grime
-    chip_mask = ramp(nt, big.outputs["Fac"], [(0.56, (0, 0, 0)), (0.6, (1, 1, 1))])
-    paint = principled(nt, (0.016, 0.018, 0.024), 0.55)
-    rust = principled(nt, (0.11, 0.045, 0.018), 0.85)
-    rust_col = ramp(nt, fine.outputs["Fac"], [(0.35, (0.04, 0.016, 0.008)), (0.5, (0.13, 0.05, 0.018)), (0.7, (0.2, 0.09, 0.03))])
+    chip_mask = ramp(nt, big.outputs["Fac"], [(0.55, (0, 0, 0)), (0.66, (1, 1, 1))])
+    paint = principled(nt, (0.012, 0.014, 0.019), 0.55)
+    rust = principled(nt, (0.06, 0.028, 0.012), 0.9)
+    rust_col = ramp(nt, fine.outputs["Fac"], [(0.3, (0.018, 0.009, 0.005)), (0.5, (0.055, 0.026, 0.011)), (0.72, (0.1, 0.05, 0.022))])
     link_in(nt, rust_col.outputs["Color"], rust, ["Base Color"])
-    rough = ramp(nt, grime.outputs["Fac"], [(0.3, (0.38, 0.38, 0.38)), (0.7, (0.75, 0.75, 0.75))])
+    # damp vertical streaks (stretched noise) darken the paint and change its sheen
+    smp = nt.nodes.new("ShaderNodeMapping")
+    set_in(smp, ["Scale"], (5.0, 0.25, 1.0))
+    nt.links.new(co, smp.inputs["Vector"])
+    streak = ramp(nt, noise(nt, smp.outputs["Vector"], 1.6, 6.0, 0.55).outputs["Fac"], [(0.4, (0, 0, 0)), (0.65, (1, 1, 1))])
+    paint_col = ramp(nt, streak.outputs["Color"], [(0.0, (0.014, 0.016, 0.021)), (1.0, (0.006, 0.007, 0.009))])
+    link_in(nt, paint_col.outputs["Color"], paint, ["Base Color"])
+    rough = ramp(nt, grime.outputs["Fac"], [(0.3, (0.32, 0.32, 0.32)), (0.7, (0.7, 0.7, 0.7))])
     link_in(nt, rough.outputs["Color"], paint, ["Roughness"])
     height = math_node(nt, "ADD", math_node(nt, "MULTIPLY", chip_mask.outputs["Color"], 0.6), math_node(nt, "MULTIPLY", fine.outputs["Fac"], 0.4))
     n = bump(nt, height, 0.35, 0.05)
@@ -216,10 +222,10 @@ def mat_lacquer():
     set_in(mp, ["Rotation"], (0.0, 0.0, math.radians(23)))
     nt.links.new(co, mp.inputs["Vector"])
     scr = noise(nt, mp.outputs["Vector"], 9.0, 4.0, 0.5)
-    scr_r = ramp(nt, scr.outputs["Fac"], [(0.62, (0.06, 0.06, 0.06)), (0.7, (0.35, 0.35, 0.35))])
-    dust = ramp(nt, noise(nt, co, 14.0, 6.0, 0.6).outputs["Fac"], [(0.5, (0.18, 0.18, 0.18)), (0.75, (0.5, 0.5, 0.5))])
-    b = principled(nt, (0.012, 0.012, 0.014), 0.35)
-    link_in(nt, dust.outputs["Color"], b, ["Roughness"])
+    scr_r = ramp(nt, scr.outputs["Fac"], [(0.66, (0.03, 0.03, 0.03)), (0.69, (0.3, 0.3, 0.3))])
+    smudge = ramp(nt, noise(nt, co, 1.5, 4.0, 0.5).outputs["Fac"], [(0.35, (0.12, 0.12, 0.12)), (0.7, (0.3, 0.3, 0.3))])
+    b = principled(nt, (0.006, 0.006, 0.007), 0.2)
+    link_in(nt, smudge.outputs["Color"], b, ["Roughness"])
     set_in(b, ["Coat Weight", "Clearcoat"], 1.0)
     link_in(nt, scr_r.outputs["Color"], b, ["Coat Roughness", "Clearcoat Roughness"])
     nt.links.new(b.outputs[0], out.inputs["Surface"])
@@ -240,10 +246,11 @@ def mat_bone():
 
 def mat_jewel():
     m, nt, out = new_material("Red_Jewel")
-    b = principled(nt, (0.55, 0.02, 0.02), 0.08)
-    set_in(b, ["Transmission Weight", "Transmission"], 0.7)
-    set_in(b, ["Emission Color", "Emission"], (0.9, 0.05, 0.03, 1.0))
-    set_in(b, ["Emission Strength"], 0.6)
+    b = principled(nt, (0.4, 0.0, 0.012), 0.02)
+    set_in(b, ["Transmission Weight", "Transmission"], 1.0)
+    set_in(b, ["IOR"], 1.77)
+    set_in(b, ["Emission Color", "Emission"], (0.7, 0.01, 0.02, 1.0))
+    set_in(b, ["Emission Strength"], 0.25)
     nt.links.new(b.outputs[0], out.inputs["Surface"])
     return m
 
@@ -256,7 +263,7 @@ def mesh_obj(name, bm):
     scene.collection.objects.link(ob)
     return ob
 
-def knurled_skirt(r_out=1.7, r_in=1.63, ridges=110, h=0.55, taper=0.965):
+def knurled_skirt(r_out=1.7, r_in=1.665, ridges=180, h=0.55, taper=0.965):
     bm = bmesh.new()
     n = ridges * 2
     bot, top = [], []
@@ -304,14 +311,20 @@ scene.collection.objects.link(rig)
 
 SKIRT_H = 0.55
 CAP_H = 0.9
-CAP_TOP = SKIRT_H + CAP_H
+CAP_TOP = SKIRT_H + 0.1 + CAP_H
 
 skirt = knurled_skirt(h=SKIRT_H)
-skirt.data.materials.append(mat_brass())
-add_bevel(skirt, 0.02, 2)
+brass = mat_brass()
+skirt.data.materials.append(brass)
+add_bevel(skirt, 0.008, 2)
 smooth(skirt, 30)
 
-cap = cylinder("Cap", 1.36, CAP_H, SKIRT_H)
+collar = cylinder("Collar", 1.5, 0.14, SKIRT_H - 0.02)
+collar.data.materials.append(brass)
+add_bevel(collar, 0.06, 5, 40)
+smooth(collar, 40)
+
+cap = cylinder("Cap", 1.36, CAP_H, SKIRT_H + 0.1)
 cap.data.materials.append(mat_lacquer())
 add_bevel(cap, 0.14, 6, 40)
 smooth(cap, 40)
@@ -331,7 +344,7 @@ jewel = sphere("Jewel", 0.1, (0.0, 1.0, CAP_TOP + 0.13), squash=0.65)
 jewel.data.materials.append(mat_jewel())
 smooth(jewel, 180)
 
-for ob in (skirt, cap, pointer, hub, jewel):
+for ob in (skirt, collar, cap, pointer, hub, jewel):
     ob.parent = rig
 
 # ---------------------------------------------------------------- lights, world, camera
@@ -360,23 +373,24 @@ def spot(name, loc, energy, color, size_deg, blend):
     look_at(ob, (0.0, 0.0, 0.4))
     return ob
 
-area("KeyWarm", (-7.0, 6.0, 13.0), 5.0, 2600.0, (1.0, 0.8, 0.58))
-spot("MoonRim", (15.0, -3.0, 3.2), 9000.0, (0.55, 0.7, 1.0), 22.0, 0.6)
-area("Fill", (4.0, -10.0, 9.0), 8.0, 250.0, (0.6, 0.7, 0.9))
+spot("KeyLamp", (-6.0, 5.0, 14.0), 3800.0, (1.0, 0.74, 0.48), 16.0, 0.9)    # pool of warm light
+spot("MoonRim", (16.0, -2.0, 2.2), 12000.0, (0.45, 0.62, 1.0), 20.0, 0.7)  # cold, grazing
+area("Softbox", (-3.0, 3.0, 12.0), 2.5, 260.0, (1.0, 0.85, 0.7))            # highlight in the lacquer
+area("Fill", (4.0, -10.0, 9.0), 8.0, 40.0, (0.55, 0.65, 0.9))
 
 world = bpy.data.worlds.new("World")
 scene.world = world
 world.use_nodes = True
 bg = world.node_tree.nodes.get("Background")
-set_in(bg, ["Color"], (0.008, 0.01, 0.016, 1.0))
+set_in(bg, ["Color"], (0.003, 0.004, 0.007, 1.0))
 set_in(bg, ["Strength"], 1.0)
 
 cam_data = bpy.data.cameras.new("Cam")
-cam_data.lens = 100.0
+cam_data.lens = 60.0
 cam_data.sensor_width = 36.0
 cam = bpy.data.objects.new("Cam", cam_data)
 scene.collection.objects.link(cam)
-cam.location = (0.0, 0.0, 15.0)
+cam.location = (0.0, 0.0, 9.8)
 look_at(cam, (0.0, 0.0, 0.0))
 cam.rotation_euler[2] = 0.0
 scene.camera = cam
@@ -388,15 +402,28 @@ scene.cycles.samples = args.samples
 scene.cycles.use_adaptive_sampling = True
 # Distro builds (e.g. Ubuntu's apt Blender) can lack OpenImageDenoise; rendering then fails if
 # denoising is on. Without it, fall back to 4x the samples.
-HAS_OIDN = bool(getattr(bpy.app.build_options, "openimagedenoise", False))
-scene.cycles.use_denoising = HAS_OIDN
-if HAS_OIDN:
+def denoiser_works():
+    scene.render.resolution_x = scene.render.resolution_y = 16
+    old = scene.cycles.samples
+    scene.cycles.samples = 1
+    scene.cycles.use_denoising = True
     try_set(scene.cycles, "denoiser", ["OPENIMAGEDENOISE"])
-else:
-    scene.cycles.samples = args.samples * 4
+    try:
+        bpy.ops.render.render(write_still=False)
+        ok = True
+    except RuntimeError:
+        ok = False
+    scene.cycles.samples = old
+    return ok
+
+HAS_OIDN = denoiser_works()
 scene.render.resolution_x = args.res
 scene.render.resolution_y = args.res
 scene.render.resolution_percentage = 100
+scene.cycles.use_denoising = HAS_OIDN
+if not HAS_OIDN:
+    scene.cycles.samples = args.samples * 4
+
 scene.render.film_transparent = False
 scene.render.image_settings.file_format = "PNG"
 scene.render.image_settings.color_mode = "RGB"
@@ -422,9 +449,3 @@ for value, tag in ((0.0, "v000"), (1.0, "v100"), (0.5, "v050")):
     bpy.ops.render.render(write_still=False)
     save(f"knob_{tag}.png")
 
-# The last render is the mid position: re-save it at -1 / +1 stop, no re-render needed.
-scene.view_settings.exposure = -1.0
-save("knob_v050_dark.png")
-scene.view_settings.exposure = 1.0
-save("knob_v050_bright.png")
-scene.view_settings.exposure = 0.0
