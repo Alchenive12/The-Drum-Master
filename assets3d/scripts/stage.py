@@ -143,9 +143,9 @@ def mat_trousers():
     b = principled(nt, (0, 0, 0), 0.8)
     link_in(nt, col, b, ["Base Color"])
     set_in(b, ["Sheen Weight", "Sheen"], 0.6)
-    creases = noise(nt, mapping(nt, co, scale=(1.5, 1.5, 14.0)), 3.0, 4.0, 0.5)   # horizontal folds
+    creases = noise(nt, mapping(nt, co, scale=(1.5, 1.5, 9.0)), 2.2, 5.0, 0.55)   # horizontal folds
     weave = noise(nt, co, 60.0, 4.0, 0.5)
-    link_in(nt, bump(nt, math_node(nt, "ADD", math_node(nt, "MULTIPLY", creases, 0.8), math_node(nt, "MULTIPLY", weave, 0.2)), 0.35, 0.01), b, ["Normal"])
+    link_in(nt, bump(nt, math_node(nt, "ADD", math_node(nt, "MULTIPLY", creases, 0.8), math_node(nt, "MULTIPLY", weave, 0.2)), 0.9, 0.02), b, ["Normal"])
     finish(nt, out, dusty(nt, b, 0.35, 25.0))
     return m
 
@@ -158,7 +158,8 @@ def mat_jacket(ty, sh_z):
     cloth = principled(nt, (0, 0, 0), 0.8)
     link_in(nt, col, cloth, ["Base Color"])
     set_in(cloth, ["Sheen Weight", "Sheen"], 0.6)
-    link_in(nt, bump(nt, noise(nt, co, 60.0, 4.0, 0.5), 0.15, 0.005), cloth, ["Normal"])
+    folds = noise(nt, mapping(nt, co, scale=(2.0, 2.0, 7.0)), 2.0, 5.0, 0.55)
+    link_in(nt, bump(nt, math_node(nt, "ADD", math_node(nt, "MULTIPLY", folds, 0.8), math_node(nt, "MULTIPLY", noise(nt, co, 60.0, 4.0, 0.5), 0.2)), 0.8, 0.02), cloth, ["Normal"])
 
     sep = nt.nodes.new("ShaderNodeSeparateXYZ")
     nt.links.new(co, sep.inputs[0])
@@ -447,7 +448,7 @@ for i in range(260):
 # The head is always out of frame: the shoulders sit at the top edge, the neck runs up out of view.
 TY = 0.6                                         # where he stands, just behind the control bar
 SH_Z = solve_height(cam, 0.0, TY - 0.09, 0.9)    # shoulders clearly in frame; arms rise out of view
-HIP_Z = SH_Z - 1.05                              # tall and thin, but closer to human
+HIP_Z = SH_Z - 0.95                              # legs a little too long: almost human, not quite
 trousers, leather = mat_trousers(), mat_leather()
 jacket = mat_jacket(TY, SH_Z)
 
@@ -500,13 +501,31 @@ for s_ in (-1, 1):
 
 legs = []
 for s_ in (-1, 1):
-    pts = [(s_ * 0.09, TY, HIP_Z + 0.05), (s_ * 0.13, TY, HIP_Z - 0.35), (s_ * 0.17, TY - 0.02, 0.55 * HIP_Z),
-           (s_ * 0.2, TY - 0.045, 0.5 * HIP_Z), (s_ * 0.18, TY - 0.02, 0.3 * HIP_Z), (s_ * 0.16, TY, 0.12 * HIP_Z),
-           (s_ * 0.15, TY + 0.02, 0.15)]
-    legs.append(tube(f"Leg{s_}", pts, [0.095, 0.088, 0.07, 0.075, 0.06, 0.048, 0.045], trousers, order=3))
-    shoe = [(s_ * 0.15, TY + 0.12, 0.08), (s_ * 0.155, TY - 0.12, 0.07), (s_ * 0.16, TY - 0.38, 0.06),
-            (s_ * 0.165, TY - 0.55, 0.08), (s_ * 0.17, TY - 0.6, 0.14), (s_ * 0.165, TY - 0.56, 0.18)]
-    legs.append(tube(f"Shoe{s_}", shoe, [0.075, 0.068, 0.045, 0.025, 0.012, 0.004], leather, order=3))
+    if s_ < 0:      # standing leg, carries the weight
+        pts = [(-0.09, TY, HIP_Z + 0.05), (-0.13, TY, HIP_Z - 0.35), (-0.16, TY - 0.02, 0.55 * HIP_Z),
+               (-0.19, TY - 0.04, 0.5 * HIP_Z), (-0.17, TY - 0.02, 0.3 * HIP_Z), (-0.15, TY, 0.12 * HIP_Z),
+               (-0.14, TY + 0.02, 0.15)]
+        heel_z, foot_x = 0.08, -0.14
+    else:           # relaxed leg: knee bent forward and turned out, heel lifted
+        pts = [(0.09, TY, HIP_Z + 0.05), (0.15, TY - 0.06, HIP_Z - 0.35), (0.22, TY - 0.15, 0.56 * HIP_Z),
+               (0.25, TY - 0.19, 0.5 * HIP_Z), (0.24, TY - 0.12, 0.32 * HIP_Z), (0.21, TY - 0.02, 0.15 * HIP_Z),
+               (0.2, TY + 0.02, 0.2)]
+        heel_z, foot_x = 0.15, 0.2
+    legs.append(tube(f"Leg{s_}", pts, [0.092, 0.084, 0.066, 0.082, 0.052, 0.042, 0.04], trousers, order=3))
+    lift = heel_z - 0.08
+    shoe = [(foot_x, TY + 0.12, heel_z), (foot_x + s_ * 0.005, TY - 0.12, 0.07 + lift * 0.6),
+            (foot_x + s_ * 0.01, TY - 0.38, 0.055 + lift * 0.1), (foot_x + s_ * 0.015, TY - 0.55, 0.07),
+            (foot_x + s_ * 0.02, TY - 0.6, 0.13), (foot_x + s_ * 0.015, TY - 0.56, 0.17)]
+    legs.append(tube(f"Shoe{s_}", shoe, [0.072, 0.065, 0.043, 0.024, 0.012, 0.004], leather, order=3))
+pivot = bpy.data.objects.new("UpperBodyPivot", None)
+link(pivot)
+pivot.location = (0.0, TY, HIP_Z)
+bpy.context.view_layer.update()
+for o in body:
+    o.parent = pivot
+    o.matrix_parent_inverse = pivot.matrix_world.inverted()
+pivot.rotation_euler = (math.radians(4), math.radians(-5), math.radians(6))   # lean, hip tilt, twist
+bpy.context.view_layer.update()
 legs += body
 room += legs
 
@@ -631,9 +650,9 @@ set_in(bg, ["Color"], (0.004, 0.006, 0.012, 1.0))
 set_in(bg, ["Strength"], 1.0)
 
 moon = sun("Moon", tuple(moon_dir), 2.8, (0.5, 0.64, 1.0), 0.4)
-stage = spot("StageLamp", (0.0, -3.6, BAR_Z + 1.4), (0.0, BAR_Y, BAR_Z - 0.2), 110.0, (1.0, 0.86, 0.72), 50.0, 0.7, 0.3)
+stage = spot("StageLamp", (0.0, -3.6, BAR_Z + 1.4), (0.0, TY, SH_Z - 0.45), 160.0, (1.0, 0.86, 0.72), 50.0, 0.7, 0.3)
 room_fill = area("RoomFill", (0.0, 2.0, H - 0.1), (0.0, 2.0, 0.0), 4.0, 30.0, (0.5, 0.6, 0.85))
-rim = spot("MasterRim", (1.9, TY - 0.6, SH_Z + 0.9), (0.0, TY, SH_Z - 0.3), 320.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.4)
+rim = spot("MasterRim", (1.9, TY - 0.6, SH_Z + 0.9), (0.0, TY, SH_Z - 0.3), 600.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.4)
 try:                               # light linking (Blender 4.0+): the rim light only touches the master
     rim_coll = bpy.data.collections.new("RimReceivers")
     for o in body:
@@ -644,7 +663,7 @@ except Exception as e:
     rim.data.energy = 0.0
 corner = spot("CornerGlint", (0.3, 1.2, 3.8), (2.5, 3.8, 0.5), 230.0, (0.6, 0.7, 1.0), 36.0, 0.9, 0.3)
 
-leg_rim = spot("LegRim", (-2.6, TY + 3.6, 3.4), (0.0, TY, 1.6), 520.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.3)
+leg_rim = spot("LegRim", (-2.6, TY + 3.6, 3.4), (0.0, TY, 1.6), 900.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.3)
 try:
     leg_coll = bpy.data.collections.new("LegRimReceivers")
     for o in legs:
