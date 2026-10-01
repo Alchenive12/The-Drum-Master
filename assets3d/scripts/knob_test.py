@@ -478,6 +478,9 @@ else:
     import json
     import numpy as np
     panel.is_shadow_catcher = True
+    for ob in scene.objects:                 # the low moon rim keeps its highlights but casts no long
+        if ob.type == "LIGHT" and ob.name == "MoonRim":   # shadow that would run off the frame
+            ob.data.use_shadow = False
     scene.render.film_transparent = True
     scene.render.image_settings.color_mode = "RGBA"
     n, cols, size = args.frames, args.cols, args.res
@@ -497,6 +500,10 @@ else:
         img.pixels.foreach_get(px)
         bpy.data.images.remove(img)
         px = px.reshape(size, size, 4)                    # Blender rows start at the bottom
+        d = np.minimum(np.arange(size), size - 1 - np.arange(size)).astype(np.float32)
+        t = np.clip(d / 28.0, 0.0, 1.0)
+        fade = t * t * (3.0 - 2.0 * t)
+        px[:, :, 3] *= np.minimum.outer(fade, fade)      # soft alpha fade at the frame borders
         r, c = k // cols, k % cols
         y0 = (rows - 1 - r) * size                         # first frame ends up top-left in the PNG
         sheet[y0:y0 + size, c * size:(c + 1) * size] = px
@@ -510,7 +517,7 @@ else:
     out_img.save()
     meta = {"frames": n, "cols": cols, "rows": rows, "frame_size": size, "order": "row-major, top-left first",
             "values": [round(v, 6) for v in values], "angle_min_deg": -135.0, "angle_max_deg": 135.0,
-            "background": "transparent, with contact shadow"}
+            "background": "transparent, with contact shadow", "edge_feather_px": 28}
     with open(os.path.join(args.out, tag + ".json"), "w") as f:
         json.dump(meta, f, indent=2)
     print("[knob_test] wrote", out_img.filepath_raw)

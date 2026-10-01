@@ -72,5 +72,6 @@
   ],
   "angle_min_deg": -135.0,
   "angle_max_deg": 135.0,
-  "background": "transparent, with contact shadow"
+  "background": "transparent, with contact shadow",
+  "edge_feather_px": 28
 }

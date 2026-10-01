@@ -6,7 +6,7 @@
 # assets3d/scripts/knob_test.py assets3d/renders/knob_test --samples 32 --res 400
 
 # knob filmstrip: FINAL, 64 positions, 256 px frames (128 px at 1x), 8x8 grid, transparent + shadow
-assets3d/scripts/knob_test.py assets3d/renders/knob --frames 64 --cols 8 --res 256 --samples 96
+# (done) assets3d/scripts/knob_test.py assets3d/renders/knob --frames 64 --cols 8 --res 256 --samples 96
 # later, for 127 positions: the in-between frames
 # assets3d/scripts/knob_test.py assets3d/renders/knob --frames 63 --steps 63 --offset 0.5 --cols 8 --res 256 --samples 96
 
