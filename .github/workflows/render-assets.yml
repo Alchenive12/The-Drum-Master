@@ -1,6 +1,7 @@
 # File: .github/workflows/render-assets.yml
 # Renders the 3D UI assets with Blender (headless, Cycles on CPU) and commits the PNGs back to the
-# same branch, so they can be reviewed from a phone and by Claude.
+# same branch, so they can be reviewed from a phone and by Claude. No artifact upload: the renders
+# are already in the branch, and artifacts would only use the 0.5 GB Actions storage.
 # Linux only (1x Actions minutes). Runs on pushes to remote/3d-* branches that touch the scripts,
 # or by hand from the Actions tab.
 
@@ -66,11 +67,3 @@ jobs:
           git commit -m "renders: from ${GITHUB_SHA::7}"
           git pull --rebase -X theirs origin "${GITHUB_REF_NAME}"   # on a render conflict, this run (newest) wins
           git push origin "HEAD:${GITHUB_REF_NAME}"
-
-      - name: Upload renders
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: renders
-          path: assets3d/renders/
-          retention-days: 7
