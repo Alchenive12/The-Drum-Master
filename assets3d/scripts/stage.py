@@ -33,6 +33,8 @@ ap.add_argument("--out", default="assets3d/renders/stage")
 ap.add_argument("--layers", default="preview")
 ap.add_argument("--width", type=int, default=1100)
 ap.add_argument("--samples", type=int, default=96)
+ap.add_argument("--lamp", type=float, default=1.0,
+                help="warm lamp level, 1 = full; lower values are frames for the flicker effect")
 args = ap.parse_args(argv)
 WIDTH = args.width
 HEIGHT = round(WIDTH * 10 / 16)
@@ -87,7 +89,7 @@ def mat_floor():
     link_in(nt, rough, wood, ["Roughness"])
     gaps = math_node(nt, "SUBTRACT", 1.0, br.outputs["Fac"])
     grain_h = noise(nt, grain_co, 6.0, 12.0, 0.65)
-    n = bump(nt, math_node(nt, "ADD", gaps, math_node(nt, "MULTIPLY", grain_h, 0.15)), 0.4, 0.02)
+    n = bump(nt, math_node(nt, "ADD", gaps, math_node(nt, "MULTIPLY", grain_h, 0.3)), 0.8, 0.02)
     link_in(nt, n, wood, ["Normal"])
     finish(nt, out, dusty(nt, wood, 0.55, 12.0))
     return m
@@ -135,13 +137,15 @@ def mat_trousers():
     co = coords(nt)
     stripes = wave_bands(nt, co, 22.0, "X")
     col = ramp(nt, stripes, [(0.0, (0.012, 0.012, 0.014)), (0.88, (0.012, 0.012, 0.014)),
-                             (0.92, (0.12, 0.12, 0.125)), (0.95, (0.012, 0.012, 0.014))], "CONSTANT")
+                             (0.92, (0.17, 0.17, 0.175)), (0.95, (0.012, 0.012, 0.014))], "CONSTANT")
     worn = ramp(nt, noise(nt, co, 6.0, 8.0, 0.6), [(0.4, gray(0.0)), (0.75, gray(0.5))])
     col = mix_color(nt, worn, col, (0.05, 0.048, 0.045))
     b = principled(nt, (0, 0, 0), 0.8)
     link_in(nt, col, b, ["Base Color"])
     set_in(b, ["Sheen Weight", "Sheen"], 0.6)
-    link_in(nt, bump(nt, noise(nt, co, 60.0, 4.0, 0.5), 0.15, 0.005), b, ["Normal"])
+    creases = noise(nt, mapping(nt, co, scale=(1.5, 1.5, 14.0)), 3.0, 4.0, 0.5)   # horizontal folds
+    weave = noise(nt, co, 60.0, 4.0, 0.5)
+    link_in(nt, bump(nt, math_node(nt, "ADD", math_node(nt, "MULTIPLY", creases, 0.8), math_node(nt, "MULTIPLY", weave, 0.2)), 0.35, 0.01), b, ["Normal"])
     finish(nt, out, dusty(nt, b, 0.35, 25.0))
     return m
 
@@ -172,14 +176,14 @@ def mat_skin():
 def mat_porcelain():
     m, nt, out = new_material("CrackedPorcelain")
     co = coords(nt)
-    col = ramp(nt, noise(nt, co, 5.0, 10.0, 0.6), [(0.3, (0.55, 0.52, 0.46)), (0.6, (0.72, 0.7, 0.64)), (0.85, (0.78, 0.76, 0.71))])
-    b = principled(nt, (0, 0, 0), 0.3)
+    col = ramp(nt, noise(nt, co, 5.0, 10.0, 0.6), [(0.3, (0.42, 0.38, 0.3)), (0.6, (0.6, 0.56, 0.47)), (0.85, (0.67, 0.63, 0.54))])
+    b = principled(nt, (0, 0, 0), 0.45)
     link_in(nt, col, b, ["Base Color"])
-    set_in(b, ["Coat Weight", "Clearcoat"], 0.35)
+    set_in(b, ["Coat Weight", "Clearcoat"], 0.15)
     set_in(b, ["Subsurface Weight", "Subsurface"], 0.05)
     edges = voronoi_edges(nt, mapping(nt, co, scale=(1.0, 1.0, 1.6)), 3.2)
     crack_line = ramp(nt, edges, [(0.0, gray(1.0)), (0.016, gray(0.0))])
-    where = ramp(nt, noise(nt, co, 2.0, 4.0, 0.5), [(0.56, gray(0.0)), (0.64, gray(1.0))])
+    where = ramp(nt, noise(nt, co, 2.0, 4.0, 0.5), [(0.52, gray(0.0)), (0.6, gray(1.0))])
     crack = math_node(nt, "MULTIPLY", crack_line, where)
     link_in(nt, bump(nt, math_node(nt, "SUBTRACT", 1.0, crack), 0.6, 0.004), b, ["Normal"])
     dark = principled(nt, (0.02, 0.016, 0.012), 0.9)
@@ -191,6 +195,8 @@ def mat_porcelain():
     drip = ramp(nt, noise(nt, mapping(nt, co, scale=(9.0, 9.0, 0.6)), 3.0, 6.0, 0.6), [(0.5, gray(0.0)), (0.72, gray(0.75))])
     grime = principled(nt, (0.12, 0.1, 0.075), 0.7)
     s = mix_shaders(nt, drip, s, grime)
+    stains = ramp(nt, noise(nt, co, 1.6, 8.0, 0.65), [(0.55, gray(0.0)), (0.75, gray(0.8))])
+    s = mix_shaders(nt, stains, s, principled(nt, (0.17, 0.12, 0.07), 0.8))   # old brown stains
     finish(nt, out, s)
     return m
 
@@ -320,7 +326,7 @@ kit = []
 # bass drum on its side, front head (towards the camera) split
 bd = cylinder("BassShell", 0.3, 0.42, (0, 0, 0), 64, wrap)
 bd.rotation_euler = (math.radians(90), 0, math.radians(-12))
-bd.location = (2.55, 3.9, 0.31)
+bd.location = (2.4, 3.65, 0.31)
 kit.append(bd)
 bdh = cylinder("BassHead", 0.29, 0.01, (0, 0, 0.215), 64, split_head)   # faces the camera
 bdh.parent = bd
@@ -330,6 +336,22 @@ for k, z in enumerate((-0.2, 0.2)):
                 [0.018] * 33, chrome, order=3, caps=False)
     hoop.parent = bd
     kit.append(hoop)
+# rack tom on the bass drum, tilted towards the camera, and a snare on a stand
+def drum(name, radius, depth, loc, tilt_deg, heads=True):
+    shell = cylinder(name, radius, depth, (0, 0, 0), 48, wrap)
+    shell.location, shell.rotation_euler = loc, (math.radians(tilt_deg), 0, 0)
+    parts = [shell]
+    if heads:
+        top = cylinder(name + "_head", radius * 0.98, 0.006, (0, 0, depth / 2 + 0.003), 48, head)
+        top.parent = shell
+        rim_ = tube(name + "_hoop", [(math.cos(a) * radius * 1.02, math.sin(a) * radius * 1.02, depth / 2)
+                                      for a in [i * math.pi / 16 for i in range(33)]], [0.012] * 33, chrome, order=3, caps=False)
+        rim_.parent = shell
+        parts += [top, rim_]
+    return parts
+kit += drum("RackTom", 0.17, 0.2, (2.42, 3.6, 0.78), 24)
+kit += drum("Snare", 0.18, 0.13, (1.8, 3.3, 0.62), 10)
+kit.append(tube("SnareStand", [(1.8, 3.3, 0.0), (1.8, 3.3, 0.55)], [0.012, 0.012], chrome, order=2))
 # floor tom under a dust sheet
 sheet = cylinder("DustSheet", 0.34, 0.66, (3.45, 3.55, 0.33), 48, mat_dust_sheet(), radius2=0.19)
 sub = sheet.modifiers.new("Sub", "SUBSURF")
@@ -359,6 +381,7 @@ def cymbal_stand(name, base, height, tilt_deg, radius):
     return parts
 kit += cymbal_stand("Crash", (2.0, 4.35), 1.25, 18, 0.23)
 kit += cymbal_stand("Ride", (3.55, 4.45), 1.05, 11, 0.27)
+kit += cymbal_stand("HiHat", (1.35, 3.7), 0.9, 3, 0.18)
 room += kit
 
 # ---------------------------------------------------------------- dust in the moonlight
@@ -475,7 +498,7 @@ for _ in range(50):              # place the mask so its smile sits just inside 
     mid = (lo + hi) / 2.0
     mask.location = (0.0, MASK_Y, mid)
     bpy.context.view_layer.update()
-    if view_y(cam, mask.matrix_world @ mask_mouth_local) < 0.9:
+    if view_y(cam, mask.matrix_world @ mask_mouth_local) < 0.955:
         lo = mid
     else:
         hi = mid
@@ -489,7 +512,7 @@ bg = world.node_tree.nodes.get("Background")
 set_in(bg, ["Color"], (0.004, 0.006, 0.012, 1.0))
 set_in(bg, ["Strength"], 1.0)
 
-moon = sun("Moon", tuple(moon_dir), 4.5, (0.5, 0.64, 1.0), 0.4)
+moon = sun("Moon", tuple(moon_dir), 2.8, (0.5, 0.64, 1.0), 0.4)
 stage = spot("StageLamp", (0.0, -3.6, BAR_Z + 1.4), (0.0, BAR_Y, BAR_Z - 0.2), 110.0, (1.0, 0.86, 0.72), 50.0, 0.7, 0.3)
 room_fill = area("RoomFill", (0.0, 2.0, H - 0.1), (0.0, 2.0, 0.0), 4.0, 30.0, (0.5, 0.6, 0.85))
 rim = spot("MasterRim", (0.0, 1.3, BAR_Z + 1.5), (0.0, BAR_Y, BAR_Z - 0.1), 320.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.4)
@@ -501,7 +524,22 @@ try:                               # light linking (Blender 4.0+): the rim light
 except Exception as e:
     print("[stage] light linking unavailable, rim light off:", e)
     rim.data.energy = 0.0
-corner = spot("CornerGlint", (0.5, 1.5, 3.8), (2.8, 4.0, 0.5), 110.0, (0.6, 0.7, 1.0), 32.0, 0.9, 0.3)
+corner = spot("CornerGlint", (0.3, 1.2, 3.8), (2.5, 3.8, 0.5), 230.0, (0.6, 0.7, 1.0), 36.0, 0.9, 0.3)
+
+leg_rim = spot("LegRim", (-2.6, 4.6, 3.2), (0.0, 2.85, 1.4), 520.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.3)
+try:
+    leg_coll = bpy.data.collections.new("LegRimReceivers")
+    for o in legs:
+        leg_coll.objects.link(o)
+    leg_rim.light_linking.receiver_collection = leg_coll
+except Exception as e:
+    print("[stage] light linking unavailable, leg rim off:", e)
+    leg_rim.data.energy = 0.0
+
+# --- flicker: the warm lamp and the corner glint dim; the moon does not
+for lamp_light in (stage, corner):
+    lamp_light.data.energy *= args.lamp
+print(f"[stage] lamp level {args.lamp}")
 
 haze = box_minmax("Haze", (X0, Y0, 0.0), (X1, Y1, H), mat_volume())
 room.append(haze)
@@ -527,4 +565,5 @@ for layer in [l.strip() for l in args.layers.split(",") if l.strip()]:
     else:
         show_only(layer_objs[layer] + ([haze] if layer == "background" else []))
         setup_cycles(args.samples, WIDTH, HEIGHT, transparent=(layer != "background"))
-    render_to(os.path.join(args.out, f"stage_{layer}.png"))
+    suffix = "" if abs(args.lamp - 1.0) < 1e-6 else f"_lamp{round(args.lamp * 100):03d}"
+    render_to(os.path.join(args.out, f"stage_{layer}{suffix}.png"))

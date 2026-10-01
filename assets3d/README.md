@@ -18,5 +18,8 @@ Same designs and layout as `assets/ui/` (the SVG pack); only the rendering chang
   moonlight and dust, old drum set) and the master (legs, hands with elongated fingers on the control
   bar, cracked porcelain mask with a stitched smile). Original design, not FNaF's Puppet: no rosy
   cheeks, tear streaks or striped cuffs.
+- **Flicker:** `stage.py --lamp <level>` renders the same frame with the warm lamp dimmed (the moon
+  stays). The plugin will crossfade between a few levels (e.g. 100% / 50% / 15%) at random moments
+  for an occasional flicker. Round 5 renders 100% and 15% to judge the effect.
 - `render_list.txt` picks which scripts CI renders, to save minutes.
 - Shared helpers: `scripts/lib3d.py`.
