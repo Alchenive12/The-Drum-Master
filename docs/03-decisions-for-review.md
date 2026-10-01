@@ -422,6 +422,11 @@ edit, and strings side by side and centred. Claude decided the rest:
   per drum; strings from the master's fingers to the advanced knobs. No parameter, page or
   behaviour was removed. `VERIFY(ui)`: how it all looks under FL Studio's Direct2D renderer on
   Windows, at HiDPI, and its CPU at 60 fps.
+- **Update (user, 2026-10-01):** The Puppet Show shows a live, reactive EQ graph like Gullfoss /
+  Guardian Angel instead of five dB bars: spectrum before/after plus one EQ curve per drum, drawn
+  from the engine's own band table (moved into `PuppetShow::bands`; the engine's output is
+  bit-identical, checked on a 32 s loop with the show correcting). Needed one processor addition:
+  a lock-free before/after copy of the bus for the spectrum (`copyScope()`).
 - **Font:** the system serif (v1; v2 embeds its own, see below).
 - **Top bar:** LISTEN (auto detect: clears the strings and forgets the loop), + STRING,
   PUPPET SHOW, bypass (power symbol), ? (about).

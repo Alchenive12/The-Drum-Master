@@ -148,11 +148,26 @@ master is listening" [Claude].
   - the **genre** as five posters (Rock, Pop, EDM, Metal, Hip-hop);
   - **Depth** as the big centre knob;
   - the four bipolar knobs (Bass boost, Mud control, Mid presence, High control);
-  - five **live band meters** (kick sub, mud, presence, kick click, air) that move up for boosts
-    and down for cuts, with ±8 dB marks.
+  - ~~five live band meters~~ → since 2026-10-01 a **live EQ graph** in the manner of Gullfoss and
+    Guardian Angel [user: "more a reactive EQ curve, less just bands of dB"]:
+    - behind: the bus **spectrum** before the plugin (a ghost line) and after it (filled), 20 Hz to
+      20 kHz, ±12 dB scale for the EQ;
+    - in front: the show's **EQ curve for each drum** (kick, snare, clap, toms, hats & cymbals) in
+      the drum's colour, drawn from the same band table the engine uses
+      (`plugin_dsp::PuppetShow::bands`) with the live gains, so it is exactly what is applied;
+      a curve flares when its drum is hit;
+    - a **handle per measure** (kick sub, mud, presence, kick click, air) with its dB: warm when it
+      boosts, cold when it cuts;
+    - "CORRECTING" while on; "OFF - LISTENING ONLY" (and the hint) while off.
 - **Closing:** the back arrow closes the curtains and reopens them on the stage.
 - v2: a black stage under a limelight spotlight with haze, velvet wings, a valance and footlights;
-  the marquee's bulbs chase; genres are tickets; meters are smoothed capsules.
+  the marquee's bulbs chase; genres are tickets; the live EQ graph sits in the middle, the knobs
+  (Depth in the centre) under it.
+- **Technical (the graph):** the processor keeps a mono copy of the bus before and after the plugin
+  in two lock-free rings (relaxed atomics, no allocation, no locks; it never touches the sound).
+  The editor reads the latest 4096 samples, windows them and runs the dsp/ core's own FFT
+  (`Source/ui/Spectrum.h`), with a +4.5 dB/octave display tilt and a fast rise / slow fall. The
+  graph refreshes at 30 fps (sandbox: 15 % of a core, as much as the old bar meters).
 
 ## The master's hands (advanced) [concept + Claude]
 - Drive, saturation, high-pass, low-pass.
@@ -200,7 +215,7 @@ master is listening" [Claude].
 | Deep edit: kick | `screenshots/kick.png` |
 | A new string: choose its type | `screenshots/new.png` |
 | The Puppet Show's curtain closing | `screenshots/curtain.png` |
-| The Puppet Show page (meters show made-up values) | `screenshots/show.png` |
+| The Puppet Show page: live EQ graph (made-up spectrum and gains) | `screenshots/show.png` |
 | The master's hands (advanced) | `screenshots/advanced.png` |
 | Shadow Play enlarged | `screenshots/shadow.png` |
 | About and credits | `screenshots/about.png` |

@@ -17,6 +17,7 @@
 
 #include "PluginProcessor.h"
 #include "ui/Art.h"
+#include "ui/Spectrum.h"
 #include "ui/Widgets.h"
 
 #include <array>
@@ -741,13 +742,20 @@ private:
 };
 
 // ------------------------------------------------------------------------- The Puppet Show
+/** The Puppet Show: genre tickets, Depth and four trims around a live EQ graph in the manner of
+    Gullfoss / Guardian Angel. Behind: the bus spectrum before (ghost line) and after (filled) the
+    plugin. In front: the show's EQ for each drum, drawn from the same band table the engine uses
+    (plugin_dsp::PuppetShow::bands) with the live gains, in the drum's colour, flaring when that
+    drum is hit; and a handle per measure, warm when it boosts, cold when it cuts. */
 class ShowPage final : public juce::Component
 {
 public:
     std::function<void()> onBack;
-    std::function<float (int)> meterValue;   // dB, measure index 0..4
+    std::function<float (int)> meterValue;           // dB, measure index 0..4
+    std::function<bool (float*, float*)> readScope;  // Spectrum::fftSize samples before / after; false: no audio (demo)
+    std::function<double()> sampleRate;
 
-    explicit ShowPage (DrumMasterProcessor& p) : proc (p)
+    ShowPage (DrumMasterProcessor& p, StageModel& m) : proc (p), model (m), scopeIn (Spectrum::fftSize), scopeOut (Spectrum::fftSize)
     {
         auto& s = proc.apvts;
         addAndMakeVisible (styleBack (back));
@@ -785,6 +793,11 @@ public:
         }
     }
 
+    /** Screenshot demo: show the switch on without touching the parameter (no notification, so
+        the attachment never hears of it and the sound can't change). */
+    void showDemoOn() { lever.setToggleState (true, juce::dontSendNotification); }
+
+    /** Called by the editor's timer (30 fps) while the page is visible. */
     void refresh()
     {
         lever.setButtonText (lever.getToggleState() ? "THE SHOW IS ON" : "THE SHOW IS OFF");
@@ -794,12 +807,16 @@ public:
             for (int i = 0; i < 5; ++i)
                 genres[static_cast<std::size_t> (i)].setToggleState (i == idx, juce::dontSendNotification);
         }
-        for (std::size_t i = 0; i < shown.size(); ++i)
+        for (std::size_t i = 0; i < gains.size(); ++i)
         {
-            const float v = meterValue ? juce::jlimit (-8.0f, 8.0f, meterValue (static_cast<int> (i))) : 0.0f;
-            shown[i] += (v - shown[i]) * 0.2f;
+            const float v = meterValue ? juce::jlimit (-12.0f, 12.0f, meterValue (static_cast<int> (i))) : 0.0f;
+            gains[i] += (v - gains[i]) * 0.4f;
         }
-        repaint (meterPanel.toNearestInt().expanded (4));
+        const double sr = sampleRate ? juce::jmax (8000.0, sampleRate()) : 48000.0;
+        updateCurves (sr);
+        if (readScope && readScope (scopeIn.data(), scopeOut.data())) spectrum.analyse (scopeIn.data(), scopeOut.data(), sr);
+        else demoSpectrum();
+        repaint (graph.toNearestInt().expanded (6));
         repaint (marquee.toNearestInt().expanded (30));
     }
 
@@ -808,18 +825,137 @@ public:
         back.setBounds (20, 16, 104, 32);
         lever.setBounds (880, 16, 200, 32);
         for (int i = 0; i < 5; ++i)
-            genres[static_cast<std::size_t> (i)].setBounds (190 + i * 146, 146, 134, 54);
-        depth->setBounds (462, 216, 176, 204);
-        const int kx[4] = { 158, 302, 688, 832 };
+            genres[static_cast<std::size_t> (i)].setBounds (190 + i * 146, 118, 134, 46);
+        depth->setBounds (466, 466, 168, 200);
+        const int kx[4] = { 172, 316, 674, 818 };
         for (int i = 0; i < 4; ++i)
-            knobs[static_cast<std::size_t> (i)]->setBounds (kx[i], 250, 110, 132);
+            knobs[static_cast<std::size_t> (i)]->setBounds (kx[i], 498, 110, 128);
     }
 
     void paint (juce::Graphics& g) override
     {
         background.draw (g, baseW, baseH, [this] (juce::Graphics& ig, juce::Image& img, float s) { paintBackground (ig, img, s); });
+        paintMarquee (g);
+        paintGraph (g);
+    }
 
-        // the marquee: chasing bulbs around a lit sign
+private:
+    using PS = plugin_dsp::PuppetShow;
+    struct Group { const char* name; DrumType drum; std::array<DrumType, 4> members; std::size_t numMembers; };
+    static constexpr std::array<Group, 5> groups { {
+        { "KICK", DrumType::kick, { DrumType::kick, DrumType::kick, DrumType::kick, DrumType::kick }, 1 },
+        { "SNARE", DrumType::snare, { DrumType::snare, DrumType::snare, DrumType::snare, DrumType::snare }, 1 },
+        { "CLAP", DrumType::clap, { DrumType::clap, DrumType::clap, DrumType::clap, DrumType::clap }, 1 },
+        { "TOMS", DrumType::misc, { DrumType::misc, DrumType::misc, DrumType::misc, DrumType::misc }, 1 },
+        { "HATS & CYMBALS", DrumType::closedHat, { DrumType::closedHat, DrumType::openHat, DrumType::crash, DrumType::ride }, 4 },
+    } };
+
+    // ---------------------------------------------------------------- geometry of the graph
+    juce::Rectangle<float> plot() const { return graph.withTrimmedLeft (54.0f).withTrimmedRight (22.0f).withTrimmedTop (44.0f).withTrimmedBottom (30.0f); }
+    float xOf (float hz) const { const auto p = plot(); return p.getX() + p.getWidth() * std::log (hz / 20.0f) / std::log (1000.0f); }
+    float yEq (float db) const { const auto p = plot(); return p.getCentreY() - juce::jlimit (-rangeDb, rangeDb, db) / rangeDb * p.getHeight() * 0.5f; }
+    float ySpec (float db) const { const auto p = plot(); return juce::jmap (juce::jlimit (-90.0f, 0.0f, db), -90.0f, 0.0f, p.getBottom(), p.getY()); }
+
+    /** Design the show's bands once per frame from the engine's band table and the live gains. */
+    void updateCurves (double sr)
+    {
+        for (std::size_t i = 0; i < PS::bands.size(); ++i)
+        {
+            const auto& b = PS::bands[i];
+            const double gDb = static_cast<double> (gains[static_cast<std::size_t> (b.measure)]);
+            bandOn[i] = std::abs (gDb) >= 0.01;
+            if (! bandOn[i]) continue;
+            const double f = static_cast<double> (b.freq), q = static_cast<double> (b.q);
+            bandCoeffs[i] = b.shape == PS::Shape::lowShelf    ? plugin_dsp::BiquadCoeffs::lowShelf (sr, f, q, gDb)
+                            : b.shape == PS::Shape::highShelf ? plugin_dsp::BiquadCoeffs::highShelf (sr, f, q, gDb)
+                                                              : plugin_dsp::BiquadCoeffs::peak (sr, f, q, gDb);
+        }
+        curveSr = sr;
+        for (std::size_t gi = 0; gi < groups.size(); ++gi)
+            for (std::size_t i = 0; i < curveSteps; ++i)
+                curves[gi][i] = curveDb (groups[gi].drum, Spectrum::frequency (static_cast<float> (i) / static_cast<float> (curveSteps - 1)));
+    }
+
+    /** The show's EQ for one drum at frequency f (dB), from this frame's bands. */
+    float curveDb (DrumType drum, float f) const
+    {
+        double mag = 1.0;
+        for (std::size_t i = 0; i < PS::bands.size(); ++i)
+            if (bandOn[i] && PS::bands[i].drum == drum) mag *= bandCoeffs[i].magnitudeAt (curveSr, static_cast<double> (f));
+        return static_cast<float> (20.0 * std::log10 (juce::jmax (1.0e-6, mag)));
+    }
+
+    float jerkOf (const Group& gr) const
+    {
+        float j = 0.0f;
+        for (const auto& s : model.slots)
+            for (std::size_t k = 0; k < gr.numMembers; ++k)
+                if (! s.pending && s.type == gr.members[k]) j = juce::jmax (j, s.jerk);
+        return j;
+    }
+
+    // ---------------------------------------------------------------- painting
+    void paintBackground (juce::Graphics& g, juce::Image& img, float scale)
+    {
+        const auto r = juce::Rectangle<float> (static_cast<float> (baseW), static_cast<float> (baseH));
+        art::theatre (g, r);
+        fx::softShadow (g, marquee, 12.0f, 0.9f, 22.0f, 10.0f);
+        fx::softShadow (g, graph, 18.0f, 0.85f, 22.0f, 10.0f);
+        fx::frost (g, img, scale, graph, 18.0f, 14);
+        fx::glass (g, graph, 18.0f, 0.78f, juce::Colour (0xff160b0f));
+        drawOverline (g, "LIVE  -  THE SHOW'S EQ, DRUM BY DRUM", juce::Rectangle<float> (graph.getX() + 20.0f, graph.getY() + 16.0f, 400.0f, 14.0f), colours::limelight);
+
+        // legend: one colour per curve, then the spectrum
+        float x = graph.getRight() - 24.0f;
+        g.setFont (caps (8.5f, 0.18f));
+        auto legend = [&g, &x, this] (const juce::String& name, juce::Colour c, bool line) {
+            const float w = textWidth (caps (8.5f, 0.18f), name);
+            x -= w;
+            g.setColour (colours::boneDim);
+            g.drawText (name, juce::Rectangle<float> (x, graph.getY() + 16.0f, w + 2.0f, 14.0f), juce::Justification::centredLeft, false);
+            x -= 12.0f;
+            g.setColour (c);
+            if (line) g.fillRect (juce::Rectangle<float> (x - 2.0f, graph.getY() + 22.5f, 10.0f, 1.5f));
+            else g.fillEllipse (juce::Rectangle<float> (6.0f, 6.0f).withCentre ({ x + 3.0f, graph.getY() + 23.0f }));
+            x -= 16.0f;
+        };
+        legend ("AFTER", colours::limelight.withAlpha (0.6f), true);
+        legend ("BEFORE", colours::bone.withAlpha (0.35f), true);
+        x -= 10.0f;
+        for (auto it = groups.rbegin(); it != groups.rend(); ++it)
+            legend (it->name, drumColour (it->drum), false);
+
+        // the grid: frequencies and dB
+        const auto p = plot();
+        g.setFont (mono (9.5f));
+        const std::pair<float, const char*> freqs[] = { { 30.0f, "30" }, { 50.0f, "50" }, { 100.0f, "100" }, { 200.0f, "200" }, { 500.0f, "500" },
+                                                        { 1000.0f, "1k" }, { 2000.0f, "2k" }, { 5000.0f, "5k" }, { 10000.0f, "10k" }, { 20000.0f, "20k" } };
+        for (const auto& [hz, label] : freqs)
+        {
+            const float fx0 = xOf (hz);
+            g.setColour (juce::Colours::white.withAlpha (hz > 999.0f && hz < 1001.0f ? 0.08f : 0.045f));
+            g.fillRect (juce::Rectangle<float> (fx0, p.getY(), 1.0f, p.getHeight()));
+            g.setColour (colours::boneFaint);
+            g.drawText (label, juce::Rectangle<float> (fx0 - 20.0f, p.getBottom() + 8.0f, 40.0f, 12.0f), juce::Justification::centred, false);
+        }
+        for (int db : { 12, 6, 0, -6, -12 })
+        {
+            const float y = yEq (static_cast<float> (db));
+            const float dashes[] = { 2.0f, 5.0f };
+            juce::Path line, dashed;
+            line.startNewSubPath (p.getX(), y);
+            line.lineTo (p.getRight(), y);
+            juce::PathStrokeType (1.0f).createDashedStroke (dashed, line, dashes, 2);
+            g.setColour (juce::Colours::white.withAlpha (db == 0 ? 0.22f : 0.06f));
+            g.fillPath (dashed);
+            g.setColour (db == 0 ? colours::boneDim : colours::boneFaint);
+            g.drawText ((db > 0 ? "+" : "") + juce::String (db), juce::Rectangle<float> (graph.getX() + 10.0f, y - 7.0f, 34.0f, 14.0f), juce::Justification::centredRight,
+                        false);
+        }
+    }
+
+    void paintMarquee (juce::Graphics& g)
+    {
         const bool on = lever.getToggleState();
         g.setGradientFill (juce::ColourGradient (juce::Colour (0xff2a0710), 0.0f, marquee.getY(), juce::Colour (0xff12030a), 0.0f, marquee.getBottom(), false));
         g.fillRoundedRectangle (marquee, 12.0f);
@@ -839,92 +975,162 @@ public:
             g.setColour (lit ? colours::limelight.brighter (0.3f).withAlpha (on ? 1.0f : 0.7f) : colours::brassDim.darker (0.5f));
             g.fillEllipse (juce::Rectangle<float> (4.5f, 4.5f).withCentre (p));
         }
-        const auto a = whisper (40.0f), b = display (40.0f);
+        const auto a = whisper (38.0f), b = display (38.0f);
         const float wa = textWidth (a, "The "), wb = textWidth (b, "Puppet Show");
         const float x0 = marquee.getCentreX() - (wa + wb) * 0.5f;
         g.setFont (a);
         g.setColour (colours::limelight.withAlpha (0.8f));
-        g.drawText ("The ", juce::Rectangle<float> (x0, marquee.getY() + 12.0f, wa + 4.0f, marquee.getHeight() - 24.0f), juce::Justification::centredLeft, false);
+        g.drawText ("The ", juce::Rectangle<float> (x0, marquee.getY() + 10.0f, wa + 4.0f, marquee.getHeight() - 20.0f), juce::Justification::centredLeft, false);
         g.setFont (b);
         g.setColour (colours::bone);
-        g.drawText ("Puppet Show", juce::Rectangle<float> (x0 + wa, marquee.getY() + 12.0f, wb + 4.0f, marquee.getHeight() - 24.0f), juce::Justification::centredLeft, false);
-
-        // live band meters: up = boost (warm), down = cut (cold), +-8 dB
-        const char* names[] = { "KICK SUB", "MUD", "PRESENCE", "KICK CLICK", "AIR" };
-        for (int i = 0; i < 5; ++i)
-        {
-            const float v = shown[static_cast<std::size_t> (i)];
-            const float x = meterX (i);
-            const float h = std::abs (v) / 8.0f * meterHalf;
-            const auto colr = v >= 0.0f ? colours::limelight : colours::frost;
-            g.setColour (juce::Colours::white.withAlpha (0.04f));
-            g.fillRoundedRectangle (juce::Rectangle<float> (14.0f, meterHalf * 2.0f).withCentre ({ x, meterMid }), 7.0f);
-            if (h > 0.5f)
-            {
-                const auto bar = juce::Rectangle<float> (x - 7.0f, v >= 0.0f ? meterMid - h : meterMid, 14.0f, h);
-                const auto endP = juce::Point<float> (x, v >= 0.0f ? bar.getY() : bar.getBottom());
-                fx::glowDot (g, endP, 26.0f, colr.withAlpha (on ? 0.35f : 0.15f));
-                g.setGradientFill (juce::ColourGradient (colr.withAlpha (on ? 0.25f : 0.12f), x, meterMid, colr.withAlpha (on ? 0.95f : 0.45f), endP.x, endP.y, false));
-                g.fillRoundedRectangle (bar, 7.0f);
-                g.setColour (juce::Colours::white.withAlpha (on ? 0.9f : 0.4f));
-                g.fillRoundedRectangle (juce::Rectangle<float> (10.0f, 2.0f).withCentre (endP.translated (0.0f, v >= 0.0f ? 3.0f : -3.0f)), 1.0f);
-            }
-            g.setFont (mono (11.0f));
-            g.setColour (on ? colr.brighter (0.2f) : colours::boneDim);
-            const juce::String txt = formatValue (static_cast<double> (v), "dB", true);
-            g.drawText (txt, juce::Rectangle<float> (x + 12.0f, (v >= 0.0f ? meterMid - h : meterMid + h) - 7.0f, 70.0f, 14.0f), juce::Justification::centredLeft, false);
-            g.setFont (caps (9.5f, 0.2f));
-            g.setColour (colours::bone.withAlpha (0.8f));
-            g.drawText (names[i], juce::Rectangle<float> (x - 70.0f, meterPanel.getBottom() - 30.0f, 140.0f, 14.0f), juce::Justification::centred, false);
-        }
+        g.drawText ("Puppet Show", juce::Rectangle<float> (x0 + wa, marquee.getY() + 10.0f, wb + 4.0f, marquee.getHeight() - 20.0f), juce::Justification::centredLeft, false);
     }
 
-private:
-    float meterX (int i) const { return meterPanel.getX() + 120.0f + static_cast<float> (i) * 145.0f; }
-
-    void paintBackground (juce::Graphics& g, juce::Image& img, float scale)
+    void paintGraph (juce::Graphics& g)
     {
-        const auto r = juce::Rectangle<float> (static_cast<float> (baseW), static_cast<float> (baseH));
-        art::theatre (g, r);
-        fx::softShadow (g, marquee, 12.0f, 0.9f, 22.0f, 10.0f);
-        g.setFont (whisper (18.0f));
-        g.setColour (colours::boneDim);
-        g.drawText ("pick a genre, set the depth, press play", juce::Rectangle<float> (300.0f, 112.0f, 500.0f, 24.0f), juce::Justification::centred, false);
+        const bool on = lever.getToggleState();
+        const auto p = plot();
+        g.saveState();
+        g.reduceClipRegion (p.expanded (2.0f, 0.0f).toNearestInt());
 
-        fx::softShadow (g, meterPanel, 18.0f, 0.8f, 20.0f, 8.0f);
-        fx::frost (g, img, scale, meterPanel, 18.0f, 14);
-        fx::glass (g, meterPanel, 18.0f, 0.7f, juce::Colour (0xff1e1014));
-        drawOverline (g, "LIVE  -  WHAT THE SHOW IS DOING", juce::Rectangle<float> (meterPanel.getX() + 20.0f, meterPanel.getY() + 16.0f, 400.0f, 14.0f),
-                      colours::limelight);
-        g.setFont (mono (9.5f));
-        for (int db : { 8, 4, 0, -4, -8 })
+        // the spectrum: before as a ghost, after filled
+        juce::Path before, after;
+        for (std::size_t i = 0; i < Spectrum::numPoints; ++i)
         {
-            const float y = meterMid - static_cast<float> (db) / 8.0f * meterHalf;
-            const float dashes[] = { 2.0f, 5.0f };
-            juce::Path line, dashed;
-            line.startNewSubPath (meterPanel.getX() + 58.0f, y);
-            line.lineTo (meterPanel.getRight() - 24.0f, y);
-            juce::PathStrokeType (1.0f).createDashedStroke (dashed, line, dashes, 2);
-            g.setColour (juce::Colours::white.withAlpha (db == 0 ? 0.2f : 0.07f));
-            g.fillPath (dashed);
-            g.setColour (db == 0 ? colours::boneDim : colours::boneFaint);
-            g.drawText ((db > 0 ? "+" : "") + juce::String (db), juce::Rectangle<float> (meterPanel.getX() + 16.0f, y - 7.0f, 34.0f, 14.0f), juce::Justification::centredRight,
+            const float x = p.getX() + p.getWidth() * Spectrum::position (i);
+            const auto pb = juce::Point<float> (x, ySpec (spectrum.before[i])), pa = juce::Point<float> (x, ySpec (spectrum.after[i]));
+            if (i == 0) { before.startNewSubPath (pb); after.startNewSubPath (pa); }
+            else { before.lineTo (pb); after.lineTo (pa); }
+        }
+        juce::Path afterFill (after);
+        afterFill.lineTo (p.getRight(), p.getBottom());
+        afterFill.lineTo (p.getX(), p.getBottom());
+        afterFill.closeSubPath();
+        g.setGradientFill (juce::ColourGradient (colours::limelight.withAlpha (0.16f), 0.0f, p.getY(), colours::limelight.withAlpha (0.015f), 0.0f, p.getBottom(), false));
+        g.fillPath (afterFill);
+        g.setColour (colours::limelight.withAlpha (0.32f));
+        g.strokePath (after, juce::PathStrokeType (1.1f));
+        g.setColour (colours::bone.withAlpha (0.2f));
+        g.strokePath (before, juce::PathStrokeType (0.9f));
+
+        // the show's EQ, one curve per drum
+        const float zeroY = yEq (0.0f);
+        for (std::size_t gi = 0; gi < groups.size(); ++gi)
+        {
+            const auto& gr = groups[gi];
+            juce::Path curve;
+            float peak = 0.0f;
+            for (std::size_t i = 0; i < curveSteps; ++i)
+            {
+                const float t = static_cast<float> (i) / static_cast<float> (curveSteps - 1);
+                const float db = curves[gi][i];
+                peak = juce::jmax (peak, std::abs (db));
+                const auto pt = juce::Point<float> (p.getX() + p.getWidth() * t, yEq (db));
+                if (i == 0) curve.startNewSubPath (pt); else curve.lineTo (pt);
+            }
+            if (peak < 0.05f) continue;
+            const auto col = drumColour (gr.drum);
+            const float hit = jerkOf (gr);
+            juce::Path fill (curve);
+            fill.lineTo (p.getRight(), zeroY);
+            fill.lineTo (p.getX(), zeroY);
+            fill.closeSubPath();
+            g.setColour (col.withAlpha ((on ? 0.07f : 0.03f) + 0.14f * hit));
+            g.fillPath (fill);
+            fx::glowStroke (g, curve, col.withAlpha ((on ? 0.6f : 0.3f) + 0.4f * hit), 1.5f, 0.5f + 1.0f * hit);
+        }
+
+        // a handle per measure: warm when it boosts, cold when it cuts
+        struct Handle { const char* name; PS::Measure m; float hz; DrumType on; int side; };   // side: label -1 left, 1 right, 0 above/below
+        const Handle handles[] = { { "KICK SUB", PS::kickSub, 60.0f, DrumType::kick, 0 }, { "MUD", PS::mud, 320.0f, DrumType::snare, 0 },
+                                   { "PRESENCE", PS::presence, 3000.0f, DrumType::snare, -1 }, { "KICK CLICK", PS::kickClick, 3500.0f, DrumType::kick, 1 },
+                                   { "AIR", PS::air, 11000.0f, DrumType::closedHat, 0 } };
+        for (const auto& h : handles)
+        {
+            const float gDb = gains[static_cast<std::size_t> (h.m)];
+            const auto pt = juce::Point<float> (xOf (h.hz), yEq (curveDb (h.on, h.hz)));
+            const bool active = std::abs (gDb) >= 0.1f;
+            const auto col = ! active ? colours::boneDim : gDb > 0.0f ? colours::limelight : colours::frost;
+            if (active) fx::glowDot (g, pt, 14.0f, col.withAlpha (on ? 0.55f : 0.3f));
+            g.setColour (col.withAlpha (active ? 1.0f : 0.5f));
+            g.fillEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre (pt));
+            g.setColour (juce::Colours::white.withAlpha (active ? 0.85f : 0.3f));
+            g.fillEllipse (juce::Rectangle<float> (2.5f, 2.5f).withCentre (pt.translated (-0.8f, -0.8f)));
+            const juce::String text = juce::String (h.name) + "  " + formatValue (static_cast<double> (gDb), "", true);
+            g.setFont (caps (8.5f, 0.14f));
+            const float w = textWidth (caps (8.5f, 0.14f), text) + 4.0f;
+            juce::Rectangle<float> box (w, 12.0f);
+            if (h.side < 0) box = box.withPosition (pt.x - w - 9.0f, pt.y - 6.0f);
+            else if (h.side > 0) box = box.withPosition (pt.x + 9.0f, pt.y - 6.0f);
+            else box = box.withCentre (pt.translated (0.0f, gDb < -0.05f ? 15.0f : -15.0f));
+            g.setColour (col.withAlpha (active ? 0.95f : 0.55f));
+            g.drawText (text, box, juce::Justification::centred, false);
+        }
+        g.restoreState();
+
+        // status, top right of the plot
+        g.setFont (caps (8.5f, 0.22f));
+        g.setColour (on ? colours::limelight : colours::boneFaint);
+        g.drawText (on ? "CORRECTING" : "OFF  -  LISTENING ONLY", juce::Rectangle<float> (p.getRight() - 220.0f, p.getY() + 4.0f, 214.0f, 12.0f), juce::Justification::centredRight,
+                    false);
+        if (! on)
+        {
+            g.setFont (whisper (19.0f));
+            g.setColour (colours::boneDim.withAlpha (0.8f));
+            g.drawText ("pick a genre, set the depth, press play", juce::Rectangle<float> (p.getX(), p.getY() + 4.0f, 400.0f, 22.0f), juce::Justification::centredLeft,
                         false);
         }
     }
 
+    /** No audio in the screenshot demo: a made-up drum bus whose kick, snare and hats swell with
+        the demo's hits, and an "after" with the show's average correction on top. */
+    void demoSpectrum()
+    {
+        const auto t = static_cast<float> (model.now);
+        float kick = 0.0f, snare = 0.0f, hats = 0.0f;
+        for (const auto& s : model.slots)
+        {
+            if (s.type == DrumType::kick) kick = s.jerk;
+            if (s.type == DrumType::snare || s.type == DrumType::clap) snare = juce::jmax (snare, s.jerk);
+            if (s.type == DrumType::closedHat || s.type == DrumType::openHat || s.type == DrumType::ride) hats = juce::jmax (hats, s.jerk);
+        }
+        auto bump = [] (float f, float centre, float width) { const float d = std::log2 (f / centre) / width; return std::exp (-d * d); };
+        auto base = [=] (float f) {
+            const float wobble = 1.5f * std::sin (std::log2 (f) * 7.0f + t * 1.3f) + 0.8f * std::sin (std::log2 (f) * 17.0f - t * 2.1f);
+            return -44.0f - 3.0f * std::log2 (f / 1000.0f) + 20.0f * bump (f, 60.0f, 0.6f) * (0.55f + 0.45f * kick) + 9.0f * bump (f, 220.0f, 0.8f) * (0.5f + 0.5f * snare)
+                   + 10.0f * bump (f, 3000.0f, 1.0f) * (0.4f + 0.6f * snare) + 12.0f * bump (f, 9000.0f, 0.9f) * (0.5f + 0.5f * hats) + wobble
+                   - 30.0f * (f > 15000.0f ? std::log2 (f / 15000.0f) : 0.0f);
+        };
+        spectrum.synthesise (base, false);
+        spectrum.synthesise ([&, this] (float f) {
+            const float pos = std::log (f / 20.0f) / std::log (1000.0f) * static_cast<float> (curveSteps - 1);
+            const auto i = static_cast<std::size_t> (juce::jlimit (0.0f, static_cast<float> (curveSteps - 1), pos));
+            float eq = 0.0f;
+            for (const auto& c : curves) eq += c[i];
+            return base (f) + eq * 0.4f;
+        }, true);
+    }
+
     DrumMasterProcessor& proc;
+    StageModel& model;
     juce::TextButton back;
     ParamToggle lever { proc.apvts, "ps_enabled", "THE SHOW IS OFF" };
     juce::AudioParameterChoice* genre = nullptr;
     std::array<juce::TextButton, 5> genres;
     std::unique_ptr<Knob> depth;
     std::vector<std::unique_ptr<Knob>> knobs;
-    std::array<float, 5> shown {};
+    std::array<float, PS::numMeasures> gains {};
+    static constexpr std::size_t curveSteps = 161;
+    std::array<plugin_dsp::BiquadCoeffs, PS::bands.size()> bandCoeffs {};
+    std::array<bool, PS::bands.size()> bandOn {};
+    std::array<std::array<float, curveSteps>, groups.size()> curves {};
+    double curveSr = 48000.0;
+    Spectrum spectrum;
+    std::vector<float> scopeIn, scopeOut;
     fx::CachedLayer background;
-    const juce::Rectangle<float> marquee { 330.0f, 40.0f, 440.0f, 70.0f };
-    const juce::Rectangle<float> meterPanel { 150.0f, 432.0f, 800.0f, 222.0f };
-    const float meterMid = 544.0f, meterHalf = 58.0f;
+    static constexpr float rangeDb = 12.0f;
+    const juce::Rectangle<float> marquee { 330.0f, 36.0f, 440.0f, 68.0f };
+    const juce::Rectangle<float> graph { 110.0f, 176.0f, 880.0f, 282.0f };
 };
 
 // ---------------------------------------------------------------------- the master's hands
@@ -1158,7 +1364,7 @@ class DrumMasterEditor final : public juce::AudioProcessorEditor, private juce::
 {
 public:
     explicit DrumMasterEditor (DrumMasterProcessor& p)
-        : juce::AudioProcessorEditor (p), proc (p), stage (p, model), deep (p, model), show (p), advanced (p)
+        : juce::AudioProcessorEditor (p), proc (p), stage (p, model), deep (p, model), show (p, model), advanced (p)
     {
         setLookAndFeel (&lnf);
         addAndMakeVisible (content);
@@ -1241,6 +1447,12 @@ private:
             zoomOut();
         };
         show.onBack = [this] { curtainTo (Page::stage); };
+        show.readScope = [this] (float* in, float* out) {
+            if (demo.isNotEmpty()) return false;
+            proc.copyScope (in, out, ui::Spectrum::fftSize);
+            return true;
+        };
+        show.sampleRate = [this] { return proc.getTransport().sampleRate; };
         show.meterValue = [this] (int i) {
             if (demo.isNotEmpty()) return 4.5f * std::sin (static_cast<float> (model.now) * 0.7f + static_cast<float> (i) * 1.3f);
             return proc.puppetShow().meterDb (static_cast<plugin_dsp::PuppetShow::Measure> (i));
@@ -1441,7 +1653,7 @@ private:
             deep.show (true, DrumType::misc);
             setPageNow (Page::deep);
         }
-        else if (demo == "show") setPageNow (Page::show);
+        else if (demo == "show") { show.showDemoOn(); setPageNow (Page::show); }
         else if (demo == "advanced") setPageNow (Page::advanced);
         else if (demo == "about") setPageNow (Page::about);
         else if (demo == "shadow") shadow.setVisible (true);
@@ -1508,16 +1720,17 @@ private:
         model.flicker = random.nextFloat() < 0.004f ? 0.3f : juce::jmin (1.0f, model.flicker + fdt * 2.0f);
 
         stepAnimation (dt);
+        ++frame;
         if (stage.isVisible()) stage.tick();
         if (deep.isVisible()) deep.tick();
-        if (show.isVisible()) show.refresh();
+        if (show.isVisible() && (frame & 1) == 0) show.refresh();   // the live EQ graph runs at 30 fps
         if (advanced.isVisible())
         {
             advanced.sway = model.sway * 2.0f;
             advanced.breathe = model.breathe;
             advanced.time = static_cast<float> (model.now);
             advanced.flicker = model.flicker;
-            if ((++frame & 1) == 0) advanced.repaint();   // a slow sway: 30 fps is plenty
+            if ((frame & 1) == 0) advanced.repaint();   // a slow sway: 30 fps is plenty
         }
         if (shadow.isVisible()) shadow.repaint();
     }
