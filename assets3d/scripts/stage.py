@@ -149,6 +149,50 @@ def mat_trousers():
     finish(nt, out, dusty(nt, b, 0.35, 25.0))
     return m
 
+def mat_jacket(ty, sh_z):
+    m, nt, out = new_material("Jacket")
+    co = coords(nt)
+    stripes = wave_bands(nt, co, 22.0, "X")
+    col = ramp(nt, stripes, [(0.0, (0.012, 0.012, 0.014)), (0.88, (0.012, 0.012, 0.014)),
+                             (0.92, (0.17, 0.17, 0.175)), (0.95, (0.012, 0.012, 0.014))], "CONSTANT")
+    cloth = principled(nt, (0, 0, 0), 0.8)
+    link_in(nt, col, cloth, ["Base Color"])
+    set_in(cloth, ["Sheen Weight", "Sheen"], 0.6)
+    link_in(nt, bump(nt, noise(nt, co, 60.0, 4.0, 0.5), 0.15, 0.005), cloth, ["Normal"])
+
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(co, sep.inputs[0])
+    x, y, z = sep.outputs["X"], sep.outputs["Y"], sep.outputs["Z"]
+    M = lambda op, a, b=None: math_node(nt, op, a, b)
+    v0 = sh_z - 0.42                                     # bottom of the V
+    front = M("GREATER_THAN", M("SUBTRACT", ty - 0.1, y), 0.0)
+    dz = M("SUBTRACT", z, v0)
+    ax = M("ABSOLUTE", x)
+    halfw = M("MULTIPLY", dz, 0.22)
+    in_v = M("MULTIPLY", M("MULTIPLY", M("LESS_THAN", ax, halfw), M("GREATER_THAN", dz, 0.0)),
+             M("MULTIPLY", front, M("LESS_THAN", z, sh_z + 0.1)))
+    tie = M("MULTIPLY", in_v, M("LESS_THAN", ax, 0.022))
+    shirt = M("SUBTRACT", in_v, tie)
+    edge = M("LESS_THAN", M("ABSOLUTE", M("SUBTRACT", ax, halfw)), 0.014)
+    lapel = M("MULTIPLY", M("MULTIPLY", edge, front), M("MULTIPLY", M("GREATER_THAN", dz, -0.25), M("LESS_THAN", z, sh_z + 0.05)))
+    buttons = None
+    for zb in (v0 - 0.1, v0 - 0.24, v0 - 0.38):
+        d2 = M("ADD", M("MULTIPLY", x, x), M("POWER", M("SUBTRACT", z, zb), 2.0))
+        b_ = M("MULTIPLY", M("LESS_THAN", d2, 0.016 ** 2), front)
+        buttons = b_ if buttons is None else M("ADD", buttons, b_)
+
+    shirt_s = principled(nt, (0.2, 0.19, 0.165), 0.85)
+    tie_s = principled(nt, (0.008, 0.008, 0.01), 0.3)
+    lapel_s = principled(nt, (0.02, 0.02, 0.022), 0.35)
+    set_in(lapel_s, ["Coat Weight", "Clearcoat"], 0.3)
+    button_s = principled(nt, (0.01, 0.009, 0.008), 0.2)
+    sh = mix_shaders(nt, shirt, cloth, shirt_s)
+    sh = mix_shaders(nt, tie, sh, tie_s)
+    sh = mix_shaders(nt, lapel, sh, lapel_s)
+    sh = mix_shaders(nt, buttons, sh, button_s)
+    finish(nt, out, dusty(nt, sh, 0.3, 25.0))
+    return m
+
 def mat_leather():
     m, nt, out = new_material("OldLeather")
     co = coords(nt)
@@ -398,10 +442,10 @@ for i in range(260):
 # ---------------------------------------------------------------- the master's body (up to the shoulders)
 # The head is always out of frame: the shoulders sit at the top edge, the neck runs up out of view.
 TY = 0.6                                         # where he stands, just behind the control bar
-SH_Z = solve_height(cam, 0.0, TY - 0.12, 0.985)  # shoulder line just inside the top edge
+SH_Z = solve_height(cam, 0.0, TY - 0.12, 0.95)   # shoulder joints; the shrug rises above them
 HIP_Z = SH_Z - 1.2                               # long, very thin torso
 trousers, leather = mat_trousers(), mat_leather()
-jacket = mat_trousers()
+jacket = mat_jacket(TY, SH_Z)
 
 def lofted(name, rings, segs=32, mat=None):
     """Closed body lofted through elliptical rings: (z, rx, ry, y_offset)."""
@@ -431,9 +475,9 @@ torso = lofted("Torso", [
     (HIP_Z + 0.62 * L_T, 0.15, 0.095, -0.07),    # ribs
     (HIP_Z + 0.82 * L_T, 0.23, 0.105, -0.11),    # upper chest
     (HIP_Z + 0.94 * L_T, 0.29, 0.095, -0.13),    # shoulders
-    (SH_Z + 0.02,        0.2,  0.085, -0.13),    # top of the shoulders
-    (SH_Z + 0.07,        0.065, 0.06, -0.12),    # base of the neck
-    (SH_Z + 0.45,        0.055, 0.05, -0.09),    # neck, out of frame
+    (SH_Z + 0.06,        0.25, 0.09,  -0.13),    # shrugged up: holding the bar above the frame
+    (SH_Z + 0.16,        0.13, 0.078, -0.12),    # thick base of the neck
+    (SH_Z + 0.55,        0.07, 0.06,  -0.1),     # neck, out of frame
 ], mat=jacket)
 body = [torso]
 body.append(ellipsoid("Pelvis", (0.16, 0.105, 0.13), (0.0, TY, HIP_Z), trousers, 32, 16))
@@ -443,6 +487,11 @@ for s_ in (-1, 1):                               # long coat tails hanging behin
     tail.rotation_euler = (math.radians(-6), math.radians(s_ * 4), 0)
     add_bevel(tail, 0.005, 2)
     body.append(tail)
+
+for s_ in (-1, 1):
+    arm = [(s_ * 0.26, TY - 0.13, SH_Z - 0.03), (s_ * 0.33, TY - 0.17, SH_Z + 0.1),
+           (s_ * 0.42, TY - 0.45, SH_Z + 0.6), (s_ * 0.5, TY - 0.95, SH_Z + 1.3)]
+    body.append(tube(f"Arm{s_}", arm, [0.085, 0.08, 0.06, 0.055], mat_trousers(), order=3))
 
 legs = []
 for s_ in (-1, 1):
@@ -515,8 +564,17 @@ def hand(s, wx):
                       [r * K for r in (0.012, 0.012, 0.0105, 0.0085, 0.0025)], skin))
     return parts
 
-for s in (-1, 1):
-    hands += hand(s, s * 0.42)
+for o in hands:                                 # the bar and hands are above the frame now
+    bpy.data.objects.remove(o, do_unlink=True)
+hands = []
+
+# preview-only strings falling from the bar above the frame (the plugin draws the real ones)
+thread_m = mat_simple("PreviewString", (0.42, 0.4, 0.35), 0.8)
+preview_strings = []
+for i, x in enumerate([-0.75, -0.45, -0.15, 0.15, 0.45, 0.75]):
+    top = solve_height(cam, x, BAR_Y, 1.08)
+    end = solve_height(cam, x, BAR_Y, 0.34 + 0.04 * ((i * 7) % 3))
+    preview_strings.append(tube(f"String{i}", [(x, BAR_Y, top), (x + 0.004, BAR_Y, end)], [0.0022, 0.0022], thread_m, order=2))
 
 # ---------------------------------------------------------------- the mask (only its bottom shows)
 MASK_Y = -0.4
@@ -570,10 +628,10 @@ set_in(bg, ["Strength"], 1.0)
 moon = sun("Moon", tuple(moon_dir), 2.8, (0.5, 0.64, 1.0), 0.4)
 stage = spot("StageLamp", (0.0, -3.6, BAR_Z + 1.4), (0.0, BAR_Y, BAR_Z - 0.2), 110.0, (1.0, 0.86, 0.72), 50.0, 0.7, 0.3)
 room_fill = area("RoomFill", (0.0, 2.0, H - 0.1), (0.0, 2.0, 0.0), 4.0, 30.0, (0.5, 0.6, 0.85))
-rim = spot("MasterRim", (1.9, 0.0, BAR_Z + 1.2), (0.0, BAR_Y, BAR_Z - 0.1), 320.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.4)
+rim = spot("MasterRim", (1.9, TY - 0.6, SH_Z + 0.9), (0.0, TY, SH_Z - 0.3), 320.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.4)
 try:                               # light linking (Blender 4.0+): the rim light only touches the master
     rim_coll = bpy.data.collections.new("RimReceivers")
-    for o in hands + mask_objs:
+    for o in body:
         rim_coll.objects.link(o)
     rim.light_linking.receiver_collection = rim_coll
 except Exception as e:
@@ -606,7 +664,7 @@ try_set(c, "volume_step_rate", [3.0])
 
 # ================================================================ render layers
 layer_objs = {"background": room, "mask": mask_objs, "hands": hands}
-all_objs = room + mask_objs + hands
+all_objs = room + mask_objs + hands + preview_strings
 
 def show_only(objs):
     keep = set(o.name for o in objs)

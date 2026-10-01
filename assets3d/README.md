@@ -17,7 +17,9 @@ Same designs and layout as `assets/ui/` (the SVG pack); only the rendering chang
 - **Stage** (`scripts/stage.py`): first draft of the room (wallpaper, floorboards, cracked window with
   moonlight and dust, old drum set) and the master (legs, hands with elongated fingers on the control
   bar, cracked porcelain mask with a stitched smile). **Round 6: no mask** (from below it read like a belly):
-  the frame shows him up to the shoulders, head always out of view. Original design, not FNaF's Puppet: no rosy
+  the frame shows him up to the shoulders, head always out of view. **Round 7:** the hands and the
+  control bar are above the frame too; his arms rise out of view and only the strings fall in (drawn
+  by the plugin, so their number doesn't affect the art). Original design, not FNaF's Puppet: no rosy
   cheeks, tear streaks or striped cuffs.
 - **Flicker:** `stage.py --lamp <level>` renders the same frame with the warm lamp dimmed (the moon
   stays). The plugin will crossfade between a few levels (e.g. 100% / 50% / 15%) at random moments
