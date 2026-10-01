@@ -1,0 +1,4 @@
+# Which scripts the "Render assets" workflow runs: <script> <output dir> [extra args...]
+# Lines starting with # are skipped. Keep only what is being worked on, to save Actions minutes.
+# assets3d/scripts/knob_test.py assets3d/renders/knob_test
+assets3d/scripts/stage.py assets3d/renders/stage --layers preview

@@ -11,10 +11,12 @@ Same designs and layout as `assets/ui/` (the SVG pack); only the rendering chang
 3. Review the renders in the PR, adjust, push again.
 
 ## Status
-- **Step 1, now:** one test knob (`scripts/knob_test.py`) at min / mid / max, plus the mid position at
-  -1 and +1 stop, to judge the look and the lighting before building everything.
-- **Next, if the look is approved:**
-  - knob filmstrips (every position, transparent background with a contact shadow);
-  - buttons, lever and LEDs in each state;
-  - the room background;
-  - then wiring them into `Source/ui/Art.h` in a separate PR.
+- **Knob** (`scripts/knob_test.py`): round 2 approved as a direction; the user wants the
+  **abandoned** look (cracked yellowed bone, heavier grime and verdigris, moonlight). Final
+  filmstrip later.
+- **Stage** (`scripts/stage.py`): first draft of the room (wallpaper, floorboards, cracked window with
+  moonlight and dust, old drum set) and the master (legs, hands with elongated fingers on the control
+  bar, cracked porcelain mask with a stitched smile). Original design, not FNaF's Puppet: no rosy
+  cheeks, tear streaks or striped cuffs.
+- `render_list.txt` picks which scripts CI renders, to save minutes.
+- Shared helpers: `scripts/lib3d.py`.

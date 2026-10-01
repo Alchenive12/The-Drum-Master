@@ -11,6 +11,7 @@ on:
     branches: ["remote/3d-*"]
     paths:
       - "assets3d/scripts/**"
+      - "assets3d/render_list.txt"
       - ".github/workflows/render-assets.yml"
   workflow_dispatch:
 
@@ -43,14 +44,17 @@ jobs:
       - name: Blender version
         run: blender --version
 
-      - name: Render knob test
-        # Full output goes to a log file that is committed even on failure, so it can be read
-        # from the branch (job logs can't be fetched from Claude's sandbox).
+      - name: Render (scripts listed in assets3d/render_list.txt)
+        # Each script's full output goes to render.log in its output dir, committed even on
+        # failure, so it can be read from the branch (job logs can't be fetched from Claude's sandbox).
         run: |
-          mkdir -p assets3d/renders/knob_test
           set -o pipefail
-          blender -b --factory-startup -P assets3d/scripts/knob_test.py --python-exit-code 1 \
-            -- --out assets3d/renders/knob_test 2>&1 | tee assets3d/renders/knob_test/render.log
+          grep -v '^[[:space:]]*#' assets3d/render_list.txt | grep -v '^[[:space:]]*$' > /tmp/list.txt
+          while read -r script out extra; do
+            mkdir -p "$out"
+            echo "=== $script -> $out $extra"
+            blender -b --factory-startup -P "$script" --python-exit-code 1 -- --out "$out" $extra < /dev/null 2>&1 | tee "$out/render.log"
+          done < /tmp/list.txt
 
       - name: Commit renders to this branch
         if: always()
@@ -59,7 +63,7 @@ jobs:
           git config user.email "render-bot@users.noreply.github.com"
           git add assets3d/renders
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
-          git commit -m "renders: knob test from ${GITHUB_SHA::7}"
+          git commit -m "renders: from ${GITHUB_SHA::7}"
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
