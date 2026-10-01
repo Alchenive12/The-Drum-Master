@@ -16,7 +16,7 @@ namespace ui
 class Spectrum
 {
 public:
-    static constexpr std::size_t fftSize = 4096, numPoints = 180;
+    static constexpr std::size_t fftSize = 4096, halfSize = fftSize / 2, numPoints = 180;
     static constexpr float floorDb = -96.0f;
 
     Spectrum() : buffer (fftSize), window (fftSize)
@@ -62,9 +62,8 @@ private:
             buffer[i] = plugin_dsp::Fft::Complex (x[i] * window[i], 0.0f);
         fft.forward (buffer.data());
         const float binHz = static_cast<float> (sr) / static_cast<float> (fftSize);
-        constexpr std::size_t half = fftSize / 2;
         auto binDb = [this] (std::size_t b) {
-            const float m = std::abs (buffer[std::min (b, half - 1)]) * norm;
+            const float m = std::abs (buffer[std::min (b, halfSize - 1)]) * norm;
             return 20.0f * std::log10 (std::max (m, 1.0e-6f));
         };
         for (std::size_t i = 0; i < numPoints; ++i)
@@ -76,7 +75,7 @@ private:
             if (std::floor (hi) > std::ceil (lo))   // several bins: the loudest of them
             {
                 db = floorDb;
-                for (auto b = static_cast<std::size_t> (std::ceil (lo)); b <= static_cast<std::size_t> (std::floor (hi)) && b < half; ++b)
+                for (auto b = static_cast<std::size_t> (std::ceil (lo)); b <= static_cast<std::size_t> (std::floor (hi)) && b < halfSize; ++b)
                     db = std::max (db, binDb (b));
             }
             else   // between two bins (the low end): interpolate in dB
