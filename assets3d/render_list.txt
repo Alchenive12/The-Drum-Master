@@ -2,4 +2,4 @@
 # Lines starting with # are skipped. Keep only what is being worked on, to save Actions minutes.
 # assets3d/scripts/knob_test.py assets3d/renders/knob_test
 assets3d/scripts/stage.py assets3d/renders/stage --layers preview
-assets3d/scripts/stage.py assets3d/renders/stage --layers preview --lamp 0.15
+# assets3d/scripts/stage.py assets3d/renders/stage --layers preview --lamp 0.15

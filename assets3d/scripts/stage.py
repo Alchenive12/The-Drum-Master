@@ -75,7 +75,7 @@ def mat_floor():
     set_in(br, ["Color2"], (0.06, 0.041, 0.027, 1))
     set_in(br, ["Mortar"], (0.004, 0.003, 0.002, 1))
     set_in(br, ["Scale"], 1.8)
-    set_in(br, ["Mortar Size"], 0.006)
+    set_in(br, ["Mortar Size"], 0.014)
     set_in(br, ["Bias"], 0.0)
     set_in(br, ["Brick Width"], 4.5)
     set_in(br, ["Row Height"], 0.25)
@@ -91,7 +91,7 @@ def mat_floor():
     grain_h = noise(nt, grain_co, 6.0, 12.0, 0.65)
     n = bump(nt, math_node(nt, "ADD", gaps, math_node(nt, "MULTIPLY", grain_h, 0.3)), 0.8, 0.02)
     link_in(nt, n, wood, ["Normal"])
-    finish(nt, out, dusty(nt, wood, 0.55, 12.0))
+    finish(nt, out, dusty(nt, wood, 0.35, 12.0))
     return m
 
 def mat_plaster():
@@ -395,16 +395,65 @@ for i in range(260):
         continue
     room.append(ellipsoid(f"Mote{i}", (0.004, 0.004, 0.004), tuple(p), dust_mat, 8, 4))
 
-# ---------------------------------------------------------------- the master's legs and shoes
+# ---------------------------------------------------------------- the master's body (up to the shoulders)
+# The head is always out of frame: the shoulders sit at the top edge, the neck runs up out of view.
+TY = 0.6                                         # where he stands, just behind the control bar
+SH_Z = solve_height(cam, 0.0, TY - 0.12, 0.985)  # shoulder line just inside the top edge
+HIP_Z = SH_Z - 1.2                               # long, very thin torso
 trousers, leather = mat_trousers(), mat_leather()
+jacket = mat_trousers()
+
+def lofted(name, rings, segs=32, mat=None):
+    """Closed body lofted through elliptical rings: (z, rx, ry, y_offset)."""
+    bm = bmesh.new()
+    loops = []
+    for z, rx, ry, yo in rings:
+        loops.append([bm.verts.new((rx * math.cos(2 * math.pi * i / segs), TY + yo + ry * math.sin(2 * math.pi * i / segs), z))
+                      for i in range(segs)])
+    for r0, r1 in zip(loops, loops[1:]):
+        for i in range(segs):
+            j = (i + 1) % segs
+            bm.faces.new((r0[i], r0[j], r1[j], r1[i]))
+    bm.faces.new(list(reversed(loops[0])))
+    bm.faces.new(loops[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = mesh_obj(name, bm, mat)
+    sub = ob.modifiers.new("Sub", "SUBSURF")
+    sub.levels = sub.render_levels = 2
+    smooth(ob, 180)
+    return ob
+
+L_T = SH_Z - HIP_Z
+torso = lofted("Torso", [
+    (HIP_Z - 0.05,       0.15, 0.10,  0.00),     # hips
+    (HIP_Z + 0.22 * L_T, 0.13, 0.09,  0.00),
+    (HIP_Z + 0.42 * L_T, 0.10, 0.075, -0.03),    # wasp waist
+    (HIP_Z + 0.62 * L_T, 0.15, 0.095, -0.07),    # ribs
+    (HIP_Z + 0.82 * L_T, 0.23, 0.105, -0.11),    # upper chest
+    (HIP_Z + 0.94 * L_T, 0.29, 0.095, -0.13),    # shoulders
+    (SH_Z + 0.02,        0.2,  0.085, -0.13),    # top of the shoulders
+    (SH_Z + 0.07,        0.065, 0.06, -0.12),    # base of the neck
+    (SH_Z + 0.45,        0.055, 0.05, -0.09),    # neck, out of frame
+], mat=jacket)
+body = [torso]
+body.append(ellipsoid("Pelvis", (0.16, 0.105, 0.13), (0.0, TY, HIP_Z), trousers, 32, 16))
+for s_ in (-1, 1):                               # long coat tails hanging behind the legs
+    tail = box(f"CoatTail{s_}", (0.12, 0.012, 1.15), (0, 0, 0), jacket)
+    tail.location = (s_ * 0.07, TY + 0.12, HIP_Z - 0.5)
+    tail.rotation_euler = (math.radians(-6), math.radians(s_ * 4), 0)
+    add_bevel(tail, 0.005, 2)
+    body.append(tail)
+
 legs = []
-for s in (-1, 1):
-    pts = [(s * 0.28, 2.95, 6.0), (s * 0.5, 2.92, 4.4), (s * 0.78, 2.88, 2.9), (s * 0.9, 2.86, 2.3),
-           (s * 0.82, 2.85, 1.7), (s * 0.58, 2.82, 0.75), (s * 0.42, 2.8, 0.17)]
-    legs.append(tube(f"Leg{s}", pts, [0.09, 0.075, 0.07, 0.125, 0.06, 0.045, 0.045], trousers, order=3))
-    shoe = [(s * 0.42, 2.92, 0.08), (s * 0.43, 2.62, 0.075), (s * 0.45, 2.22, 0.065),
-            (s * 0.48, 1.95, 0.1), (s * 0.49, 1.88, 0.22), (s * 0.47, 1.98, 0.3), (s * 0.45, 2.06, 0.28)]
-    legs.append(tube(f"Shoe{s}", shoe, [0.08, 0.072, 0.045, 0.026, 0.016, 0.009, 0.003], leather, order=3))
+for s_ in (-1, 1):
+    pts = [(s_ * 0.08, TY, HIP_Z + 0.1), (s_ * 0.18, TY + 0.01, HIP_Z - 0.35), (s_ * 0.34, TY + 0.02, 0.72 * HIP_Z),
+           (s_ * 0.42, TY + 0.03, 0.52 * HIP_Z), (s_ * 0.38, TY + 0.04, 0.36 * HIP_Z), (s_ * 0.3, TY + 0.05, 0.17 * HIP_Z),
+           (s_ * 0.24, TY + 0.06, 0.17)]
+    legs.append(tube(f"Leg{s_}", pts, [0.085, 0.075, 0.065, 0.11, 0.055, 0.045, 0.042], trousers, order=3))
+    shoe = [(s_ * 0.24, TY + 0.14, 0.08), (s_ * 0.25, TY - 0.15, 0.075), (s_ * 0.27, TY - 0.5, 0.065),
+            (s_ * 0.29, TY - 0.75, 0.1), (s_ * 0.3, TY - 0.82, 0.22), (s_ * 0.29, TY - 0.73, 0.3), (s_ * 0.28, TY - 0.66, 0.28)]
+    legs.append(tube(f"Shoe{s_}", shoe, [0.08, 0.072, 0.045, 0.026, 0.016, 0.009, 0.003], leather, order=3))
+legs += body
 room += legs
 
 # ---------------------------------------------------------------- control bar + hands (foreground)
@@ -424,8 +473,12 @@ def P(wx, dx, dy, dz):
 def hand(s, wx):
     parts = []
     wrist = Vector(P(wx, 0.0, 0.2, 0.135))
-    parts.append(tube(f"Sleeve{s}", [(wx * 1.3, BAR_Y + 1.2, BAR_Z + 1.8), (wx * 1.15, BAR_Y + 0.55, BAR_Z + 0.65),
-                                      tuple(wrist + Vector((0, 0.05, 0.03)))], [0.075, 0.07, 0.06], sleeve_mat, order=3))
+    shoulder = Vector((s * 0.28, TY - 0.14, SH_Z - 0.07))
+    cuff = wrist + Vector((0, 0.05, 0.03))
+    elbow = shoulder.lerp(cuff, 0.5) + Vector((s * 0.32, 0.1, -0.18))      # insect-like, out to the side
+    parts.append(tube(f"Arm{s}", [tuple(shoulder), tuple(shoulder.lerp(elbow, 0.5)), tuple(elbow),
+                                  tuple(elbow.lerp(cuff, 0.5)), tuple(cuff)],
+                      [0.07, 0.055, 0.068, 0.05, 0.058], sleeve_mat, order=3))
     parts.append(bony(f"Wrist{s}", [tuple(wrist + Vector((0, 0.06, 0.035))), tuple(wrist)], [0.026 * K], [0.024 * K, 0.03 * K], skin))
     knuckles = []
     for k, off in enumerate((-0.062, -0.021, 0.021, 0.062)):
@@ -502,7 +555,9 @@ for _ in range(50):              # place the mask so its smile sits just inside 
         lo = mid
     else:
         hi = mid
-mask_objs = [mask] + mask_parts
+for o in [mask] + mask_parts:                  # the head stays out of frame: no mask in the scene
+    bpy.data.objects.remove(o, do_unlink=True)
+mask_objs = []
 
 # ================================================================ light
 world = bpy.data.worlds.new("Night")
@@ -515,7 +570,7 @@ set_in(bg, ["Strength"], 1.0)
 moon = sun("Moon", tuple(moon_dir), 2.8, (0.5, 0.64, 1.0), 0.4)
 stage = spot("StageLamp", (0.0, -3.6, BAR_Z + 1.4), (0.0, BAR_Y, BAR_Z - 0.2), 110.0, (1.0, 0.86, 0.72), 50.0, 0.7, 0.3)
 room_fill = area("RoomFill", (0.0, 2.0, H - 0.1), (0.0, 2.0, 0.0), 4.0, 30.0, (0.5, 0.6, 0.85))
-rim = spot("MasterRim", (0.0, 1.3, BAR_Z + 1.5), (0.0, BAR_Y, BAR_Z - 0.1), 320.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.4)
+rim = spot("MasterRim", (1.9, 0.0, BAR_Z + 1.2), (0.0, BAR_Y, BAR_Z - 0.1), 320.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.4)
 try:                               # light linking (Blender 4.0+): the rim light only touches the master
     rim_coll = bpy.data.collections.new("RimReceivers")
     for o in hands + mask_objs:
@@ -526,7 +581,7 @@ except Exception as e:
     rim.data.energy = 0.0
 corner = spot("CornerGlint", (0.3, 1.2, 3.8), (2.5, 3.8, 0.5), 230.0, (0.6, 0.7, 1.0), 36.0, 0.9, 0.3)
 
-leg_rim = spot("LegRim", (-2.6, 4.6, 3.2), (0.0, 2.85, 1.4), 520.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.3)
+leg_rim = spot("LegRim", (-2.6, TY + 3.6, 3.4), (0.0, TY, 1.6), 520.0, (0.55, 0.68, 1.0), 40.0, 0.8, 0.3)
 try:
     leg_coll = bpy.data.collections.new("LegRimReceivers")
     for o in legs:
