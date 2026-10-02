@@ -71,6 +71,12 @@ public:
     struct Transport { double ppq = 0.0, bpm = 120.0, sampleRate = 48000.0; std::int64_t blockStart = 0; int beatsPerBar = 4; bool playing = false; };
     Transport getTransport() const noexcept;
 
+    /** The Puppet Show's spectrum: a mono copy of the bus as it comes in and as it leaves (after the
+        50 ms lookahead). The audio thread writes relaxed atomics into two rings, the UI copies the
+        latest samples; a frame torn by a block arriving mid-copy only blurs one picture. */
+    static constexpr std::size_t scopeSize = 4096;
+    void copyScope (float* in, float* out, std::size_t n) const noexcept;
+
     juce::String getUiPage() const { return uiZoom; }
     void setUiPage (const juce::String& page) { uiZoom = page; }
 
@@ -92,6 +98,8 @@ private:
     std::atomic<std::int64_t> transportBlockStart { 0 };
     std::atomic<int> transportBeatsPerBar { 4 };
     std::atomic<bool> transportPlaying { false };
+    std::array<std::atomic<float>, scopeSize> scopeIn {}, scopeOut {};
+    std::atomic<std::size_t> scopeWrite { 0 };   // total samples written (the ring index is this mod scopeSize)
     std::int64_t samplesProcessed = 0;   // audio thread only: the engine's input index at block start
     std::uint32_t appliedTypes = 0xffffffffu;   // audio thread only
     bool wasPlaying = false;          // audio thread only

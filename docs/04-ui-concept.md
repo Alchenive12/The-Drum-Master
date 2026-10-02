@@ -1,7 +1,10 @@
 <!-- File: docs/04-ui-concept.md -->
 # The Drum Master — Phase 4: UI concept
 
-> Status: **built (2026-09-30)**, for review. Screenshots below.
+> Status: **built (2026-09-30)**, then **redesigned the same day ("v2 look")** at the user's request:
+> "it looks like a 2016 plugin, I want a 2026 modern look, modern but creepy and eerie; change only
+> the UI, decide the specifics yourself". Every page, control and behaviour stayed; only how they
+> look (and a few ways they respond to the mouse) changed. See "Look (v2)" below. Screenshots below.
 > - **User's answers:** marked [user].
 > - **Everything else:** decided by Claude from the context of the earlier answers ("decide by
 >   context of my earlier answers"), marked [Claude], and listed in
@@ -27,12 +30,46 @@
 ## Art
 - **Everything is drawn in code as vector graphics** [Claude]. This environment has no AI image
   generator, and vector art stays sharp at every window size.
-- **Swapping in art later:** every piece (stage, hands, mask, drums, curtain, knobs) is one drawing
-  function in `Source/ui/Art.h`. Replacing one with an image later changes only that function.
+- **Swapping in art later:** every piece (room, hands, mask, legs, drums, curtain, theatre) is one
+  drawing function in `Source/ui/Art.h`. Replacing one with an image later changes only that function.
 - **Mood** [user]: creepy, FNaF-puppet feeling, original design only.
-  - **Palette:** near-black stage, deep maroon velvet, bone/ivory for the puppet master and
-    knobs, dim gold for text, a sickly green glow for "alive" things (meters, the playhead).
-  - **Font:** the system serif (theatre-poster feel).
+
+## Look (v2) [Claude, 2026-09-30, user's brief: "modern but creepy and eerie"]
+The idea: a horror film still, not a skeuomorphic hardware panel. Moonlight, fog, dust and film
+grain carry the dread; the controls on top are quiet, modern glass.
+
+- **Type** (embedded, identical on every machine; all SIL Open Font License 1.1, credited on the
+  About page, licences in `Source/ui/fonts/`):
+  - **Instrument Serif** (and its italic) for names and titles: "Snare", "The Puppet Show". The
+    italic is the master's whisper ("the master is listening", "a crack, like a bone").
+  - **Geist** for the interface, as small tracked capitals (labels, buttons).
+  - **Geist Mono** for numbers (values, dB, "STRING 02 / 06").
+- **Colour:** blue-black ink, cold moonlight and porcelain bone. Light means something:
+  - **ectoplasm green:** alive (LISTEN, the playhead, the glowing crack in the mask);
+  - **one hue per drum:** kick blood, snare bone, closed hat ectoplasm, open hat cold cyan, crash
+    bruise violet, ride midnight blue, rimshot candle amber, clap rose, misc ash. A drum's hue
+    lights its string, its knobs' arcs, its deep edit and its Shadow Play shape;
+  - **blood red:** danger (bypass, CUT STRING);
+  - **limelight** (warm) for The Puppet Show; its meters are warm for boosts, cold for cuts.
+- **Light and surfaces:** a cracked arched window with a clouded moon behind dead branches,
+  god rays and a pool of moonlight on the boards, fog along the skirting, dust turning in the
+  light, an empty oval portrait that is looking back, cobwebs, vignette and film grain. Panels are
+  frosted dark glass (the room is really blurred behind them) with hairline edges.
+- **The master:** a porcelain mask whose crack **glows from inside** and flares with every kick;
+  long skeletal hands (knobbly three-joint fingers, dark nails, frayed yellowed cuffs) wrapped over
+  an ebony bar with brass caps and a screw eye per string; pinstriped legs lit from the window side,
+  casting long shadows across the floor.
+- **Drums** are moonlit objects: the kick's head carries the master's stitched smile as a logo,
+  the crash is cracked, the clap is two bony hands. On a hit a drum **lights up in its hue**, its
+  string twitches and glows, and the boards under it catch the light. A new "?" string hangs an
+  old **toe tag**.
+- **Controls:**
+  - knobs: a dark lathe-turned cap in its own shadow, a glowing value arc (from the centre for
+    bipolar ones), a bone needle; big knobs get an LED ring of ticks. Hover shows the value in mono.
+  - buttons: glass pills with line icons; a lit button glows (LISTEN breathes while armed).
+  - The Puppet Show: genre **tickets** (notched stubs with icons), an ON/OFF **switch**.
+  - the drum's **level is a tall fader** with a ghost meter of its hits (deep edit).
+- **Bypass:** the strings go slack and the drums sink a little, and the status line says BYPASSED.
 
 ## Window
 - **Size** [Claude]: resizable, fixed 16:10 shape, 900×563 up to 1600×1000. Default 1100×688.
@@ -43,7 +80,7 @@
 From top to bottom:
 
 1. **Top bar** [Claude]:
-   - left: the title, "THE DRUM MASTER";
+   - left: the wordmark "*The* Drum Master" and a status line (LISTENING, "6 STRINGS", BYPASSED);
    - middle: **LISTEN** (auto detect: glows green while armed), **+ STRING** [user] and
      **THE PUPPET SHOW** [user];
    - right: **BYPASS** and **?** (about).
@@ -64,7 +101,8 @@ From top to bottom:
      level [concept]. Two drums at once: both jerk.
    - Each string ends in that drum, drawn small. Misc hangs a **wooden tom block**, because toms
      are Misc [Claude].
-   - Click a string or its drum → **deep edit** (zoom in) [concept].
+   - Click a string or its drum → **deep edit** (zoom in) [concept]. Hovering a string lights it;
+     hovering the master flares the crack in his mask and names what a click opens.
 4. **Shadow Play** [F2, decided]:
    - The ring on the stage floor under the strings, drawn in perspective: a clock face synced to
      the playhead, where hits stack up and fade like smoke.
@@ -75,6 +113,8 @@ From top to bottom:
    - At the bottom, three groups (**KICK:** volume, punch, weight · **SNARE:** volume, snap, fat ·
      **HATS:** volume, tone, tame), plus the **LINK** switch between them.
    - On the right: **GLOBAL** (dry/wet, output, sensitivity, punch, clip).
+   - v2: a frosted glass dock; group names with their drum's colour dot; chain links between the
+     groups light up while LINK is on.
 
 When the stage has no strings yet (a fresh instance listening), it says "Play your loop… the
 master is listening" [Claude].
@@ -83,11 +123,12 @@ master is listening" [Claude].
 - **The zoom:** clicking a string zooms from that drum into its page (~0.3 s), and the back arrow
   zooms out.
 - **Left third:** the drum, large, under a spotlight, still on its string (it still jerks on hits),
-  with its name.
+  with its name (v2: large serif, a whispered line under it, "STRING 02 / 06" at the top).
   - **"This string is a: [type ▾]"**: the type chooser [user]. For a new "?" string it's
     the first thing shown. Changing it moves the string to the new type.
   - **CUT STRING:** removes the string (manual mode).
-- **Right two thirds:** that drum's knobs in labelled groups.
+- **Right two thirds:** that drum's knobs in labelled groups (v2: glass cards packed into rows of
+  up to five knobs; the drum's LEVEL moved out of the grid into a tall fader card on the right).
   - **Kick:** WEIGHT (low-end boost, bottom, top) · DYNAMICS (decay, compression, saturation,
     clipping) · EQ (low, mid, mid freq, high) · LEVEL.
   - **Snare:** CHARACTER (the four blendable macros: Dubstepify, Popify, Rockify, Rimify) ·
@@ -107,21 +148,50 @@ master is listening" [Claude].
   - the **genre** as five posters (Rock, Pop, EDM, Metal, Hip-hop);
   - **Depth** as the big centre knob;
   - the four bipolar knobs (Bass boost, Mud control, Mid presence, High control);
-  - five **live band meters** (kick sub, mud, presence, kick click, air) that move up for boosts
-    and down for cuts, with ±8 dB marks.
+  - ~~five live band meters~~ → since 2026-10-01 a **live EQ graph** in the manner of Gullfoss and
+    Guardian Angel [user: "more a reactive EQ curve, less just bands of dB"]:
+    - behind: the bus **spectrum** before the plugin (a ghost line) and after it (filled), 20 Hz to
+      20 kHz, ±12 dB scale for the EQ;
+    - in front: the show's **EQ curve for each drum** (kick, snare, clap, toms, hats & cymbals) in
+      the drum's colour, drawn from the same band table the engine uses
+      (`plugin_dsp::PuppetShow::bands`) with the live gains, so it is exactly what is applied;
+      a curve flares when its drum is hit;
+    - a **handle per measure** (kick sub, mud, presence, kick click, air) with its dB: warm when it
+      boosts, cold when it cuts;
+    - "CORRECTING" while on; "OFF - LISTENING ONLY" (and the hint) while off.
 - **Closing:** the back arrow closes the curtains and reopens them on the stage.
+- v2: a black stage under a limelight spotlight with haze, velvet wings, a valance and footlights;
+  the marquee's bulbs chase; genres are tickets; the live EQ graph sits in the middle, the knobs
+  (Depth in the centre) under it.
+- **Technical (the graph):** the processor keeps a mono copy of the bus before and after the plugin
+  in two lock-free rings (relaxed atomics, no allocation, no locks; it never touches the sound).
+  The editor reads the latest 4096 samples, windows them and runs the dsp/ core's own FFT
+  (`Source/ui/Spectrum.h`), with a +4.5 dB/octave display tilt and a fast rise / slow fall. The
+  graph refreshes at 30 fps (sandbox: 15 % of a core, as much as the old bar meters).
 
 ## The master's hands (advanced) [concept + Claude]
 - Drive, saturation, high-pass, low-pass.
+- v2: the master's two hands hang open above the four knobs, and a string runs from a fingertip to
+  each knob's pointer: when a knob turns, its string follows. He is working them.
 - **FORGET THIS LOOP:** resets what was learned (presence and spectra).
 
 ## About [Claude]
 - Version and credits. The Groove MIDI and Expanded Groove MIDI credit (CC BY 4.0) is **required**
-  (D-C2).
+  (D-C2). v2 adds the fonts' credit (SIL OFL 1.1).
 
 ## Technical [Claude]
 - **No CMakeLists.txt change:** all UI code is header-only under `Source/ui/`, included by the
-  processor.
+  processor: `Theme.h` (colours, type), `Fx.h` (glow, glass, blur, grain, cached layers, icons),
+  `LookAndFeel.h`, `Widgets.h`, `Art.h`, and `FontData.h` (the fonts as byte arrays, generated by
+  `research/ui-fonts/make_font_header.py`; no BinaryData needed).
+- **Cached scenery (v2):** each page's static background (room, blur, fog, glass, grain) is rendered
+  once into an image at the screen's real pixel density and then only blitted; it re-renders when
+  the window's scale changes (never during a zoom). The 60 Hz timer only redraws what moves: on the
+  stage, the scene above the dock (the dock's knobs repaint themselves); the master's hands page at
+  30 fps. Sandbox CPU (software renderer, one core, 60 fps): stage 48 % (v1: 53 %), The Puppet Show
+  12 % (v1: 15 %), the master's hands 25 % (v1: static, 3 %).
+- **Fonts lifetime:** the typefaces are a `DeletedAtShutdown` singleton, released with JUCE's own
+  shutdown (never after it, when a host unloads the plugin).
 - **Timer and threads:**
   - A 60 Hz editor timer drives the animations.
   - It reads hits from the lock-free Shadow Play queue (the UI thread is the only reader) and the
@@ -140,11 +210,12 @@ master is listening" [Claude].
 | Page | File |
 |---|---|
 | Stage: puppet master, 6 strings, Shadow Play ring, quick mix | `screenshots/stage.png` |
+| A fresh instance: empty stage, the master listening (`DRUM_MASTER_DEMO=listen`) | `screenshots/listen.png` |
 | Deep edit: snare (four macros on top) | `screenshots/snare.png` |
 | Deep edit: kick | `screenshots/kick.png` |
 | A new string: choose its type | `screenshots/new.png` |
 | The Puppet Show's curtain closing | `screenshots/curtain.png` |
-| The Puppet Show page (meters show made-up values) | `screenshots/show.png` |
+| The Puppet Show page: live EQ graph (made-up spectrum and gains) | `screenshots/show.png` |
 | The master's hands (advanced) | `screenshots/advanced.png` |
 | Shadow Play enlarged | `screenshots/shadow.png` |
 | About and credits | `screenshots/about.png` |
@@ -173,3 +244,10 @@ files are in `assets/ui3d/`, loaded from BinaryData by `Source/ui/Art3D.h`). The
   are brass plaques (off / hover / on) drawn in three slices so the screws never stretch; the quick-mix
   panel is an image, labels and dividers stay in code.
 - Rendered but not used yet: `lever_off/on` (the Puppet Show switch is still a text button).
+**Checked in the sandbox (v1 and again for v2):**
+- The plugin builds (Linux, Release, LTO) with no warnings from our code (v2 also checked with
+  clang `-Wconversion -Wshadow-all -Wdouble-promotion`).
+- pluginval passes at strictness 5 **including its editor tests**: opening, opening the editor
+  while audio is processing, and editor automation.
+- v2: resizing to 1600 x 1000 re-renders the scenery sharp; clicks and hovers checked by driving the
+  Standalone with xdotool.

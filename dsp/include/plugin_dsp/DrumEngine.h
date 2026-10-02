@@ -285,19 +285,14 @@ private:
     {
         using PS = PuppetShow;
         auto settings = mapped;
-        const std::size_t s0 = ChannelSettings::firstPuppetSlot;
-        auto put = [&settings] (DrumType t, std::size_t slot, EqSlot e) { settings[index (t)].eq[slot] = e; };
-        const float sub = puppetShow.gainDb (PS::kickSub), mud = puppetShow.gainDb (PS::mud);
-        const float pres = puppetShow.gainDb (PS::presence), click = puppetShow.gainDb (PS::kickClick), air = puppetShow.gainDb (PS::air);
-        put (DrumType::kick, s0, { EqSlot::Kind::lowShelf, 70.0f, 0.707f, sub });
-        put (DrumType::kick, s0 + 1, { EqSlot::Kind::bell, 250.0f, 1.0f, mud });
-        put (DrumType::kick, s0 + 2, { EqSlot::Kind::bell, 3500.0f, 0.9f, click });
-        put (DrumType::snare, s0, { EqSlot::Kind::bell, 400.0f, 1.0f, mud });
-        put (DrumType::snare, s0 + 1, { EqSlot::Kind::bell, 3000.0f, 0.9f, pres });
-        put (DrumType::clap, s0, { EqSlot::Kind::bell, 3000.0f, 0.9f, pres });
-        put (DrumType::misc, s0, { EqSlot::Kind::bell, 300.0f, 1.0f, mud });   // toms are misc
-        for (auto t : { DrumType::closedHat, DrumType::openHat, DrumType::crash, DrumType::ride })
-            put (t, s0, { EqSlot::Kind::highShelf, 8000.0f, 0.707f, air });
+        std::array<std::size_t, numDrumTypes> next {};
+        next.fill (ChannelSettings::firstPuppetSlot);
+        for (const auto& b : PS::bands)   // the table also drives the editor's curves
+        {
+            const auto kind = b.shape == PS::Shape::lowShelf ? EqSlot::Kind::lowShelf
+                              : b.shape == PS::Shape::highShelf ? EqSlot::Kind::highShelf : EqSlot::Kind::bell;
+            settings[index (b.drum)].eq[next[index (b.drum)]++] = { kind, b.freq, b.q, puppetShow.gainDb (b.measure) };
+        }
         for (std::size_t t = 0; t < numDrumTypes; ++t) channels[t].setSettings (settings[t]);
     }
 

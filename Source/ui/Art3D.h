@@ -143,6 +143,15 @@ inline bool drawPlaque (juce::Graphics& g, juce::Rectangle<float> r, int state)
     return true;
 }
 
+inline bool plaqueAvailable() { return plaque (0).isValid(); }
+
+/** The part of a plaque button that text may use: between the screw ends. */
+inline juce::Rectangle<float> plaqueTextArea (juce::Rectangle<float> r)
+{
+    const float cap = juce::jmin (r.getWidth() * 0.3f, r.getHeight() * 0.43f);
+    return r.reduced (cap, 0.0f);
+}
+
 /** Any image stretched into an area (the quick-mix panel has the same aspect as its slot). */
 inline bool drawImageIn (juce::Graphics& g, const juce::Image& img, juce::Rectangle<float> area)
 {
