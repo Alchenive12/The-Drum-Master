@@ -43,7 +43,13 @@ struct StageModel
         float drop = 1.0f;             // 0 = just appeared (falls in), 1 = arrived
         float swing = 0.0f;            // px, sideways swing of the string's middle (shivers, landings)
         float swingVel = 0.0f;
+        float rock = 0.0f;             // rad, the drum rocking around its knot (hits, landings)
+        float rockVel = 0.0f;
+        float lastJerk = 0.0f;         // to notice a new hit
     };
+    /** Strings are tied off-centre, alternating sides, so each drum hangs tilted. */
+    static float tieSide (std::size_t i) { return i % 2 == 0 ? 1.0f : -1.0f; }
+    static float tieAmount (std::size_t i) { return 0.48f + 0.1f * static_cast<float> ((i * 7) % 3); }
     static constexpr float landAt = 0.32f;   // drop phase where a falling drum reaches its string's length
     struct Hit { DrumType type = DrumType::misc; float phase = 0.0f, level = 0.5f, confidence = 1.0f; double born = 0.0; };
 
@@ -304,16 +310,32 @@ public:
             const float top = rendered ? -6.0f : barY + 9.0f;   // 3D art: he holds the bar above the window
             juce::Path str;
             const float twitch = s.jerk * 5.0f * std::sin (static_cast<float> (model.now) * 46.0f + static_cast<float> (i));
+            const auto tie = tieFor (s.pending ? DrumType::misc : s.type, 64.0f, StageModel::tieSide (i), StageModel::tieAmount (i));
+            const juce::Point<float> knot { x, y + tie.dy };          // the string ends at the knot
+            const float angle = tie.tilt + s.rock;                     // hangs tilted, rocks on hits
             str.startNewSubPath (x, top);
-            str.quadraticTo (x + model.sway * 0.6f + twitch + s.swing + model.slack * 10.0f, (top + y) * 0.5f + model.slack * 16.0f, x, y - 30.0f);
+            str.quadraticTo (x + model.sway * 0.6f + twitch + s.swing + model.slack * 10.0f, (top + knot.y) * 0.5f + model.slack * 16.0f, knot.x, knot.y);
             if (s.jerk > 0.05f || hot)
                 fx::glowStroke (g, str, col.withAlpha (juce::jmax (hot ? 0.5f : 0.0f, s.jerk)), 1.0f, juce::jmax (hot ? 0.5f : 0.0f, s.jerk));
             g.setColour (colours::string.withAlpha (0.7f).interpolatedWith (col, juce::jmin (1.0f, s.jerk * 1.5f)));
             g.strokePath (str, juce::PathStrokeType (1.1f));
             const float appear = juce::jmin (1.0f, s.drop * 2.5f);   // a new drum fades in as it falls
             if (appear < 1.0f) g.beginTransparencyLayer (appear);
-            if (s.pending) art::questionTag (g, { x, y }, 64.0f, hot ? 1.0f : 0.5f + 0.5f * std::sin (static_cast<float> (model.now) * 3.0f));
-            else art::drum (g, s.type, { x, y }, 64.0f, juce::jmax (s.jerk, hot ? 0.35f : 0.0f));
+            {
+                juce::Graphics::ScopedSaveState hang (g);              // the drum hangs from its knot
+                g.addTransform (juce::AffineTransform::rotation (angle, knot.x, knot.y));
+                const juce::Point<float> centre { x - tie.dx, y };
+                if (s.pending) art::questionTag (g, centre, 64.0f, hot ? 1.0f : 0.5f + 0.5f * std::sin (static_cast<float> (model.now) * 3.0f));
+                else art::drum (g, s.type, centre, 64.0f, juce::jmax (s.jerk, hot ? 0.35f : 0.0f));
+            }
+            {   // the knot: a small loop with two short tails, wrapped round the rim
+                const auto knotCol = colours::string.withAlpha (0.9f).interpolatedWith (col, juce::jmin (1.0f, s.jerk * 1.5f));
+                g.setColour (knotCol);
+                g.drawEllipse (juce::Rectangle<float> (4.4f, 4.4f).withCentre (knot), 1.1f);
+                const auto t1 = fx::polar (knot, angle + 2.5f, 7.0f), t2 = fx::polar (knot, angle + 3.6f, 6.0f);
+                g.drawLine ({ knot, t1 }, 1.0f);
+                g.drawLine ({ knot, t2 }, 1.0f);
+            }
             if (appear < 1.0f) g.endTransparencyLayer();
             const auto label = s.pending ? juce::String ("CHOOSE") : typeTitle (s.type);
             g.setFont (caps (9.5f, 0.2f));
@@ -463,6 +485,33 @@ private:
         const float half = n > 0 ? 0.5f * static_cast<float> (n - 1) * spacing + 60.0f : 90.0f;
         barX1 = 550.0f - juce::jmax (120.0f, half);
         barX2 = 550.0f + juce::jmax (120.0f, half);
+    }
+
+    /** Where a string is tied on a drum drawn at size `size`: dx from the drum's centre (along its
+        top), dy (negative, up) of the rim at that point, and the drum's natural tilt (radians,
+        clockwise) from hanging off-centre - its weight swings under the knot, toned down. */
+    struct Tie { float dx, dy, tilt; };
+    static Tie tieFor (DrumType t, float size, float side, float amount)
+    {
+        float halfW = 0.45f, dy = -0.45f, shape = 0.0f;   // shape: 0 = flat top, 1 = round, 2 = thin ellipse
+        switch (t)
+        {
+            case DrumType::kick:      halfW = 0.45f; dy = -0.45f; shape = 1.0f; break;
+            case DrumType::snare:     halfW = 0.44f; dy = -0.26f; break;
+            case DrumType::rimshot:   halfW = 0.42f; dy = -0.24f; break;
+            case DrumType::closedHat:
+            case DrumType::openHat:   halfW = 0.5f;  dy = -0.14f; shape = 2.0f; break;
+            case DrumType::crash:
+            case DrumType::ride:      halfW = 0.54f; dy = -0.16f; shape = 2.0f; break;
+            case DrumType::clap:      halfW = 0.2f;  dy = -0.42f; break;
+            case DrumType::misc:      halfW = 0.3f;  dy = -0.4f;  break;
+        }
+        const float dx = side * amount * halfW * size;
+        float top = dy * size;
+        if (shape > 0.5f)                                  // on a round or elliptic rim the knot sits lower
+            top *= std::sqrt (juce::jmax (0.0f, 1.0f - (dx / (halfW * size)) * (dx / (halfW * size))));
+        const float tilt = -0.36f * std::atan2 (dx, std::abs (top) + 0.25f * size);
+        return { dx, top, tilt };
     }
 
     /** Drop-in: falls from above the window (accelerating), then the drum bobs on its string like a
@@ -1747,13 +1796,17 @@ private:
         for (std::size_t i = 0; i < model.slots.size(); ++i)
         {
             auto& s = model.slots[i];
+            if (s.jerk > s.lastJerk + 0.15f)                           // a new hit: the drum swings on its knot
+                s.rockVel += ui::StageModel::tieSide (i) * 1.4f * s.jerk;
             s.jerk *= static_cast<float> (std::exp (-dt / 0.11));
+            s.lastJerk = s.jerk;
             const float before = s.drop;
             s.drop = juce::jmin (1.0f, s.drop + fdt / 0.95f);
             if (before < ui::StageModel::landAt && s.drop >= ui::StageModel::landAt)
             {
-                // it landed: the bar above jolts, the neighbouring strings shiver
+                // it landed: the bar above jolts, the neighbouring strings shiver, the drum rocks
                 s.swingVel += (i % 2 == 0 ? 1.0f : -1.0f) * 160.0f;
+                s.rockVel -= ui::StageModel::tieSide (i) * 2.0f;
                 for (std::size_t j : { i - 1, i + 1 })                // i - 1 wraps for i == 0: skipped
                     if (j < model.slots.size())
                     {
@@ -1766,6 +1819,8 @@ private:
         {
             s.swingVel += (-120.0f * s.swing - 7.0f * s.swingVel) * fdt;
             s.swing += s.swingVel * fdt;
+            s.rockVel += (-60.0f * s.rock - 3.5f * s.rockVel) * fdt;   // pendulum round the knot, ~1.2 Hz
+            s.rock += s.rockVel * fdt;
         }
         model.pulse *= std::exp (-fdt / 0.22f);
         const bool bypassed = proc.apvts.getRawParameterValue ("global_bypass")->load() > 0.5f;
