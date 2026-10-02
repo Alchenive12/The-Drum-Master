@@ -127,7 +127,27 @@ void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         return;
     float* left = buffer.getWritePointer (0);
     float* right = numOut > 1 ? buffer.getWritePointer (1) : nullptr;
-    engine->process (left, right, static_cast<std::size_t> (numSamples));
+    const auto n = static_cast<std::size_t> (numSamples);
+    const std::size_t w = scopeWrite.load (std::memory_order_relaxed);
+    auto mono = [left, right] (std::size_t i) { return right != nullptr ? 0.5f * (left[i] + right[i]) : left[i]; };
+    for (std::size_t i = 0; i < n; ++i)   // the spectrum's "before"
+        scopeIn[(w + i) % scopeSize].store (mono (i), std::memory_order_relaxed);
+    engine->process (left, right, n);
+    for (std::size_t i = 0; i < n; ++i)   // ...and "after"
+        scopeOut[(w + i) % scopeSize].store (mono (i), std::memory_order_relaxed);
+    scopeWrite.store (w + n, std::memory_order_release);
+}
+
+void DrumMasterProcessor::copyScope (float* in, float* out, std::size_t n) const noexcept
+{
+    n = juce::jmin (n, scopeSize);
+    const std::size_t end = scopeWrite.load (std::memory_order_acquire);
+    for (std::size_t i = 0; i < n; ++i)   // oldest first
+    {
+        const std::size_t k = (end + scopeSize - n + i) % scopeSize;
+        in[i] = scopeIn[k].load (std::memory_order_relaxed);
+        out[i] = scopeOut[k].load (std::memory_order_relaxed);
+    }
 }
 
 std::uint32_t DrumMasterProcessor::getStringTypes() const noexcept

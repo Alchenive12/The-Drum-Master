@@ -68,6 +68,24 @@ public:
         { 4.5f, 5.0f, 6.0f },   // High control -> hats, cymbals
     } };
 
+    /** Where each measure's gain acts: one EQ band in one drum's own chain (the engine fills the
+        drums' reserved slots from this table in order; the editor draws its curves from it). */
+    enum class Shape : std::uint8_t { bell, lowShelf, highShelf };
+    struct Band { DrumType drum; Measure measure; Shape shape; float freq, q; };
+    static constexpr std::array<Band, 11> bands { {
+        { DrumType::kick, kickSub, Shape::lowShelf, 70.0f, 0.707f },
+        { DrumType::kick, mud, Shape::bell, 250.0f, 1.0f },
+        { DrumType::kick, kickClick, Shape::bell, 3500.0f, 0.9f },
+        { DrumType::snare, mud, Shape::bell, 400.0f, 1.0f },
+        { DrumType::snare, presence, Shape::bell, 3000.0f, 0.9f },
+        { DrumType::clap, presence, Shape::bell, 3000.0f, 0.9f },
+        { DrumType::misc, mud, Shape::bell, 300.0f, 1.0f },   // toms are misc
+        { DrumType::closedHat, air, Shape::highShelf, 8000.0f, 0.707f },
+        { DrumType::openHat, air, Shape::highShelf, 8000.0f, 0.707f },
+        { DrumType::crash, air, Shape::highShelf, 8000.0f, 0.707f },
+        { DrumType::ride, air, Shape::highShelf, 8000.0f, 0.707f },
+    } };
+
     void reset() noexcept
     {
         measured.fill (0.0f);

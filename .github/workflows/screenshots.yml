@@ -1,0 +1,79 @@
+# File: .github/workflows/screenshots.yml
+# Real screenshots of the plugin UI without a DAW or audio: builds the Linux Standalone, runs it on a
+# virtual screen with DRUM_MASTER_DEMO=<page> (made-up hits, see PluginEditor.h), captures the window,
+# and commits the PNGs to docs/screenshots/3d/ on the same branch. Linux only (1x minutes).
+
+name: Screenshots
+
+on:
+  push:
+    branches: ["remote/3d-*"]
+    paths:
+      - "Source/**"
+      - "assets/ui3d/**"
+      - ".github/workflows/screenshots.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: shots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shots:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build xvfb xdotool imagemagick \
+            libasound2-dev libjack-jackd2-dev ladspa-sdk libcurl4-openssl-dev \
+            libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev libxi-dev \
+            libglu1-mesa-dev mesa-common-dev libegl-dev
+
+      - name: Build the Standalone
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPLUGIN_DSP_TESTS=OFF
+          cmake --build build --target DrumMaster_Standalone --parallel
+
+      - name: Capture each page
+        run: |
+          APP=$(find build -type f -executable -path "*Standalone*" -name "The Drum Master" | head -n 1)
+          echo "App: $APP"
+          mkdir -p docs/screenshots/3d
+          Xvfb :99 -screen 0 1920x1200x24 &
+          export DISPLAY=:99
+          sleep 2
+          for page in stage new show shadow curtain kick snare advanced about; do
+            DRUM_MASTER_DEMO=$page "$APP" > /dev/null 2>&1 &
+            PID=$!
+            WID=$(timeout 40 xdotool search --sync --onlyvisible --name "The Drum Master" | head -n 1 || true)
+            sleep 6                                   # let the demo hits and animations run
+            if [ -n "$WID" ]; then
+              import -window "$WID" "docs/screenshots/3d/$page.png" && echo "captured $page"
+            else
+              echo "no window for $page"
+            fi
+            kill $PID 2>/dev/null || true
+            wait $PID 2>/dev/null || true
+          done
+          ls -la docs/screenshots/3d
+
+      - name: Commit screenshots to this branch
+        if: success() || failure()
+        run: |
+          git config user.name  "render-bot"
+          git config user.email "render-bot@users.noreply.github.com"
+          git add docs/screenshots/3d
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "screenshots: from ${GITHUB_SHA::7}"
+          git pull --rebase -X theirs origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

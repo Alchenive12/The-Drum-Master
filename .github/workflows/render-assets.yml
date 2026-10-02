@@ -1,0 +1,69 @@
+# File: .github/workflows/render-assets.yml
+# Renders the 3D UI assets with Blender (headless, Cycles on CPU) and commits the PNGs back to the
+# same branch, so they can be reviewed from a phone and by Claude. No artifact upload: the renders
+# are already in the branch, and artifacts would only use the 0.5 GB Actions storage.
+# Linux only (1x Actions minutes). Runs on pushes to remote/3d-* branches that touch the scripts,
+# or by hand from the Actions tab.
+
+name: Render assets
+
+on:
+  push:
+    branches: ["remote/3d-*"]
+    paths:
+      - "assets3d/scripts/**"
+      - "assets3d/render_list.txt"
+      - ".github/workflows/render-assets.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: render-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180    # final 2x backgrounds take ~25 min each
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Blender (official build, includes OpenImageDenoise)
+        # Ubuntu's apt Blender is built without the denoiser. Latest 4.5 LTS patch from blender.org.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxrender1 libxxf86vm1 libxfixes3 libxi6 libxkbcommon0 libsm6 libgl1 libegl1
+          BASE=https://download.blender.org/release/Blender4.5/
+          FILE=$(curl -s "$BASE" | grep -o 'blender-4\.5\.[0-9]*-linux-x64\.tar\.xz' | sort -V | tail -n 1)
+          echo "Downloading $FILE"
+          curl -sSL "$BASE$FILE" | tar -xJ -C "$HOME"
+          echo "$HOME/${FILE%.tar.xz}" >> "$GITHUB_PATH"
+
+      - name: Blender version
+        run: blender --version
+
+      - name: Render (scripts listed in assets3d/render_list.txt)
+        # Each script's full output goes to render.log in its output dir, committed even on
+        # failure, so it can be read from the branch (job logs can't be fetched from Claude's sandbox).
+        run: |
+          set -o pipefail
+          grep -v '^[[:space:]]*#' assets3d/render_list.txt | grep -v '^[[:space:]]*$' > /tmp/list.txt
+          while read -r script out extra; do
+            mkdir -p "$out"
+            echo "=== $script -> $out $extra"
+            blender -b --factory-startup -P "$script" --python-exit-code 1 -- --out "$out" $extra < /dev/null 2>&1 | tee "$out/render.log"
+          done < /tmp/list.txt
+
+      - name: Commit renders to this branch
+        if: success() || failure()     # not when cancelled: a newer run replaces this one
+        run: |
+          git config user.name  "render-bot"
+          git config user.email "render-bot@users.noreply.github.com"
+          git add assets3d/renders
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "renders: from ${GITHUB_SHA::7}"
+          git pull --rebase -X theirs origin "${GITHUB_REF_NAME}"   # on a render conflict, this run (newest) wins
+          git push origin "HEAD:${GITHUB_REF_NAME}"

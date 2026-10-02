@@ -15,6 +15,9 @@ name: Build
 on:
   push:
     branches: ["**"]     # a push to a PR branch also updates the PR checks
+    paths-ignore:
+      - "assets3d/**"    # 3D art renders: no plugin code, has its own workflow (render-assets.yml)
+      - ".github/workflows/render-assets.yml"
   workflow_dispatch:     # "Run workflow" button in the Actions tab
 
 concurrency:

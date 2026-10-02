@@ -1,0 +1,19 @@
+# Which scripts the "Render assets" workflow runs: <script> <output dir> [extra args...]
+# Lines starting with # are skipped. Keep only what is being worked on, to save Actions minutes.
+# Drafts: low samples / resolution. Finals: full quality, once.
+
+# knob: abandoned pass approved as draft
+# assets3d/scripts/knob_test.py assets3d/renders/knob_test --samples 32 --res 400
+
+# knob filmstrip: FINAL, 64 positions, 256 px frames (128 px at 1x), 8x8 grid, transparent + shadow
+# (done) assets3d/scripts/knob_test.py assets3d/renders/knob --frames 64 --cols 8 --res 256 --samples 96
+# later, for 127 positions: the in-between frames
+# assets3d/scripts/knob_test.py assets3d/renders/knob --frames 63 --steps 63 --offset 0.5 --cols 8 --res 256 --samples 96
+
+# stage background: FINAL (done, committed), 2x resolution, no preview strings, three lamp levels for the flicker
+# assets3d/scripts/stage.py assets3d/renders/stage --layers background --width 2200 --samples 64
+# assets3d/scripts/stage.py assets3d/renders/stage --layers background --width 2200 --samples 64 --lamp 0.5
+# assets3d/scripts/stage.py assets3d/renders/stage --layers background --width 2200 --samples 64 --lamp 0.15
+
+# controls: plaque buttons (off/hover/on), levers (off/on), quick-mix panel - same sizes as the SVG pack
+assets3d/scripts/controls.py assets3d/renders/controls --samples 64 --only button
