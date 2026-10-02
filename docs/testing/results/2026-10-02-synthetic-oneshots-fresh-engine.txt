@@ -1,0 +1,35 @@
+ONE-SHOTS: packtest/SynthPack
+  found 45 labelled one-shots (skipped: 0 unlabelled, 0 in loop folders, 0 longer than 4 s, 0 unreadable)
+
+  per sound group (3 velocities each)     right    mistaken for
+  clap             5 sounds               53.3%   closed hat 13% misc 33%
+  closed hat       5 sounds              100.0%  
+  crash            5 sounds               40.0%   open hat 60%
+  kick             5 sounds              100.0%  
+  open hat         5 sounds               86.7%   closed hat 13%
+  perc             5 sounds                0.0%   kick 100%
+  ride             5 sounds              100.0%  
+  rimshot          5 sounds              100.0%  
+  snare            5 sounds                0.0%   closed hat 100%
+
+  per pack                               right
+  One Shots                               64.4%  (135 tests)
+
+  hardest sounds (right at 0 of 3 velocities first; up to 25):
+    0/3  clap  packtest/SynthPack/One Shots/Synth Clap 4.wav
+    0/3  crash  packtest/SynthPack/One Shots/Synth Crash 2.wav
+    0/3  crash  packtest/SynthPack/One Shots/Synth Crash 3.wav
+    0/3  crash  packtest/SynthPack/One Shots/Synth Crash 5.wav
+    0/3  perc  packtest/SynthPack/One Shots/Synth Tom 1.wav
+    0/3  perc  packtest/SynthPack/One Shots/Synth Tom 2.wav
+    0/3  perc  packtest/SynthPack/One Shots/Synth Tom 3.wav
+    0/3  perc  packtest/SynthPack/One Shots/Synth Tom 4.wav
+    0/3  perc  packtest/SynthPack/One Shots/Synth Tom 5.wav
+    0/3  snare  packtest/SynthPack/One Shots/Synth Snare 1.wav
+    0/3  snare  packtest/SynthPack/One Shots/Synth Snare 2.wav
+    0/3  snare  packtest/SynthPack/One Shots/Synth Snare 3.wav
+    0/3  snare  packtest/SynthPack/One Shots/Synth Snare 4.wav
+    0/3  snare  packtest/SynthPack/One Shots/Synth Snare 5.wav
+    1/3  clap  packtest/SynthPack/One Shots/Synth Clap 1.wav
+    1/3  clap  packtest/SynthPack/One Shots/Synth Clap 5.wav
+    1/3  open hat  packtest/SynthPack/One Shots/Synth Open Hat 4.wav
