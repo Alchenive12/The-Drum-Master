@@ -9,3 +9,11 @@ out/
 .DS_Store
 __pycache__/
 *.pyc
+
+# testing: never commit sample audio (licences); results go in docs/testing/results as text/CSV
+*.wav
+*.aif
+*.aiff
+*.flac
+*.mp3
+build-bench/

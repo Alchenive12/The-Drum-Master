@@ -1,0 +1,69 @@
+THE DRUM MASTER - offline benchmark (synthetic drums, 48 kHz, sensitivity 50, all types allowed)
+
+1) DETECTION BY GENRE (16 bars each; tolerance +/-25 ms)
+
+ rock (120 bpm, 208 hits)
+  drums alone                onsets found  96.9%  false   0  F1  98.4%  | label is a drum really there  93.5%  | every layered hit typed  55.8%
+                             kick 10% snare 3% closed hat 86% open hat 0% crash 25%
+  in a full mix              onsets found  96.9%  false   5  F1  96.5%  | label is a drum really there  76.6%  | every layered hit typed  45.7%
+                             kick 30% snare 16% closed hat 60% open hat 25% crash 0%
+  full mix, only its kit     onsets found  96.9%  false   5  F1  96.5%  | label is a drum really there  82.3%  | every layered hit typed  49.0%
+                             kick 30% snare 16% closed hat 66% open hat 25% crash 0%
+
+ pop (100 bpm, 370 hits)
+  drums alone                onsets found  87.9%  false   0  F1  93.6%  | label is a drum really there 100.0%  | every layered hit typed  60.8%
+                             kick 8% snare 0% closed hat 80% crash 100% clap 41%
+  in a full mix              onsets found  87.9%  false  47  F1  85.3%  | label is a drum really there  70.7%  | every layered hit typed  43.0%
+                             kick 21% snare 34% closed hat 51% crash 0% clap 25%
+  full mix, only its kit     onsets found  87.9%  false  47  F1  85.3%  | label is a drum really there  71.1%  | every layered hit typed  43.2%
+                             kick 21% snare 34% closed hat 51% crash 0% clap 25%
+
+ edm (128 bpm, 290 hits)
+  drums alone                onsets found  64.8%  false   0  F1  78.7%  | label is a drum really there  89.2%  | every layered hit typed  51.0%
+                             kick 53% closed hat 31% open hat 69% crash 50% clap 91%
+  in a full mix              onsets found  64.8%  false  35  F1  73.5%  | label is a drum really there  83.1%  | every layered hit typed  48.3%
+                             kick 64% closed hat 30% open hat 66% crash 0% clap 56%
+  full mix, only its kit     onsets found  64.8%  false  35  F1  73.5%  | label is a drum really there  83.1%  | every layered hit typed  48.3%
+                             kick 64% closed hat 30% open hat 66% crash 0% clap 56%
+
+ metal (180 bpm, 428 hits)
+  drums alone                onsets found  88.7%  false   4  F1  93.2%  | label is a drum really there  85.5%  | every layered hit typed  45.3%
+                             kick 75% snare 0% crash 0% ride 2% misc 0%
+  in a full mix              onsets found  69.1%  false   9  F1  80.1%  | label is a drum really there  71.2%  | every layered hit typed  29.7%
+                             kick 49% snare 0% crash 0% ride 2% misc 0%
+  full mix, only its kit     onsets found  69.1%  false   9  F1  80.1%  | label is a drum really there  74.0%  | every layered hit typed  30.6%
+                             kick 50% snare 0% crash 0% ride 2% misc 0%
+
+ hip-hop (88 bpm, 232 hits)
+  drums alone                onsets found 100.0%  false   0  F1 100.0%  | label is a drum really there  98.0%  | every layered hit typed  64.2%
+                             kick 35% snare 6% closed hat 88% rimshot 100% clap 62%
+  in a full mix              onsets found 100.0%  false  56  F1  84.5%  | label is a drum really there  78.3%  | every layered hit typed  51.3%
+                             kick 35% snare 3% closed hat 70% rimshot 100% clap 19%
+  full mix, only its kit     onsets found 100.0%  false  56  F1  84.5%  | label is a drum really there  78.3%  | every layered hit typed  51.3%
+                             kick 35% snare 3% closed hat 70% rimshot 100% clap 19%
+
+2) EACH HIT TYPE ALONE (40 hits, velocities 0.3..1.0, 0.45 s apart)
+   type        right    mistaken for (share of all its hits)
+   kick        100.0%  
+   snare         2.5%   closed hat 92% crash 5%
+   closed hat  100.0%  
+   open hat     42.5%   closed hat 58%
+   crash         2.5%   closed hat 10% open hat 10% clap 40% missed 38%
+   ride          2.5%   closed hat 28% rimshot 70%
+   rimshot     100.0%  
+   clap         72.5%   closed hat 22% misc 5%
+   tom           0.0%   kick 100%
+
+3) PERFORMANCE (rock in a full mix, 34 s of audio)
+
+  block 128 samples (2.67 ms budget per block at 48 kHz, stereo)
+    detection + routing only   19.60% of one core  (5x real time)  99% of blocks under 35% of budget, worst 167%
+    + quick mix                22.42% of one core  (4x real time)  99% of blocks under 42% of budget, worst 241%
+    + every drum's effects     24.85% of one core  (4x real time)  99% of blocks under 55% of budget, worst 146%
+    + Puppet Show              23.14% of one core  (4x real time)  99% of blocks under 54% of budget, worst 261%
+
+  block 512 samples (10.67 ms budget per block at 48 kHz, stereo)
+    detection + routing only   20.20% of one core  (5x real time)  99% of blocks under 37% of budget, worst 54%
+    + quick mix                22.96% of one core  (4x real time)  99% of blocks under 40% of budget, worst 71%
+    + every drum's effects     23.59% of one core  (4x real time)  99% of blocks under 46% of budget, worst 108%
+    + Puppet Show              24.30% of one core  (4x real time)  99% of blocks under 46% of budget, worst 64%

@@ -85,3 +85,12 @@ if(PLUGIN_DSP_TESTS)
         endif()
     endforeach()
 endif()
+
+# ---- Benchmark tool (not built by default; docs/07-home-test-plan.md) ------------
+option(PLUGIN_DSP_BENCH "Build dsp/tools/bench.cpp (detection + performance benchmark)" OFF)
+if(PLUGIN_DSP_BENCH)
+    add_executable(drum_bench "${CMAKE_CURRENT_SOURCE_DIR}/tools/bench.cpp")
+    target_include_directories(drum_bench PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests" "${CMAKE_CURRENT_SOURCE_DIR}/tools")
+    target_link_libraries(drum_bench PRIVATE plugin_dsp)
+    target_compile_features(drum_bench PRIVATE cxx_std_17)
+endif()
