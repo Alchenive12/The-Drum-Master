@@ -340,7 +340,7 @@ public:
             const auto label = s.pending ? juce::String ("CHOOSE") : typeTitle (s.type);
             g.setFont (caps (9.5f, 0.2f));
             g.setColour ((hot || s.jerk > 0.3f ? col : colours::boneDim).withMultipliedAlpha (s.drop));
-            g.drawText (label, juce::Rectangle<float> (x - 60.0f, y + 38.0f, 120.0f, 14.0f), juce::Justification::centred, false);
+            g.drawText (label, juce::Rectangle<float> (x - tie.dx - 60.0f, y + 38.0f, 120.0f, 14.0f), juce::Justification::centred, false);   // under the hanging drum
         }
         if (model.slots.empty())
         {
