@@ -88,8 +88,9 @@ def augment(X, rng):
     for _ in range(2):
         c = rng.uniform(-1, 1, (n, 1)); w = rng.uniform(0.1, 0.4, (n, 1)); g = rng.uniform(-6, 6, (n, 1))
         curve += g * np.exp(-0.5 * ((m - c) / w) ** 2)
-    rel = X[:, :-1].reshape(n, SEGS, MELS) + curve[:, None, :]
-    shift = rel[:, 1:, :].reshape(n, -1).max(1)
+    segs = (X.shape[1] - 1) // MELS                      # 7, or more with a longer listening window
+    rel = X[:, :-1].reshape(n, segs, MELS) + curve[:, None, :]
+    shift = rel[:, 1:SEGS, :].reshape(n, -1).max(1)     # level reference: the original 0-40 ms segments
     out = np.empty_like(X)
     out[:, :-1] = np.maximum(rel - shift[:, None, None], -80.0).reshape(n, -1)
     out[:, -1] = X[:, -1] + shift + rng.uniform(-12, 6, n)
@@ -175,7 +176,7 @@ def train(P0, Xtr, ytr, wtr, Xva, va_fn, rng, epochs=40, lam=float(arg('--lam', 
 def main():
     W, old_h, out_h = sys.argv[1], sys.argv[2], sys.argv[3]
     name = arg("--name", "full")
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(int(arg("--seed", "0")))
     P0 = load_header(old_h)
     widen = int(arg("--widen", "0"))
     if widen:   # extra hidden units: random inputs, zero outputs, so the network starts out unchanged
@@ -186,14 +187,22 @@ def main():
 
     items = [l.rstrip("\n").split("\t") for l in open(f"{W}/list.tsv", encoding="utf-8", errors="surrogateescape")]
     pack = np.array([it[1] for it in items]); group = np.array([it[2] for it in items]); typ = np.array([int(it[3]) for it in items])
-    os_rows = np.vstack([read_csv(f) for f in sorted(glob.glob(f"{W}/feat/os_*.csv"))])
-    mix_rows = np.vstack([read_csv(f) for f in sorted(glob.glob(f"{W}/feat/mix_*.csv"))])
+    FD = arg("--feat", "feat"); SX = arg("--sets-suffix", "")
+    os_rows = np.vstack([read_csv(f) for f in sorted(glob.glob(f"{W}/{FD}/os_*.csv"))])
+    mix_rows = np.vstack([read_csv(f) for f in sorted(glob.glob(f"{W}/{FD}/mix_*.csv"))])
     idx = os_rows[:, 0].astype(int); det = os_rows[:, 3].astype(int); y_os = os_rows[:, 4:13].astype(np.int8); X_os = os_rows[:, 13:]
     keep = os_rows[:, 2] > 0                                                   # drop unreadable files
     idx, det, y_os, X_os = idx[keep], det[keep], y_os[keep], X_os[keep]
     g_os = group[idx]; t_os = typ[idx]; p_os = pack[idx]
-    bfiles = sorted(glob.glob(f"{W}/feat/beat_*.csv"))
-    bt_rows = np.vstack([read_csv(f) for f in bfiles]) if bfiles else np.zeros((0, 238))
+    extra_in = X_os.shape[1] - len(P0["mean"])
+    if extra_in > 0:   # longer listening window: new feature blocks start with zero weight (net unchanged)
+        ref = X_os[det == 1]; at = len(P0["mean"]) - 1                       # insert before the level feature
+        P0["mean"] = np.concatenate([P0["mean"][:at], ref[:, at:at + extra_in].mean(0), P0["mean"][at:]])
+        P0["scale"] = np.concatenate([P0["scale"][:at], 1.0 / (ref[:, at:at + extra_in].std(0) + 1e-3), P0["scale"][at:]])
+        P0["w1"] = np.vstack([P0["w1"][:at], np.zeros((extra_in, P0["w1"].shape[1])), P0["w1"][at:]])
+        print(f"   listening window: {extra_in} extra features (zero-initialised)")
+    bfiles = sorted(glob.glob(f"{W}/{FD}/beat_*.csv"))
+    bt_rows = np.vstack([read_csv(f) for f in bfiles]) if bfiles else np.zeros((0, os_rows.shape[1]))
     bi, y_bt, X_bt = bt_rows[:, 0].astype(int), bt_rows[:, 4:13].astype(np.int8), bt_rows[:, 13:]
     mi, mj, mdet, y_mx, X_mx = mix_rows[:, 0].astype(int), mix_rows[:, 1].astype(int), mix_rows[:, 3].astype(int), mix_rows[:, 4:13].astype(np.int8), mix_rows[:, 13:]
 
@@ -219,9 +228,9 @@ def main():
         is_va = ~is_test
     is_fit = is_train & ~is_va & (det == 1)
 
-    Xs, ys = load_set(f"{W}/X_syn.csv")
-    (gaX, gay), (raX, ray) = halves(*load_set(f"{W}/X_ac.csv", True))
-    (geX, gey), (reX, rey) = halves(*load_set(f"{W}/X_el.csv", True))
+    Xs, ys = load_set(f"{W}/X_syn{SX}.csv")
+    (gaX, gay), (raX, ray) = halves(*load_set(f"{W}/X_ac{SX}.csv", True))
+    (geX, gey), (reX, rey) = halves(*load_set(f"{W}/X_el{SX}.csv", True))
     guard_sets = lambda P: np.array([np.nanmean(f1_report(P, gaX, gay)), np.nanmean(f1_report(P, geX, gey))])
     g0 = guard_sets(P0)
     guard0 = 0.0

@@ -168,3 +168,29 @@ first trained on (Groove / E-GMD) can't be downloaded on the PC to rehearse with
 
 **Next:** load it in FL Studio on real loops (EDM claps, live acoustic loops, hats); if acoustic
 material matters, fetch E-GMD at home (Claude Code) and retrain with it as rehearsal.
+
+## 8. Does a longer listening window help? (40 vs 50 vs 60 ms)
+
+The classifier hears each hit from 25 ms before to **40 ms after** it, inside the plugin's 50 ms
+latency. A 50 ms window would need about 60 ms latency, and a 60 ms window about 70 ms, keeping the same
+10 ms margin. Test: `research/snare-train/HitFeatures_window.h`, a research copy of
+`HitFeatures.h` with 1 or 2 extra 10 ms segments (40-50, 50-60 ms). The first 224 features are
+bit-identical to the plugin's, and the new ones start with zero weight, so every variant starts from the
+shipped network. Same data (same one-shots, mixes and beats, same seeds), same FULL v2 recipe;
+4 pack folds x **3 training seeds** each, because one seed alone moves single-snare scores by up to 5 points.
+
+| Window (latency) | Single snares | Snares in beats | False snares | All one-shots | Closed hat | Clap | MDB acoustic | Electronic loops |
+|---|---|---|---|---|---|---|---|---|
+| 40 ms (50 ms) | 71.7 ± 2.5% | 47.8 ± 1.4% | 1.6% | 61.4% | 64.1% | 53.1% | 0.358 | 0.369 |
+| 50 ms (60 ms) | 71.3 ± 2.6% | 49.4 ± 0.7% | 1.5% | 62.6% | 68.8% | 57.5% | 0.367 | 0.379 |
+| 60 ms (70 ms) | 72.0 ± 0.3% | 51.6 ± 1.5% | 1.5% | 63.2% | 74.2% | 56.8% | 0.387 | 0.383 |
+
+- **Single snares: no difference** (within the seed noise). What makes a snare a snare is in the first 40 ms.
+- **Snares inside beats: +4 points at 60 ms.** A little extra tail helps tell a snare from what's around it.
+- **Hats gain the most** (+10 points at 60 ms), and claps +4. **Live acoustic loops recover part of
+  their loss** (MDB 0.358 -> 0.387), matching research/lookahead-test (acoustic cymbals keep
+  improving past 40 ms; electronic drums level off at 40-50 ms).
+- **Cost:** 20 ms more plugin latency. FL compensates it on playback, but it's felt when monitoring or
+  recording live through the plugin. CPU barely changes (64 more inputs per hit).
+- Not applied to the plugin: it needs `DrumEngine::lookaheadSeconds` 0.050 -> 0.070 and the extra
+  segments in `HitFeatures.h`, and retraining with them. Owner's call.
