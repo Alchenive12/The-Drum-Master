@@ -59,8 +59,13 @@ def primary(p):
 
 # ------------------------------------------------------------------ data
 def read_csv(path):
+    cache = path + ".npy"
+    if os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(path):
+        return np.load(cache)
     with open(path) as f: ncol = len(f.readline().split(","))
-    return np.loadtxt(path, delimiter=",", skiprows=1, ndmin=2, dtype=np.float64, usecols=range(ncol))
+    d = np.loadtxt(path, delimiter=",", skiprows=1, ndmin=2, dtype=np.float64, usecols=range(ncol))
+    np.save(cache, d)
+    return d
 
 def load_set(path, with_files=False):
     """extract.cpp CSV: file, onset, 9 labels, 225 features -> X, y (, file per row)"""
@@ -110,6 +115,21 @@ def f1_report(P, X, y):
         f1.append(2 * tp / max(1, 2 * tp + fp + fn))
     return np.array(f1)
 
+def beat_score(P, X, y):
+    """Plugin decision on onsets inside beats. score = mean of the per-class rates, minus false snares."""
+    pr = primary(forward(P, X)); n = y.sum(1)
+    snare = y[:, 1] == 1
+    clap = (y[:, 7] == 1) & ~snare
+    hat = (y[:, 2] == 1) & (n == 1)
+    kick = (y[:, 0] == 1) & (n == 1)
+    nons = (n >= 1) & (y[:, 1] == 0) & (y[:, 6] == 0) & (y[:, 7] == 0)
+    r = lambda m, ok: float(ok[m].mean() * 100) if m.sum() else float("nan")
+    out = {"snare": r(snare, pr == 1), "clap": r(clap, pr == 7), "hat": r(hat, pr == 2), "kick": r(kick, pr == 0),
+           "false_snare": r(nons, pr == 1)}
+    vals = [out[k] for k in ("snare", "clap", "hat", "kick") if not np.isnan(out[k])]
+    out["score"] = (np.mean(vals) - 2 * np.nan_to_num(out["false_snare"])) / 100
+    return out
+
 # ------------------------------------------------------------------ training
 def train(P0, Xtr, ytr, wtr, Xva, va_fn, rng, epochs=40, lam=float(arg('--lam', '3e-3')), lr=float(arg('--lr', '3e-4')), batch=256):
     P = {k: v.copy() for k, v in P0.items()}
@@ -157,6 +177,12 @@ def main():
     name = arg("--name", "full")
     rng = np.random.default_rng(0)
     P0 = load_header(old_h)
+    widen = int(arg("--widen", "0"))
+    if widen:   # extra hidden units: random inputs, zero outputs, so the network starts out unchanged
+        r = np.random.default_rng(7)
+        P0["w1"] = np.hstack([P0["w1"], r.normal(0, 0.05, (P0["w1"].shape[0], widen))])
+        P0["b1"] = np.concatenate([P0["b1"], np.zeros(widen)])
+        P0["w2"] = np.vstack([P0["w2"], np.zeros((widen, P0["w2"].shape[1]))])
 
     items = [l.rstrip("\n").split("\t") for l in open(f"{W}/list.tsv", encoding="utf-8", errors="surrogateescape")]
     pack = np.array([it[1] for it in items]); group = np.array([it[2] for it in items]); typ = np.array([int(it[3]) for it in items])
@@ -166,6 +192,9 @@ def main():
     keep = os_rows[:, 2] > 0                                                   # drop unreadable files
     idx, det, y_os, X_os = idx[keep], det[keep], y_os[keep], X_os[keep]
     g_os = group[idx]; t_os = typ[idx]; p_os = pack[idx]
+    bfiles = sorted(glob.glob(f"{W}/feat/beat_*.csv"))
+    bt_rows = np.vstack([read_csv(f) for f in bfiles]) if bfiles else np.zeros((0, 238))
+    bi, y_bt, X_bt = bt_rows[:, 0].astype(int), bt_rows[:, 4:13].astype(np.int8), bt_rows[:, 13:]
     mi, mj, mdet, y_mx, X_mx = mix_rows[:, 0].astype(int), mix_rows[:, 1].astype(int), mix_rows[:, 3].astype(int), mix_rows[:, 4:13].astype(np.int8), mix_rows[:, 13:]
 
     test_packs = set(arg("--test-packs", "").split(";")) - {""}
@@ -174,6 +203,10 @@ def main():
     is_test = np.array([p in test_packs for p in p_os]); is_train = np.array([p in train_packs for p in p_os])
     mx_test = np.array([pack[a] in test_packs and pack[b] in test_packs for a, b in zip(mi, mj)])
     mx_train = np.array([pack[a] in train_packs and pack[b] in train_packs for a, b in zip(mi, mj)])
+    bt_test = np.array([pack[a] in test_packs for a in bi], dtype=bool)
+    bt_train = np.array([pack[a] in train_packs for a in bi], dtype=bool)
+    bt_va = bt_train & (bi % 8 == 0)                       # 1 kit in 8 checks training (validation)
+    bt_fit = bt_train & ~bt_va
     print(f"== {name}: {len(train_packs)} training packs, {len(test_packs)} test packs")
     print("   training packs:", "; ".join(sorted(train_packs)) or "(none)")
     print("   test packs:    ", "; ".join(sorted(test_packs)))
@@ -189,10 +222,12 @@ def main():
     Xs, ys = load_set(f"{W}/X_syn.csv")
     (gaX, gay), (raX, ray) = halves(*load_set(f"{W}/X_ac.csv", True))
     (geX, gey), (reX, rey) = halves(*load_set(f"{W}/X_el.csv", True))
-    guard = lambda P: (np.nanmean(f1_report(P, gaX, gay)) + np.nanmean(f1_report(P, geX, gey))) / 2
-    guard0 = guard(P0)
-    parts_X = [X_os[is_fit], X_mx[mx_train & (mdet == 1)], Xs]
-    parts_y = [y_os[is_fit], y_mx[mx_train & (mdet == 1)], ys]
+    guard_sets = lambda P: np.array([np.nanmean(f1_report(P, gaX, gay)), np.nanmean(f1_report(P, geX, gey))])
+    g0 = guard_sets(P0)
+    guard0 = 0.0
+    guard = lambda P: float(np.minimum(0.0, guard_sets(P) - g0).sum())   # each loop set on its own may not get worse
+    parts_X = [X_os[is_fit], X_mx[mx_train & (mdet == 1)], X_bt[bt_fit], Xs]
+    parts_y = [y_os[is_fit], y_mx[mx_train & (mdet == 1)], y_bt[bt_fit], ys]
     extra = arg("--extra-train")
     if extra:
         Xe_, ye_ = load_set(extra); parts_X.append(Xe_); parts_y.append(ye_)
@@ -212,6 +247,8 @@ def main():
         if sel.sum():
             pr = primary(forward(P, X_os[sel])); ok = (pr == t_os[sel]) & (det[sel] == 1)
             acc = float(np.mean([ok[t_os[sel] == t].mean() for t in np.unique(t_os[sel])]))
+        if bt_va.sum() and float(arg("--beat-weight", "1")) > 0:
+            acc = (acc + float(arg("--beat-weight", "1")) * beat_score(P, X_bt[bt_va], y_bt[bt_va])["score"]) / (1 + float(arg("--beat-weight", "1")))
         drop = min(0.0, guard(P) - guard0 + float(arg('--slack', '0.0')))   # real loops may not get worse
         return acc + float(arg('--guard-weight', '10')) * drop
 
@@ -221,6 +258,8 @@ def main():
 
     # ---------------- results
     res = []
+    if not test_packs:   # final model on every pack: nothing left to test on but the real loops
+        is_test = is_va.copy(); test_packs = {"(validation sounds from the training packs)"}
     old, _ = oneshot_table("old", P0, X_os, det, t_os, g_os, is_test)
     new, _ = oneshot_table("new", P, X_os, det, t_os, g_os, is_test)
     res.append(f"ONE-SHOTS FROM PACKS IT NEVER TRAINED ON ({', '.join(sorted(test_packs))})")
@@ -233,6 +272,13 @@ def main():
         pr = primary(forward(PP, X_os[sn]))
         c = {TYPES[k]: int((pr == k).sum()) for k in range(9) if (pr == k).sum() > 0}
         res.append(f"   snares were labelled ({label}): {c}")
+    if bt_test.sum() or not arg("--test-packs"):
+        bsel = bt_test if bt_test.sum() else bt_va
+        res.append(f"BEATS BUILT FROM {'THE TEST PACKS' if bt_test.sum() else 'VALIDATION KITS'} (2-bar beats, every onset; plugin decision rule)")
+        for label, PP in (("old", P0), ("new", P)):
+            b = beat_score(PP, X_bt[bsel], y_bt[bsel])
+            res.append(f"   {label}: snare hits called snare {b['snare']:.1f}% | clap {b['clap']:.1f}% | hat-only onsets called hat {b['hat']:.1f}% | "
+                       f"kick-only called kick {b['kick']:.1f}% | NON-snare onsets called snare {b['false_snare']:.1f}%  ({int(bsel.sum())} onsets)")
     sel = mx_test & (mdet == 1)
     if sel.sum():
         for label, PP in (("old", P0), ("new", P)):
@@ -255,8 +301,9 @@ def main():
         f"Variant: {name.upper()}. Fine-tuned from the Groove / E-GMD weights (CC BY 4.0, Magenta) with research/snare-train.",
         "Fine-tuning data: " + ("; ".join(sorted(train_packs)) if train_packs else "none from sample packs") + " + own synthetic loops"
         + (" + " + os.path.basename(extra) if extra else "") + ".",
-        f"Held-out sample packs: snare {snare_old:.0f}% -> {snare_new:.0f}%, all types {old['ALL'][0]:.0f}% -> {new['ALL'][0]:.0f}% (one-shots, 3 velocities).",
+        f"Test set ({'; '.join(sorted(test_packs))[:120]}): snare {snare_old:.0f}% -> {snare_new:.0f}%, all types {old['ALL'][0]:.0f}% -> {new['ALL'][0]:.0f}% (one-shots, 3 velocities).",
     ]
+    if arg("--note"): comments.append(arg("--note"))
     if name == "full":
         comments.append("FULL variant: trained on commercial sample packs - for personal use, not for release (see docs/08).")
     write_header(out_h, P, comments)

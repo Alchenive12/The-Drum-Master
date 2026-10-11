@@ -48,7 +48,7 @@ Two variants, as agreed:
 | **FULL** | All the other packs on the PC (incl. KSHMR, Splice, commercial packs) + synthetic | Personal use only: the pack licences (Splice explicitly) don't allow AI training |
 | **CLEAN** | Only our own generated audio: 600 new synthetic snares (808, 909, acoustic, layered) + other synthetic one-shots + the synthetic loops. Packs only chose the epoch | Can ship |
 
-MHA is in neither training set yet: waiting for the author's written OK.
+MHA: the FULL variant trained on MHA Ascend (MHA Atmos was a test pack); CLEAN uses no MHA sounds.
 
 ## 4. Results
 
@@ -114,3 +114,57 @@ python3 research/snare-train/train_snare.py . <shipped header> <out.h> --name fu
 python3 research/snare-train/train_snare.py . <shipped header> <out.h> --name clean --train-packs "" \
     --test-packs "<packs>" --extra-train X_snsyn.csv --lam 1e-2 --synth-weight 0.3 --boost 2:2,5:2
 ```
+
+## 7. FULL v2: tuned with cross-checks and beats (same evening)
+
+The owner chose to continue with the FULL variant only.
+
+**Problem found in v1:** trained on isolated sounds, it called many **hats inside loops "snare"**
+(electronic loops: snare precision 0.41 -> 0.25, 415 hats taken for snares).
+
+**Changes:**
+- `oneshot_extract beat`: 4,800 two-bar beats built from one pack's sounds at a time (kick, snare
+  or clap, hats, sometimes open hat, ride, crash, rim, percussion, ghost notes, stacked claps), about
+  100,000 labelled onsets. This is the context isolated one-shots lack: hats between and under
+  snares, snare tails over hats.
+- 3,600 layered snare/clap/rim-over-kick/hat hits (was 1,450).
+- Wider hidden layer (96 -> 224 units; the extra units start silent, so training starts from the
+  shipped network). Inference stays tiny: about 52k multiply-adds per hit.
+- Settings picked by **cross-checking**: 4 groups of packs held out in turn (1: MHA Atmos, Sickrate I,
+  Cymatics, Splice2, SLCTD, Aneraxx, Splice; 2: KSHMR; 3: Future bass-pop + Trap-hiphop; 4: the rest).
+
+**Cross-check result (packs never trained on, all 4 groups together):**
+
+| | Shipped | FULL v2 settings |
+|---|---|---|
+| One-shot snares | 37% | **74%** (71 / 70 / 73 / 83 per group) |
+| Snares inside beats | 28% | **49%** |
+| Non-snare hits in beats called snare | 2.5% | **1.5%** |
+| All one-shot types | 45% | 62% |
+| Closed hat / open hat / clap (one-shots) | 43 / 21 / 34% | 62 / 37 / 55% |
+| Ride / rimshot (one-shots) | 1 / 22% | 20 / 20% |
+
+The final FULL v2 was then trained on **every** pack with those settings
+(`HitClassifierWeights_full_v2.h`, PC work folder only).
+
+**Real loops (per-type F1, report half):**
+
+| | Shipped | FULL v2 |
+|---|---|---|
+| Electronic loops: snare / closed hat / clap | 0.53 / 0.58 / 0.31 | **0.64 / 0.68 / 0.51** |
+| Electronic loops: macro | 0.31 | **0.39** |
+| MDB acoustic (live drummer): snare / closed hat / kick | 0.72 / 0.47 / 0.82 | 0.61 / 0.35 / 0.73 |
+| MDB acoustic: macro | 0.44 | 0.37 |
+
+**Synthetic benchmark through the whole engine** ("label is a drum really there", full mix): rock
+76.6 -> 98.4, pop 70.7 -> 99.1, hip-hop 78.3 -> 94.7, metal 71.2 -> 66.1, **EDM 83.1 -> 55.4** (the
+synthetic clap is now taken for something else; real claps improved, 0.31 -> 0.51 in electronic
+loops, so check EDM claps by ear). Onsets found and false hits are unchanged.
+
+**Trade-off:** big gains on producer-style drums (packs, drum machines, electronic loops); **live
+acoustic drum recordings get worse** (MDB macro 0.44 -> 0.37). Guarding MDB strictly stopped the
+training from learning anything (snare 37% -> 40%), because the acoustic data the network was
+first trained on (Groove / E-GMD) can't be downloaded on the PC to rehearse with.
+
+**Next:** load it in FL Studio on real loops (EDM claps, live acoustic loops, hats); if acoustic
+material matters, fetch E-GMD at home (Claude Code) and retrain with it as rehearsal.
