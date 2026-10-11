@@ -59,11 +59,15 @@ def primary(p):
 
 # ------------------------------------------------------------------ data
 def read_csv(path):
-    cache = path + ".npy"
+    cache = path + ".f32.npy"                                  # float32: halves memory (features have 2 decimals)
     if os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(path):
         return np.load(cache)
-    with open(path) as f: ncol = len(f.readline().split(","))
-    d = np.loadtxt(path, delimiter=",", skiprows=1, ndmin=2, dtype=np.float64, usecols=range(ncol))
+    old = path + ".npy"
+    if os.path.exists(old) and os.path.getmtime(old) >= os.path.getmtime(path):
+        d = np.load(old).astype(np.float32)
+    else:
+        with open(path) as f: ncol = len(f.readline().split(","))
+        d = np.loadtxt(path, delimiter=",", skiprows=1, ndmin=2, dtype=np.float32, usecols=range(ncol))
     np.save(cache, d)
     return d
 
@@ -73,6 +77,10 @@ def cut(X):
     if k is None: return X
     keep = 224 + 32 * int(k)
     return np.hstack([X[:, :keep], X[:, -1:]]) if X.shape[1] - 1 > keep else X
+
+def cut_rows(R):
+    """cut() for raw oneshot_extract rows (13 leading columns), applied per file to save memory."""
+    return np.hstack([R[:, :13], cut(R[:, 13:])]) if arg("--use-extra") is not None else R
 
 def load_set(path, with_files=False):
     """extract.cpp CSV: file, onset, 9 labels, 225 features -> X, y (, file per row)"""
@@ -209,8 +217,8 @@ def main():
         P0["w1"] = np.vstack([P0["w1"][:at], np.zeros((extra_in, P0["w1"].shape[1])), P0["w1"][at:]])
         print(f"   listening window: {extra_in} extra features (zero-initialised)")
     bfiles = sorted(glob.glob(f"{W}/{FD}/beat_*.csv"))
-    bt_rows = np.vstack([read_csv(f) for f in bfiles]) if bfiles else np.zeros((0, os_rows.shape[1]))
-    bi, y_bt, X_bt = bt_rows[:, 0].astype(int), bt_rows[:, 4:13].astype(np.int8), cut(bt_rows[:, 13:])
+    bt_rows = np.vstack([cut_rows(read_csv(f)) for f in bfiles]) if bfiles else np.zeros((0, os_rows.shape[1]), np.float32)
+    bi, y_bt, X_bt = bt_rows[:, 0].astype(int), bt_rows[:, 4:13].astype(np.int8), bt_rows[:, 13:]
     mi, mj, mdet, y_mx, X_mx = mix_rows[:, 0].astype(int), mix_rows[:, 1].astype(int), mix_rows[:, 3].astype(int), mix_rows[:, 4:13].astype(np.int8), cut(mix_rows[:, 13:])
 
     test_packs = set(arg("--test-packs", "").split(";")) - {""}

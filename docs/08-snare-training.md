@@ -221,3 +221,44 @@ Seed spread: about ±1-2.5 points on snares, ±1-5 on cymbals (`results/window-5
 small network per step (each trained like above, about 50-90k weights, swapped when the step changes),
 `DrumEngine` lookahead and the reported latency follow the step (change it while stopped: the host
 has to re-align the track), and `HitFeatures` takes the matching number of segments.
+
+## 10. The detector now in the plugin (12 October 2026, overnight run)
+
+Trained on **every sample pack on the PC** the owner owns: the earlier folders plus FL Studio's own
+drum packs (Packs/Drums, Packs/Legacy: Ogg-in-WAV files, decoded on the PC first), DABRO Future
+Bass Vol. 2 and Drum Stems. Folders that look like pirated or torrented releases were left out.
+6,841 labelled sounds (1,171 snares, 938 claps, 682 closed hats, 469 open hats, 355 rides, 150 rims,
+1,345 kicks, 411 808s, 479 crashes, 841 percussion), 4,900 layered hits and 218,000 onsets from 9,600
+two-bar beats. Same 40 ms window as before, so it drops straight into the plugin (50 ms latency).
+
+**It replaces `dsp/include/plugin_dsp/HitClassifierWeights.h`** (225 -> 224 -> 9 network; the
+previous one was 225 -> 96 -> 9). FULL variant: trained on commercial packs, for personal use.
+
+Cross-check before the final training (5 pack groups held out in turn; group 5 = FL Studio's drums,
+DABRO, Drum Stems): one-shot snares 43% -> 71%, snares inside beats 27% -> 47%, false snares in
+beats 2.4% -> 1.3%. FL Studio's own snares were already 58% with the shipped network and reached
+60% when held out. They're mostly acoustic-style kits, the material this training helps least.
+
+Final model (validation sounds and kits from the training packs):
+
+| | Shipped | Now in the plugin |
+|---|---|---|
+| Snare one-shots | 43% | 75% |
+| Clap / closed hat / open hat one-shots | 38 / 36 / 9% | 64 / 72 / 51% |
+| Snares inside beats | 26% | 53% |
+| Hats inside beats called hat | 46% | 95% |
+| Non-snare hits in beats called snare | 2.8% | 0.8% |
+| Electronic loops (macro F1) | 0.31 | 0.38 (snare 0.53 -> 0.65, hats 0.58 -> 0.70) |
+| MDB live acoustic loops (macro F1) | 0.44 | **0.33** (snare 0.72 -> 0.59, hats 0.47 -> 0.36) |
+
+`drum_bench` (synthetic): "label is a drum really there", full mix: rock 76.6 -> 100, pop 70.7 ->
+98.7, hip-hop 78.3 -> 92.1, metal 71.2 -> 77.4, **EDM 83.1 -> 51.8** (its synthetic claps now read as
+hats/misc). Synthetic snare alone 2.5% -> 82.5%. Onsets and false hits unchanged; CPU about the same
+(22-27% of a cloud core vs 20-25%, within that machine's noise).
+
+`test_hit_classifier`: the isolated synthetic-kit threshold went from 60% to 55%. The new network
+gets the synthetic snare right but not the synthetic clap and ride (16 / 27 at 48 kHz). All 12 DSP tests pass.
+
+**Listen for in FL Studio:** EDM claps, live acoustic drum loops (worse), and whether snares and hats
+are now separated on your own beats. The shipped weights are in git history (main) if you need to
+go back.
