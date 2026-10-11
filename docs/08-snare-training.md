@@ -194,3 +194,30 @@ shipped network. Same data (same one-shots, mixes and beats, same seeds), same F
   recording live through the plugin. CPU barely changes (64 more inputs per hit).
 - Not applied to the plugin: it needs `DrumEngine::lookaheadSeconds` 0.050 -> 0.070 and the extra
   segments in `HitFeatures.h`, and retraining with them. Owner's call.
+
+## 9. The whole curve: 50 to 100 ms latency
+
+Same test extended to listening windows of 70, 80 and 90 ms (latency 80, 90, 100 ms). One extraction
+at 90 ms gives every shorter window by dropping the trailing segments; checked bit-identical with
+the 60 ms extraction. 4 pack folds x 3 seeds each.
+
+| Latency | Single snares | Snares in beats | False snares | All one-shots | Closed hat | Open hat | Clap | Crash | Ride | MDB acoustic | Electronic loops |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 50 ms (now) | 71.7% | 47.8% | 1.6% | 61.4% | 64.1% | 30.4% | 53.1% | 35.6% | 18.3% | 0.358 | 0.369 |
+| 60 ms | 71.3% | 49.4% | 1.5% | 62.6% | 68.8% | 31.2% | 57.5% | 41.2% | 20.7% | 0.367 | 0.379 |
+| 70 ms | 72.0% | 51.6% | 1.5% | 63.2% | 74.2% | 33.6% | 56.8% | 37.1% | 22.3% | 0.387 | 0.383 |
+| 80 ms | 71.0% | 52.4% | 1.6% | 64.0% | 76.5% | 35.6% | 58.6% | 45.4% | 25.3% | 0.392 | 0.395 |
+| 90 ms | 72.9% | 50.1% | 1.4% | 65.4% | 78.2% | 38.2% | 58.5% | 50.6% | 27.6% | 0.398 | 0.398 |
+| 100 ms | 74.1% | 53.2% | 1.4% | 65.8% | 77.4% | 40.2% | 59.8% | 50.0% | 26.0% | 0.404 | 0.403 |
+
+Seed spread: about ±1-2.5 points on snares, ±1-5 on cymbals (`results/window-50-to-100ms.txt`).
+
+- Snares barely move: single snares +2 points at 100 ms, snares inside beats +5.
+- The longer window mostly helps everything else: hats +13, open hats +10, crash +14, ride +8, claps +7;
+  live acoustic loops 0.358 -> 0.404 (shipped network: 0.44), electronic loops 0.369 -> 0.403.
+- Most of the gain is in by 80 ms. 80 -> 100 ms mainly helps cymbals (open hat, crash).
+
+**A latency selector in the plugin** (proposal, not built): steps 50 / 60 / 70 / 80 / 100 ms, one
+small network per step (each trained like above, about 50-90k weights, swapped when the step changes),
+`DrumEngine` lookahead and the reported latency follow the step (change it while stopped: the host
+has to re-align the track), and `HitFeatures` takes the matching number of segments.

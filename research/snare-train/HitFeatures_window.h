@@ -29,7 +29,7 @@ class HitFeatures
 public:
     static constexpr std::size_t numMels = 32;
 #ifndef PLUGIN_DSP_EXTRA_SEGMENTS
-#define PLUGIN_DSP_EXTRA_SEGMENTS 0   // research: 1 = also 40-50 ms, 2 = also 40-50 and 50-60 ms
+#define PLUGIN_DSP_EXTRA_SEGMENTS 0   // research: k extra 10 ms segments after 40 ms (window 40 + 10k ms, k <= 5)
 #endif
     static constexpr std::size_t baseSegments = 7;
     static constexpr std::size_t numSegments = baseSegments + PLUGIN_DSP_EXTRA_SEGMENTS;
@@ -38,8 +38,14 @@ public:
     static constexpr std::array<double, numSegments + 1> segmentEdgesMs { -25, 0, 5, 10, 15, 20, 30, 40 };
 #elif PLUGIN_DSP_EXTRA_SEGMENTS == 1
     static constexpr std::array<double, numSegments + 1> segmentEdgesMs { -25, 0, 5, 10, 15, 20, 30, 40, 50 };
-#else
+#elif PLUGIN_DSP_EXTRA_SEGMENTS == 2
     static constexpr std::array<double, numSegments + 1> segmentEdgesMs { -25, 0, 5, 10, 15, 20, 30, 40, 50, 60 };
+#elif PLUGIN_DSP_EXTRA_SEGMENTS == 3
+    static constexpr std::array<double, numSegments + 1> segmentEdgesMs { -25, 0, 5, 10, 15, 20, 30, 40, 50, 60, 70 };
+#elif PLUGIN_DSP_EXTRA_SEGMENTS == 4
+    static constexpr std::array<double, numSegments + 1> segmentEdgesMs { -25, 0, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80 };
+#else
+    static constexpr std::array<double, numSegments + 1> segmentEdgesMs { -25, 0, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90 };
 #endif
 
     using Vector = std::array<float, numFeatures>;

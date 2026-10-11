@@ -67,13 +67,20 @@ def read_csv(path):
     np.save(cache, d)
     return d
 
+def cut(X):
+    """--use-extra k: keep the first k extra 10 ms segments of longer-window features (k=0: the plugin's 40 ms)."""
+    k = arg("--use-extra")
+    if k is None: return X
+    keep = 224 + 32 * int(k)
+    return np.hstack([X[:, :keep], X[:, -1:]]) if X.shape[1] - 1 > keep else X
+
 def load_set(path, with_files=False):
     """extract.cpp CSV: file, onset, 9 labels, 225 features -> X, y (, file per row)"""
     with open(path) as f:
         ncol = len(f.readline().split(","))
         files = np.array([line.split(",", 1)[0] for line in f])
     d = np.loadtxt(path, delimiter=",", skiprows=1, usecols=range(2, ncol), dtype=np.float64, ndmin=2)
-    return (d[:, 9:], d[:, :9].astype(np.int8), files) if with_files else (d[:, 9:], d[:, :9].astype(np.int8))
+    return (cut(d[:, 9:]), d[:, :9].astype(np.int8), files) if with_files else (cut(d[:, 9:]), d[:, :9].astype(np.int8))
 
 def halves(X, y, files):
     """Split a loop set by track: first half guards training (model selection), second half reports."""
@@ -190,7 +197,7 @@ def main():
     FD = arg("--feat", "feat"); SX = arg("--sets-suffix", "")
     os_rows = np.vstack([read_csv(f) for f in sorted(glob.glob(f"{W}/{FD}/os_*.csv"))])
     mix_rows = np.vstack([read_csv(f) for f in sorted(glob.glob(f"{W}/{FD}/mix_*.csv"))])
-    idx = os_rows[:, 0].astype(int); det = os_rows[:, 3].astype(int); y_os = os_rows[:, 4:13].astype(np.int8); X_os = os_rows[:, 13:]
+    idx = os_rows[:, 0].astype(int); det = os_rows[:, 3].astype(int); y_os = os_rows[:, 4:13].astype(np.int8); X_os = cut(os_rows[:, 13:])
     keep = os_rows[:, 2] > 0                                                   # drop unreadable files
     idx, det, y_os, X_os = idx[keep], det[keep], y_os[keep], X_os[keep]
     g_os = group[idx]; t_os = typ[idx]; p_os = pack[idx]
@@ -203,8 +210,8 @@ def main():
         print(f"   listening window: {extra_in} extra features (zero-initialised)")
     bfiles = sorted(glob.glob(f"{W}/{FD}/beat_*.csv"))
     bt_rows = np.vstack([read_csv(f) for f in bfiles]) if bfiles else np.zeros((0, os_rows.shape[1]))
-    bi, y_bt, X_bt = bt_rows[:, 0].astype(int), bt_rows[:, 4:13].astype(np.int8), bt_rows[:, 13:]
-    mi, mj, mdet, y_mx, X_mx = mix_rows[:, 0].astype(int), mix_rows[:, 1].astype(int), mix_rows[:, 3].astype(int), mix_rows[:, 4:13].astype(np.int8), mix_rows[:, 13:]
+    bi, y_bt, X_bt = bt_rows[:, 0].astype(int), bt_rows[:, 4:13].astype(np.int8), cut(bt_rows[:, 13:])
+    mi, mj, mdet, y_mx, X_mx = mix_rows[:, 0].astype(int), mix_rows[:, 1].astype(int), mix_rows[:, 3].astype(int), mix_rows[:, 4:13].astype(np.int8), cut(mix_rows[:, 13:])
 
     test_packs = set(arg("--test-packs", "").split(";")) - {""}
     tp = arg("--train-packs", "all")
