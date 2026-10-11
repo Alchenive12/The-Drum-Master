@@ -1,0 +1,31 @@
+== full: 24 training packs, 0 test packs
+   training packs: CymaticsLofiToolkit-V1-m2d; DABRO Music - Future Bass Vol.2; Drum Stems; Packs/Drums; Packs/Legacy; Sickrate & SIIK Essentials I (WAV Samples); Sickrate and SIIK Essentials II Full Pack; Splice - user-2587851674; Splice2; stuff to save; stuff to save/Aneraxx - Ultimate Future Bounce Vol. 1; stuff to save/Future bass-pop; stuff to save/Future bounce-house; stuff to save/Itai New Pc stuff; stuff to save/Jonas Aden sample packs; stuff to save/KSHMR; stuff to save/MHA - Ascend; stuff to save/MHA - Atmos; stuff to save/Midi; stuff to save/SLCTD Collections - Sample Pack; stuff to save/Stems for dumae; stuff to save/Trap-hiphop; stuff to save/Unison MIDI Chord Pack; stuff to save/goodbye mix attempt
+   test packs:     
+   training rows: 219467  labels: {'kick': np.int64(56441), 'snare': np.int64(30209), 'closedHat': np.int64(128589), 'openHat': np.int64(6211), 'crash': np.int64(2473), 'ride': np.int64(15825), 'rimshot': np.int64(1826), 'clap': np.int64(20168), 'misc': np.int64(7379)}
+  best epoch 21 (validation 0.591)
+   trained in 41 s
+ONE-SHOTS FROM PACKS IT NEVER TRAINED ON ((validation sounds from the training packs))
+   (each sound alone at 3 velocities; plugin decision rule at sensitivity 50; missed = wrong)
+   group        sounds      old      new
+   808              33    90.9%    93.9%
+   clap            109    37.6%    63.6%
+   closed hat       76    36.4%    71.9%
+   crash            33    32.3%    57.6%
+   kick            159    76.1%    93.1%
+   open hat         46     8.7%    50.7%
+   perc            109    30.0%    36.1%
+   ride             31     3.2%    11.8%
+   rimshot          11    27.3%    81.8%
+   snare           132    43.4%    75.3%
+   ALL             739    44.4%    67.2%
+   snares were labelled (old): {'kick': 31, 'snare': 172, 'closedHat': 53, 'crash': 14, 'rimshot': 6, 'clap': 25, 'misc': 89}
+   snares were labelled (new): {'kick': 9, 'snare': 298, 'closedHat': 14, 'openHat': 5, 'crash': 3, 'rimshot': 18, 'clap': 15, 'misc': 28}
+BEATS BUILT FROM VALIDATION KITS (2-bar beats, every onset; plugin decision rule)
+   old: snare hits called snare 25.8% | clap 34.2% | hat-only onsets called hat 45.8% | kick-only called kick 64.3% | NON-snare onsets called snare 2.8%  (26575 onsets)
+   new: snare hits called snare 52.7% | clap 28.3% | hat-only onsets called hat 94.8% | kick-only called kick 82.2% | NON-snare onsets called snare 0.8%  (26575 onsets)
+REGRESSION CHECK: real drum loops, tracks not used for model selection (per-type F1 at 0.5)
+   MDB acoustic      old: macro 0.44 | kick=0.82 snare=0.72 closed=0.47 openHa=0.08 crash=0.13 ride=0.26 rimsho=0.70 clap=  -  misc=0.36
+   MDB acoustic      new: macro 0.33 | kick=0.73 snare=0.59 closed=0.36 openHa=0.11 crash=0.00 ride=0.32 rimsho=0.32 clap=  -  misc=0.24
+   electronic loops  old: macro 0.31 | kick=0.75 snare=0.53 closed=0.58 openHa=0.21 crash=0.12 ride=0.07 rimsho=0.19 clap=0.31 misc=0.04
+   electronic loops  new: macro 0.38 | kick=0.80 snare=0.65 closed=0.70 openHa=0.29 crash=0.14 ride=0.13 rimsho=0.35 clap=0.33 misc=0.00
+wrote models/HitClassifierWeights_final.h
