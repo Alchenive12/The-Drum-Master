@@ -12,7 +12,7 @@ Read these before doing anything:
    commit with its verification level, open `VERIFY` markers, and decisions with their reasons.
    **Update it in the same commit as the code.**
 3. **`docs/`**: concept (01), algorithm and parameters (02), decisions for review (03), UI (04),
-   features (05), testing (06, 07), and snare training (08).
+   features (05), testing (06, 07), snare training (08), and the detection plan without training (09).
 
 Quick facts:
 - Pure DSP lives in `dsp/` (standard C++, no JUCE, has its own CMake). Its tests can be built and run

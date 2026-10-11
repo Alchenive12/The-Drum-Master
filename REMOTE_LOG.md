@@ -20,6 +20,7 @@
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
 |---|---|---|---|
+| [untested] docs: plan to improve detection without more training | docs/09-detection-without-training.md (new), CLAUDE.md, REMOTE_LOG.md | 0 | Docs only. New branch remote/detection-postproc from remote/snare-training. Plan: ensemble with the shipped net, shift averaging, loop memory (repeats vote), clap/snare/tom checks, late correction for open hats/cymbals, per-type cuts; measured on MDB + Dirt + drum_bench in the sandbox |
 | [untested] docs: CLAUDE.md pointing to the protocol, log and docs | CLAUDE.md (new), REMOTE_LOG.md | 0 | Docs only. Repo moved to the Alchenive12 org (2026-10-11); PR #5 remote/snare-training -> main, not merged (home test first). The dsp test command in CLAUDE.md was run in the sandbox: 12/12 |
 | [untested] dsp: new hit-classifier weights in the plugin (FULL, all owner packs incl. FL Studio drums; 225 -> 224 -> 9); test_hit_classifier synthetic isolated threshold 60% -> 55% | dsp/include/plugin_dsp/HitClassifierWeights.h, dsp/tests/test_hit_classifier.cpp, docs/08-snare-training.md, REMOTE_LOG.md | 3 | CI run 57 (73886c0) green on Linux + Windows (MSVC builds the 640 KB weights header; DSP tests, pluginval). DSP tests 12/12 in the cloud sandbox; drum_bench run. Cross-check: snares 43% -> 71%, in beats 27% -> 47%, false snares 2.4% -> 1.3%. MDB live acoustic macro F1 0.44 -> 0.33 (worse); synthetic EDM labels 83% -> 52%. VERIFY(dsp): listen in FL - EDM claps, live acoustic loops, snare/hat separation |
 | [untested] dsp research: FULL v2 snare model - beat-context training (4,800 kit beats), wider net (224), settings chosen by 4-fold pack cross-checks; weights stay on the PC | research/snare-train/{oneshot_extract.cpp (beat mode), train_snare.py, models/*.txt}, docs/08-snare-training.md, REMOTE_LOG.md | 2 | Cross-check (never-seen packs): one-shot snares 37% -> 74%, snares in beats 28% -> 49%, false snares 2.5% -> 1.5%. Electronic loops macro F1 0.31 -> 0.39; MDB live acoustic 0.44 -> 0.37 (worse); synthetic EDM labels 83% -> 55%. dsp/ unchanged |
@@ -67,6 +68,7 @@
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
 ## Next steps
+0. **Now (2026-10-12):** improve detection without training the network again: docs/09, branch remote/detection-postproc. The owner's PC is off, so measure on MDB + Dirt + drum_bench in the sandbox; re-run the pack cross-check when the PC is back. Licence note: the post-processing adds no training data, so it carries over to a future CLEAN model.
 1. ~~Classifier~~ done: learned network in (D-C1, results in docs/03). Weak spots to hear at home: open vs closed hat, crash vs ride, claps, very noisy snares.
 2. ~~CI green on the plugin wiring~~ done: run 27 green (ac7e881); the Windows VST3 artifact can be tried in FL.
 3. The Puppet Show: v1 targets + engine done (D-C15, D-C16). Listen at home (Mud row least trusted). v2: re-measure targets from the user's genre-named packs (measure_kits.py + measure_rise.cpp).
