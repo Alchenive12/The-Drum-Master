@@ -25,4 +25,5 @@ Quick facts:
   Since docs/09 it runs next to the main network (per-type max).
 - Real-drum eval in the sandbox: `research/lookahead-test/fetch_data.sh`, then `research/classifier-eval/export_sets.py`,
   then `eval <set> --half guard|report` (tune on guard, report on report).
+  `export_kit_loops.py` adds `electronic_kit` (one sample per type per loop, like a produced beat).
 - Sample audio stays on the owner's PC. Only feature rows and trained weights leave it.
