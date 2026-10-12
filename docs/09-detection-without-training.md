@@ -176,3 +176,45 @@ gaining up to 100 ms). That's where the next gain is, with late correction or a 
   confident main winner.
 - `research/classifier-eval/eval.cpp`: `--half guard|report`, `--second`, `--lead`, macro F1, primary
   right, features in `--dump`. `dsp/tools/bench.cpp`: `--second`, `--lead`.
+
+## Loop templates: the owner's idea (12 October 2026, late morning)
+
+**Idea:** while listening, keep snapshots of the drums the plugin recognises in this loop. Explain each new hit
+as a mix of those snapshots, so "mostly the kick, plus extra highs but no extra mids" becomes kick + hat, and
+"kick plus mids and some highs" becomes kick + snare.
+
+**Prototype** (offline, on the dumps of `eval --dump`, causal, no plugin code):
+- A template per type is the running mean of the 0-20 ms rise spectrum (32 mel bands, power above 1.5x the
+  25 ms before the onset, square root). It's learned from this loop's clean hits: one type at 0.7 or more, the
+  others under 0.3, which is the rule `DrumEngine` already uses.
+- Each hit is fitted with non-negative least squares. When the fit leaves at most 40% unexplained, a type
+  with a 25% or larger energy share is raised to at least 0.6. A type with under 5% share is capped at 0.45.
+- A spectrum-only template, with a square root, fitted far better than a time-frequency one: on MDB, the
+  median unexplained part went from 0.55 to 0.23.
+
+**New evaluation set, `electronic_kit`** (`research/classifier-eval/export_kit_loops.py`): the electronic
+loops pick a new random sample for every hit, which a produced beat never does, and that hides anything that
+learns the loop's sounds. This set uses one sample per type per loop (40 loops).
+
+| (macro F1 / primary right) | MDB guard | MDB report | Electronic guard | Electronic report | Kit guard | Kit report |
+|---|---|---|---|---|---|---|
+| Two networks (now) | 0.387 / 68.0 | 0.434 / 61.3 | 0.433 / 54.8 | 0.392 / 52.8 | 0.416 / 68.3 | 0.362 / 35.4 |
+| + loop templates | **0.399 / 69.7** | **0.448 / 64.4** | 0.432 / 54.3 | 0.388 / 51.9 | 0.412 / 68.1 | 0.358 / 35.4 |
+| + loop memory (§3, for comparison) | 0.396 / 71.7 | 0.431 / 64.4 | 0.443 / 54.6 | 0.400 / 53.7 | 0.424 / 68.3 | 0.370 / 35.1 |
+
+(Labelled onsets only, as in docs/08.)
+
+- **Live acoustic drums: a real gain on both halves.** Templates separate layered hits of sounds the networks
+  already know (kick + hat, snare + hat).
+- **Produced beats: flat to slightly worse.** The templates are learned from hits the networks label, so they
+  inherit the networks' labels. On `electronic_kit` the main error is a whole kit's hat read as snare
+  (66 hits) or kick (65 hits) every time. That hat's snapshot is then filed as a snare or kick template, and the fit
+  confirms the mistake.
+- How often a sound repeats doesn't rescue it either: hats split into several small clusters
+  (level differences of 8 dB), so "this sound plays every 8th note" doesn't stand out per cluster.
+
+**Not built into the plugin yet:** the owner's material is produced beats, where it's flat. **Where it would pay off:**
+templates with a *correct* label. For example, the owner clicks a misread hit in Shadow Play and says "this is a hat".
+That snapshot becomes the hat template for the loop, and the fit then applies it to every repeat and every layered
+hit that contains it. That's a UI feature (phase 5), and the measurements above say the decomposition side works
+once the label is right.
