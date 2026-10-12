@@ -55,12 +55,15 @@ public:
     static constexpr double lookaheadSeconds = 0.050;
     static constexpr std::size_t numBands = ClassifiedHit::numBands;
 
+    /** Classifier tuning (docs/09; tools and tests). Takes effect at the next prepare(). */
+    void setClassifierSettings (const HitClassifier::Settings& s) noexcept { classifierSettings = s; }
+
     void prepare (double sampleRate)
     {
         sr = sampleRate;
         lookahead = static_cast<std::int64_t> (std::lround (lookaheadSeconds * sr));
         detector.prepare (sr);
-        classifier.prepare (sr);
+        classifier.prepare (sr, classifierSettings);
         tracker.prepare (sr);
         for (auto& e : estimator) e.prepare (sr, numDrumTypes);
         preDelay = static_cast<std::size_t> (lookahead - estimator[0].latency());
@@ -386,6 +389,7 @@ private:
 
     OnsetDetector detector;
     HitClassifier classifier;
+    HitClassifier::Settings classifierSettings;
     HitTracker tracker;
     std::array<DualResEstimator, 2> estimator;
     std::array<DrumChannel, numDrumTypes> channels;

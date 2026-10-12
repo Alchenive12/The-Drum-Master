@@ -15,7 +15,8 @@
 //   drum_bench --kits <folder> --genre <g>       beats built from your one-shots (g: rock pop edm house metal hip-hop)
 //   drum_bench --loops <folder>                  loops without labels: what was detected, for checking by ear
 //   drum_bench --export-synth <folder>           write the synthetic one-shots as WAVs (pipeline check)
-// Options: --csv <file> (per-file / per-event detail), --kitsets <n> (kits mode, default 5), --sens <0..100>
+// Options: --csv <file> (per-file / per-event detail), --kitsets <n> (kits mode, default 5), --sens <0..100>,
+//          --second 0|1, --lead <0..1> (HitClassifier::Settings::secondNet, mainLeadsAbove; docs/09)
 
 #include <plugin_dsp/DrumEngine.h>
 #include "synth_drums.h"
@@ -164,9 +165,11 @@ static std::vector<float> musicBed (std::size_t len, double bpm, float gain)
 struct Detection { double t; DrumType type; };
 
 static int gSensitivity = 50;
+static HitClassifier::Settings gClassifier;   // --second (docs/09)
 static std::vector<Detection> detect (const std::vector<float>& mono, std::uint32_t allowed = 0, std::size_t block = 512, int sensitivity = -1)
 {
     auto e = std::make_unique<DrumEngine>();
+    e->setClassifierSettings (gClassifier);
     e->prepare (SR);
     if (allowed != 0) e->setAllowedTypes (allowed);
     DrumParams p;
@@ -321,6 +324,7 @@ static void perf (const std::vector<float>& mono)
         for (int lvl = 0; lvl < 4; ++lvl)
         {
             auto e = std::make_unique<DrumEngine>();
+            e->setClassifierSettings (gClassifier);
             e->prepare (SR);
             const auto p = effectsLevel (lvl);
             std::vector<float> l (mono), r (mono);
@@ -543,6 +547,8 @@ int main (int argc, char** argv)
         else if (a == "--genre") genre = next();
         else if (a == "--csv") csv = next();
         else if (a == "--kitsets") kitsets = std::max (1, std::atoi (next().c_str()));
+        else if (a == "--second") gClassifier.secondNet = std::atoi (next().c_str()) != 0;
+        else if (a == "--lead") gClassifier.mainLeadsAbove = static_cast<float> (std::atof (next().c_str()));
         else if (a == "--sens") gSensitivity = std::clamp (std::atoi (next().c_str()), 0, 100);
         else { std::printf ("unknown option %s (see the top of dsp/tools/bench.cpp)\n", a.c_str()); return 2; }
     }

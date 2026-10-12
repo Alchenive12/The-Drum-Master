@@ -1,4 +1,6 @@
-# Better detection without more training (plan, 12 October 2026)
+# Better detection without more training (12 October 2026)
+
+> Plan first, then what was measured. **Results and what was kept: the "Results" section at the end.**
 
 Goal: raise the hit-labelling accuracy of the plugin's detector **without training the network again**.
 The PC and the sample packs aren't available, and the licence check (see the PR #5 discussion)
@@ -113,3 +115,64 @@ reported on the other half. Small, but it stops rare types (ride, rim) from losi
 
 Every step goes on branch `remote/detection-postproc` (from `remote/snare-training`) as
 `[untested]` commits with REMOTE_LOG rows. Nothing reaches `main` before the FL test.
+
+## Results (12 October 2026, morning session)
+
+All in the cloud sandbox. `research/classifier-eval/eval` runs the plugin's own OnsetDetector + HitClassifier
+on the real audio (streaming, as in the plugin), with **tracks split in two**: settings were chosen on
+the "guard" half and are reported on the "report" half. Both guard halves were also used to pick the
+FULL network's training epoch (docs/08), so they lean towards it. Scores are per-type F1 at weight
+0.5, averaged over types (macro), plus "primary right" = the share of single-drum hits whose main label is right.
+Missed and extra onsets count here, which is why these F1 values sit below the docs/08 ones
+(those score labelled onsets only).
+
+| | MDB live acoustic (report) | Electronic loops (report) | Guard halves (acoustic / electronic) |
+|---|---|---|---|
+| New network alone (PR #5) | 0.301, primary 41.6% | 0.384, primary 50.1% | 0.304 / 0.432 |
+| First network alone (main) | 0.398, primary 61.8% | 0.317, primary 42.5% | 0.335 / 0.315 |
+| Average, 35% first network | 0.349, primary 53.9% | 0.380, primary 49.2% | 0.322 / 0.403 |
+| **Per-type max, main leads above 0.6 (now on)** | **0.377, primary 61.3%** | **0.388, primary 52.8%** | **0.354 / 0.427** |
+
+Scored like docs/08 (labelled onsets only), MDB goes from 0.34 to 0.43 and electronic from 0.39 to 0.39.
+
+- **Right to wrong:** of the hits the new network alone labelled right, 0.8% (acoustic, 29 hits) and
+  1.5% (electronic, 17 hits) became wrong, against 675 and 39 that went from wrong to right.
+- **drum_bench (synthetic), "label is a drum really there", full mix:** rock 100 -> 100, pop 98.7 -> 99.1,
+  **EDM 51.8 -> 71.1**, metal 77.4 -> 85.9, hip-hop 92.1 -> 97.4.
+  - Alone: snare 82.5 -> 77.5%, clap 7.5 -> 50%, open hat 7.5 -> 42.5%, ride 75 -> 72.5%.
+  - Onsets and false hits are unchanged.
+- **CPU:** detection + routing 23.5% -> 22.8% of a cloud core, which is within noise. The second network is
+  about 22k multiply-adds per hit.
+- **Goals:**
+  - Met: electronic 0.38 or higher.
+  - MDB: 0.43 in the docs/08 scoring (goal 0.40), 0.377 in the streaming scoring.
+  - Not met: EDM 71 (goal 75) and the synthetic snare 77.5% (goal 80).
+
+### What was tried and dropped (with numbers)
+
+| Idea | Result | Kept? |
+|---|---|---|
+| §1 Average of the two networks (any blend) | Trades acoustic against electronic. At 35%: MDB +0.05, electronic -0.004, synthetic snare 82.5 -> 45% | No: per-type max is better on all four halves |
+| §1 Logit average | Same as or worse than probability average | No |
+| §1 "Main leads above c" | c = 0.6 keeps the synthetic snare (17.5% with plain max -> 77.5%) for -3 points of acoustic "primary right" | **Yes, 0.6** |
+| §2 Shift averaging, -/+ 1 or 2 ms | Within ±0.01, no clear direction | No |
+| §3 Loop memory: repeats vote together | Within ±0.01. Repeats of a sound make the **same** mistake (same features, same output), so voting can't fix them. The nearest earlier hit has the same true type 85% of the time on MDB, but also the same label | No (code removed) |
+| §4 Rise-spectrum checks (kick needs new energy below 100 Hz, snare body, hat highs) | Bands overlap heavily on real loops. 15% of electronic kicks show no low rise because they sit on the previous kick's tail. No gain | No |
+| §4 "High EQ + quieter + no low end = cymbal" (owner's idea) | When it fires it's right 93-99% of the time, but the networks already label those same hits a cymbal type 92-98% of the time. It fires on only 11-13% of hats/cymbals | No: adds nothing on top of the networks |
+| §6 Per-type gains | MDB +0.017, electronic +0.0, mostly by sending fewer hits to misc. That's the sensitivity knob's job | No |
+| §5 Late correction (measured offline, not built) | A "closed hat" still ringing above -10 dB at 120-150 ms (no new onset): electronic 42 relabelled, 15 truly open hats; MDB 139, 33 open hats; about 20 right closed hats lost | Next: needs HitTracker + gate crossfade |
+
+**Why the networks' mistakes resist post-processing:** they're consistent per sound and come from mixed
+spectra (hat over a kick tail, snare and hat together). Any rule on the same 40 ms of audio sees what the
+network sees. What the network doesn't see is **time after 40 ms** (§5, and docs/08 §9: cymbals keep
+gaining up to 100 ms). That's where the next gain is, with late correction or a latency option.
+
+### Changed in code
+- `HitClassifier.h`: second network (`HitClassifierWeightsV1.h` = main's CC BY weights, symbols renamed),
+  per-type max, `mainLeadsAbove = 0.6`. `Settings::secondNet = false` gives the old behaviour.
+  `Measurements` now also keeps the feature vector (research dumps).
+- `DrumEngine.h`: `setClassifierSettings()` (tools and tests).
+- `test_hit_classifier.cpp`: check 5, the second network only raises probabilities, except above a
+  confident main winner.
+- `research/classifier-eval/eval.cpp`: `--half guard|report`, `--second`, `--lead`, macro F1, primary
+  right, features in `--dump`. `dsp/tools/bench.cpp`: `--second`, `--lead`.

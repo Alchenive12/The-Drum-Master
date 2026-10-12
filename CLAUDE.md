@@ -21,4 +21,8 @@ Quick facts:
 - `processBlock`: no allocations, locks or I/O. Don't touch CMakeLists or CI without saying so.
 - `dsp/include/plugin_dsp/HitClassifierWeights.h` (from `remote/snare-training`) was trained on
   commercial sample packs and is for **personal use only**. Don't ship it (docs/08).
+- `HitClassifierWeightsV1.h` is the first network (Groove + E-GMD, CC BY 4.0, credit in the About box).
+  Since docs/09 it runs next to the main network (per-type max).
+- Real-drum eval in the sandbox: `research/lookahead-test/fetch_data.sh`, then `research/classifier-eval/export_sets.py`,
+  then `eval <set> --half guard|report` (tune on guard, report on report).
 - Sample audio stays on the owner's PC. Only feature rows and trained weights leave it.
