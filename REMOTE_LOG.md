@@ -20,6 +20,7 @@
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
 |---|---|---|---|
+| [untested] protocol: ponytail skill (MIT, DietrichGebert/ponytail) | .claude/skills/ponytail/SKILL.md, REMOTE_PROTOCOL.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] protocol: token-saving rules + caveman skill | REMOTE_PROTOCOL.md, .claude/skills/caveman/SKILL.md, REMOTE_LOG.md | 0 | Docs only |
 | test: offline benchmark + findings + home test plan | dsp/tools/{bench.cpp, wav_io.h, sample_packs.h} (new), dsp/CMakeLists.txt (PLUGIN_DSP_BENCH, off by default), docs/06-testing.md, docs/07-home-test-plan.md, docs/testing/results/, .gitignore (no audio) | 2 | bench compiled and run in the sandbox on the real engine; synthetic results deterministic. Key finding: snare taken for closed hat; confirm with real packs at home |
 | [untested] ui: wire the rendered 3D art + string drop-in animation | Source/ui/Art3D.h (new), Source/ui/Theme.h, Source/PluginEditor.h, CMakeLists.txt (juce_add_binary_data), assets/ui3d/, docs/04-ui-concept.md | 1 | JUCE 9.0.3 APIs checked against source; CI compile pending. VERIFY(ui): look, flicker feel, drop animation, CPU with the window open; VERIFY(ui): knob body size (bodyInFrame 0.6) |
