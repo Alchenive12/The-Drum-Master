@@ -10,12 +10,12 @@
 - Formats:                       VST3 / AU (macOS only) / Standalone
 - Platforms built at home:       Windows (FL Studio, i7-11700K, RTX 3060 Ti) — VST3
 - CI:                            .github/workflows/build.yml (Linux, Windows + DSP tests + pluginval; macOS dropped)
-- Last known-good commit:        f9ed21e on ccr-7db4799d-xb6ed3 (UI v2 + The Puppet Show's live EQ graph; CI run 40 green on Linux + Windows incl. DSP tests + pluginval; Windows VST3 in the run's artifacts). Before it: 8c56559 (main, UI v1)
+- Last known-good commit:        ebf7758 on ccr-e2c7e997-kfwew6 (2026-10-14: Argon review fixes, MIDI mode + MIDI write, loop-learning research; CI run 76 green on Linux + Windows incl. DSP tests + pluginval; not merged to main, no PR yet). Before it: f9ed21e on ccr-7db4799d-xb6ed3 (UI v2 + The Puppet Show's live EQ graph; CI run 40 green on Linux + Windows incl. DSP tests + pluginval; Windows VST3 in the run's artifacts). Before it: 8c56559 (main, UI v1)
 
 ## Current trip
-- Pipeline phase:                4 — UI built, then redesigned ("v2 look": modern, creepy, eerie; docs/04-ui-concept.md "Look (v2)", screenshots in docs/screenshots/); phase 3 DSP done
+- Pipeline phase:                5 — features and testing (F3 MIDI mode + F3b MIDI write built; F4 loop learning in research); before that 4 — UI built, then redesigned ("v2 look": modern, creepy, eerie; docs/04-ui-concept.md "Look (v2)", screenshots in docs/screenshots/); phase 3 DSP done
 - Branch: ccr-e2c7e997-kfwew6 (session-assigned: fixes from Argon's external code review, D-C18, then F3 MIDI mode, D-C19; both on this one branch because the session may only push here). Before: ccr-7db4799d-xb6ed3 (UI v2). Earlier trip: claude/away-from-home-protocol-pc5bni (merged as PR #1)
-- Goal: phase 3 done in code (detector, learned classifier, tracker, processors, engine, 97-param plugin, The Puppet Show engine). Waiting on: agents' answers to prompt 04 (Puppet Show), home test in FL, review of docs/03-decisions-for-review.md. User away ~1 week and delegated decisions: every one is listed in docs/03-decisions-for-review.md
+- Goal (2026-10-14): v1 detection quality (bar in docs/05-features.md F4 and the chat of 2026-10-14: kick/snare/closed hat F1 >= 0.85 with >= 85 % precision; other types >= 70 % precision). Next: rhythm feature (bar position) + Groove MIDI measurement; at home: train fast + slow models on the user's packs (research/loop-learning/train_slow_torch.py, GPU), FL tests of MIDI mode/write, then D6 with the Puppet Show kick-sub re-measure. Earlier goal: phase 3 done in code (detector, learned classifier, tracker, processors, engine, 97-param plugin, The Puppet Show engine). Waiting on: agents' answers to prompt 04 (Puppet Show), home test in FL, review of docs/03-decisions-for-review.md. User away ~1 week and delegated decisions: every one is listed in docs/03-decisions-for-review.md
 
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
