@@ -289,9 +289,45 @@ matched against those fingerprints.
    the vote, and the vote plus repetition grouping. Compare against the v1 bar (kick/snare/closed hat
    F1 at least 0.85 with at least 85 % precision; other types at least 70 % precision when they fire).
 
+### First measurements (2026-10-14, away from home)
+Raw numbers: `docs/testing/results/2026-10-14-loop-learning.txt`. Tools: `research/loop-learning/`.
+Nothing was tuned on the set it was scored on.
+
+- **Full length helps hats, even trained on synthetic drums only.**
+  - With per-type vote weights (picked on another set), closed hat goes 0.51 → 0.68 acoustic,
+    0.58 → 0.67 electronic and 0.59 → 0.70 on kit loops. Open hat goes 0.06 → 0.25 acoustic.
+  - The PyTorch slow model, with dropout, reaches 0.48 for open hat.
+  - Kick stays about the same. Snare dips (0.65 → 0.60 acoustic): synthetic snares sound nothing like
+    real ones, so the slow model's snare weight is near 0.
+- **Grouping repeats and voting changes almost nothing** (±0.02, a few precision gains).
+  - Same sample vs different drums is measurable (about 8 vs 20 dB RMS on the after-the-hit picture).
+    But the models' mistakes are **consistent per sound**: every repeat of a misheard sample is
+    misheard the same way, so voting can't fix it.
+  - Grouping is still the right tool for fingerprints and the one-click fix (a fix applies to every
+    repeat). It just isn't an accuracy gain by itself.
+- **So the gains have to come from better models:** real training data (your packs), full length, and
+  independent evidence. Rhythm (below) is independent evidence.
+
+### Rhythm as evidence (user's idea, 2026-10-14)
+- **The idea:** a hit's place in the bar says something about what it is. Kick on 1 (and often 3),
+  snare or clap on 2 and 4, hats on the 8ths or 16ths.
+- **The plugin knows the bar position.** The host's song position (ppq) is already used by Shadow
+  Play and MIDI write, so this is cheap to add as an input to the slow model or the group vote.
+- **Why it can help where voting didn't:** rhythm is independent of the sound, so it can break a
+  consistent mishearing. Example: a "hat" group that only ever lands on 2 and 4 is probably a bright
+  snare, which is exactly the synthetic-snare confusion.
+- **Risks:** genres move things (trap snares on 3, half-time, fills, off-beat kicks). So it should be
+  evidence with a learned weight, never a rule. The model learns per-position statistics from real
+  grooves.
+- **How to measure it fairly:** not on our generated loops, which were built from these very patterns
+  and would flatter it. It needs real performances with a known bar grid: the Groove MIDI Dataset
+  (already our training source) has tempo and bar positions. That's a download, so it fits the home
+  session, or away from home with your OK.
+
 ### What can be prepared away from home
-- **Measure grouping and voting with today's model** on the electronic loops, whose true samples are
-  known.
-- **Extend `extract.cpp` and `train.py`** for full-length features and PyTorch, and test them on the
-  public data.
+- ~~Measure grouping and voting~~ done (above).
+- ~~Full-length features and PyTorch~~ done: `research/loop-learning/extract_long.cpp` and
+  `train_slow_torch.py`. It runs on CUDA when present and was tested on CPU here.
+- **Next:** the rhythm feature (bar position) in `extract_long.cpp` plus a measurement on Groove MIDI;
+  and full-length synthetic training extended with your packs at home.
 

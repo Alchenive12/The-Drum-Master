@@ -1,0 +1,59 @@
+F4 loop learning - first measurements (2026-10-14, sandbox, CPU)
+Tools: research/loop-learning/{extract_long.cpp, loop_learning.py, kit_loops.py, train_slow_torch.py}.
+Scoring = research/classifier-eval/eval.cpp exactly (checked: the 'fast' rows reproduce it).
+Slow model trained ONLY on synthetic drums (600 synth_aug.py loops, 27,560 hits), full-length picture -30..+1100 ms.
+Nothing tuned on the set it is scored on: group threshold 2-fold by file inside each set; per-type vote weights from another set.
+Sets: electronic = 40 loops, new sample per hit; acoustic = MDB Drums, 23 tracks; kit = 40 loops, one sample per drum reused (kit_loops.py).
+
+F1 per type (precision in brackets)
+== electronic: hits per group at 8 dB: 2.2; slow-model weights from acoustic: kick=0.25 snare=0.00 closed hat=0.50 open hat=1.00 crash=0.25 ride=0.00 rimshot=0.25 clap=0.00
+    electronic fold 0: threshold 4 dB
+    electronic fold 1: threshold 4 dB
+    electronic fold 0: threshold 4 dB
+    electronic fold 1: threshold 4 dB
+                                          kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+fast (plugin today)                0.78 (0.79)   0.53 (0.41)   0.58 (0.86)   0.23 (0.64)   0.10 (0.08)   0.08 (0.18)   0.14 (0.38)   0.33 (0.34)
+fast + group vote (2-fold)         0.78 (0.79)   0.53 (0.40)   0.59 (0.86)   0.22 (0.64)   0.10 (0.08)   0.08 (0.19)   0.14 (0.45)   0.35 (0.38)
+ctrl: synth-only, 40 ms            0.72 (0.65)   0.29 (0.18)   0.71 (0.84)   0.33 (0.43)   0.00 (0.00)   0.00 (0.00)   0.17 (0.18)   0.48 (0.34)
+slow: synth-only, full length      0.74 (0.67)   0.39 (0.27)   0.68 (0.86)   0.24 (0.46)   0.00 (0.00)   0.00 (0.00)   0.19 (0.26)   0.32 (0.19)
+fast + slow, 50/50                 0.76 (0.71)   0.44 (0.32)   0.67 (0.86)   0.20 (0.56)   0.00 (0.00)   0.00 (0.00)   0.14 (0.38)   0.46 (0.33)
+fast + slow, per-type weights      0.78 (0.79)   0.53 (0.41)   0.67 (0.86)   0.24 (0.46)   0.06 (0.06)   0.08 (0.18)   0.12 (0.40)   0.33 (0.34)
+  ... + group vote (2-fold)        0.79 (0.79)   0.53 (0.40)   0.68 (0.86)   0.24 (0.46)   0.06 (0.06)   0.08 (0.19)   0.12 (0.40)   0.35 (0.38)
+(true hits)                                552           173          1416           161            28           100            59           125
+
+== acoustic: hits per group at 8 dB: 23.2; slow-model weights from electronic: kick=0.25 snare=0.25 closed hat=0.75 open hat=1.00 crash=0.00 ride=0.00 rimshot=1.00 clap=0.50
+    acoustic fold 0: threshold 4 dB
+    acoustic fold 1: threshold 4 dB
+    acoustic fold 0: threshold 6 dB
+    acoustic fold 1: threshold 4 dB
+                                          kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+fast (plugin today)                0.83 (0.79)   0.65 (0.75)   0.51 (0.63)   0.06 (0.08)   0.14 (0.11)   0.35 (0.42)   0.42 (0.28)             -
+fast + group vote (2-fold)         0.84 (0.81)   0.67 (0.76)   0.51 (0.64)   0.05 (0.12)   0.20 (0.19)   0.38 (0.57)   0.60 (0.46)             -
+ctrl: synth-only, 40 ms            0.60 (0.52)   0.04 (0.14)   0.59 (0.53)   0.15 (0.10)   0.00 (0.00)   0.00 (0.01)   0.21 (0.12)             -
+slow: synth-only, full length      0.64 (0.61)   0.13 (0.59)   0.68 (0.69)   0.25 (0.36)   0.01 (0.08)   0.00 (0.00)   0.15 (0.09)             -
+fast + slow, 50/50                 0.72 (0.72)   0.15 (0.72)   0.70 (0.74)   0.21 (0.46)   0.04 (0.21)   0.00 (0.00)   0.36 (0.24)             -
+fast + slow, per-type weights      0.84 (0.84)   0.60 (0.80)   0.68 (0.70)   0.25 (0.36)   0.14 (0.11)   0.35 (0.42)   0.15 (0.09)             -
+  ... + group vote (2-fold)        0.83 (0.83)   0.61 (0.83)   0.68 (0.71)   0.20 (0.36)   0.20 (0.21)   0.32 (0.56)   0.28 (0.17)             -
+(true hits)                               1539          2653          2370           269           151           851            38             0
+
+== kit: hits per group at 8 dB: 3.9; slow-model weights from acoustic: kick=0.25 snare=0.00 closed hat=0.50 open hat=1.00 crash=0.25 ride=0.00 rimshot=0.25 clap=0.00
+    kit fold 0: threshold 4 dB
+    kit fold 1: threshold 6 dB
+    kit fold 0: threshold 4 dB
+    kit fold 1: threshold 2 dB
+                                          kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+fast (plugin today)                0.78 (0.77)   0.47 (0.36)   0.59 (0.84)   0.33 (0.84)   0.04 (0.03)   0.14 (0.29)   0.03 (0.06)   0.31 (0.35)
+fast + group vote (2-fold)         0.76 (0.76)   0.47 (0.37)   0.59 (0.84)   0.32 (0.84)   0.04 (0.03)   0.09 (0.25)   0.03 (0.08)   0.35 (0.45)
+ctrl: synth-only, 40 ms            0.69 (0.63)   0.26 (0.16)   0.72 (0.82)   0.34 (0.45)   0.04 (0.17)   0.02 (0.20)   0.14 (0.17)   0.48 (0.33)
+slow: synth-only, full length      0.72 (0.65)   0.37 (0.25)   0.70 (0.86)   0.30 (0.59)   0.10 (0.67)   0.00 (0.00)   0.20 (0.26)   0.38 (0.23)
+fast + slow, 50/50                 0.75 (0.71)   0.42 (0.30)   0.70 (0.86)   0.29 (0.73)   0.00 (0.00)   0.00 (0.00)   0.17 (0.46)   0.54 (0.40)
+fast + slow, per-type weights      0.78 (0.77)   0.47 (0.36)   0.70 (0.86)   0.30 (0.59)   0.03 (0.03)   0.14 (0.29)   0.03 (0.11)   0.31 (0.35)
+  ... + group vote (2-fold)        0.77 (0.76)   0.48 (0.37)   0.69 (0.86)   0.31 (0.65)   0.03 (0.03)   0.11 (0.26)   0.03 (0.11)   0.33 (0.39)
+(true hits)                                524           159          1337           181            39            90            57           130
+
+
+PyTorch version of the slow model (train_slow_torch.py, dropout 0.2, CPU):
+device cpu, 39 epochs, 27 s, validation loss 0.0363
+electronic  slow F1: kick 0.75  snare 0.37  closed hat 0.71  open hat 0.30  crash 0.00  ride 0.00  rimshot 0.05  clap 0.33
+acoustic    slow F1: kick 0.69  snare 0.16  closed hat 0.67  open hat 0.48  crash 0.00  ride 0.02  rimshot 0.00
+kit         slow F1: kick 0.75  snare 0.37  closed hat 0.74  open hat 0.42  crash 0.00  ride 0.00  rimshot 0.09  clap 0.35
