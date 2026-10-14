@@ -8,6 +8,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <plugin_dsp/DrumEngine.h>
 #include <plugin_dsp/MidiMap.h>
+#include <plugin_dsp/MidiWriter.h>
 
 #include <array>
 #include <atomic>
@@ -102,6 +103,21 @@ public:
     bool saveMidiPreset (const juce::String& name);
     bool deleteMidiPreset (const juce::String& name);
 
+    // MIDI write (docs/05-features.md F3b): record the detected hits, unquantized, into a .mid file.
+    // Message thread. A take ends with stopMidiWrite() or when host playback stops.
+    void startMidiWrite();
+    void stopMidiWrite();
+    bool isMidiWriting() const noexcept { return midiWriting.load(); }
+    int getWrittenHitCount() const noexcept { return static_cast<int> (writtenHits.size()); }
+    /** The last take's file (does not exist if nothing was written) and its number of notes. */
+    juce::File getWrittenMidiFile() const { return writtenFile; }
+    int getWrittenNoteCount() const noexcept { return writtenNoteCount; }
+    static juce::File writtenMidiFolder();
+    /** Misc hits are written only when asked, on a note no default kit uses. */
+    bool getWriteMisc() const noexcept { return writeMisc; }
+    void setWriteMisc (bool on) noexcept { writeMisc = on; }
+    int getMiscWriteNote() const noexcept { return plugin_dsp::freeMiscNote (getMidiMap()); }
+
     juce::String getUiPage() const { return uiZoom; }
     void setUiPage (const juce::String& page) { uiZoom = page; }
 
@@ -134,6 +150,16 @@ private:
     std::atomic<std::uint32_t> midiNoteCount { 0 };
     std::array<plugin_dsp::MidiHit, 256> midiHits {};   // audio thread only: this block's mapped notes
     juce::String midiPresetName { generalMidiPreset };  // message thread
+
+    std::atomic<bool> midiWriting { false }, writeOriginSet { false }, writeDone { false };
+    double writeAnchorPpq = 0.0;                                   // audio thread only
+    std::int64_t writeAnchorSample = 0, writeEndSample = -1;       // audio thread only
+    std::atomic<double> writeOrigin { 0.0 };   // host ppq at the take's first block
+    plugin_dsp::SpscQueue<plugin_dsp::WrittenHit, 4096> writeQueue;   // audio -> message thread
+    std::vector<plugin_dsp::WrittenHit> writtenHits;   // message thread from here on
+    juce::File writtenFile;
+    int writtenNoteCount = 0;
+    bool writeMisc = false, writeSawPlay = false;
     bool wasPlaying = false;          // audio thread only
     juce::String uiZoom { "main" };
 

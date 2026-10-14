@@ -1393,6 +1393,28 @@ private:
 };
 
 // ------------------------------------------------------------------------------------- midi
+/** A button that also drags a file out of the plugin (into FL's playlist or piano roll) once it has one. */
+class FileDragButton final : public juce::TextButton
+{
+public:
+    std::function<juce::File()> file;
+    /** True once after a drag, so the click that ends it doesn't count. */
+    bool consumeDrag() { const bool d = dragged; dragged = false; return d; }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        juce::TextButton::mouseDrag (e);
+        if (dragged || e.getDistanceFromDragStart() < 8 || ! file) return;
+        const auto f = file();
+        if (! f.existsAsFile()) return;
+        dragged = true;
+        juce::DragAndDropContainer::performExternalDragDropOfFiles ({ f.getFullPathName() }, false, this);
+    }
+
+private:
+    bool dragged = false;
+};
+
 /** MIDI mode (docs/05-features.md F3): the drum pattern's notes say which drum hits. One row per
     drum with its notes, LEARN (the next note played joins that drum) and CLEAR; presets below. */
 class MidiPage final : public juce::Component
@@ -1464,6 +1486,21 @@ public:
         remove.setTooltip ("Delete the selected preset file");
         remove.onClick = [this] { proc.deleteMidiPreset (presets.getText()); refresh(); };
         addAndMakeVisible (remove);
+
+        styled (write, "pill", "listen", colours::blood);
+        write.file = [this] { return proc.getWrittenMidiFile(); };
+        write.onClick = [this] {
+            if (write.consumeDrag()) return;
+            if (proc.isMidiWriting()) proc.stopMidiWrite();
+            else proc.startMidiWrite();
+            refresh();
+        };
+        addAndMakeVisible (write);
+        styled (misc, "pill", "", drumColour (DrumType::misc));
+        misc.setButtonText ("MISC");
+        misc.setClickingTogglesState (true);
+        misc.onClick = [this] { proc.setWriteMisc (misc.getToggleState()); refresh(); };
+        addAndMakeVisible (misc);
         refresh();
     }
 
@@ -1481,6 +1518,7 @@ public:
             proc.setMidiMap (proc.getMidiMap());   // a learned note: the map no longer matches its preset
             refresh();
         }
+        if (wasWriting != proc.isMidiWriting()) refresh();   // the take ended (playback stopped or looped)
         repaint (statusArea);
     }
 
@@ -1494,10 +1532,12 @@ public:
             rows[i].learn.setBounds (660, y + 4, 112, 30);
             rows[i].clear.setBounds (782, y + 4, 92, 30);
         }
-        presets.setBounds (226, 610, 250, 34);
-        presetName.setBounds (488, 610, 200, 34);
-        save.setBounds (700, 610, 96, 34);
-        remove.setBounds (806, 610, 104, 34);
+        presets.setBounds (186, 610, 250, 34);
+        presetName.setBounds (448, 610, 200, 34);
+        save.setBounds (660, 610, 96, 34);
+        remove.setBounds (766, 610, 104, 34);
+        write.setBounds (892, 610, 112, 34);
+        misc.setBounds (1012, 610, 76, 34);
     }
 
     void paint (juce::Graphics& g) override
@@ -1517,7 +1557,8 @@ public:
             ig.drawText ("let the notes tell him which drum it was", juce::Rectangle<float> (250.0f, 72.0f, 600.0f, 24.0f), juce::Justification::centred, false);
             drawOverline (ig, "DRUM", juce::Rectangle<float> (card.getX() + 40.0f, card.getY() + 18.0f, 200.0f, 14.0f), colours::ecto);
             drawOverline (ig, "NOTES  (FL NAMES, MIDDLE C = C5)", juce::Rectangle<float> (card.getX() + 236.0f, card.getY() + 18.0f, 300.0f, 14.0f), colours::ecto);
-            drawOverline (ig, "PRESET", juce::Rectangle<float> (226.0f, 590.0f, 200.0f, 14.0f), colours::ecto);
+            drawOverline (ig, "PRESET", juce::Rectangle<float> (186.0f, 590.0f, 200.0f, 14.0f), colours::ecto);
+            drawOverline (ig, "WRITE MIDI", juce::Rectangle<float> (892.0f, 590.0f, 160.0f, 14.0f), colours::blood);
         });
 
         // status: what decides the hits right now
@@ -1532,6 +1573,10 @@ public:
                             : driving ? "THE NOTES DECIDE EVERY HIT"
                                       : "NO NOTES FOR 4 S  -  LISTENING TO THE AUDIO UNTIL THEY COME";
         if (last >= 0) status += "    LAST NOTE " + noteName (last);
+        if (proc.isMidiWriting())
+            status = "WRITING  -  " + juce::String (proc.getWrittenHitCount()) + " HITS  -  ENDS WHEN PLAYBACK STOPS OR THE LOOP COMES ROUND";
+        else if (proc.getWrittenMidiFile().existsAsFile())
+            status = juce::String (proc.getWrittenNoteCount()) + " NOTES WRITTEN  -  DRAG THE WRITE BUTTON INTO FL";
         g.setFont (caps (10.0f, 0.18f));
         g.setColour (colours::boneDim);
         g.drawText (status, statusArea.toFloat().withTrimmedLeft (24.0f), juce::Justification::centredLeft, false);
@@ -1595,12 +1640,27 @@ private:
         if (current.isEmpty()) presets.setText ("Custom (not saved)", juce::dontSendNotification);
         else presets.setSelectedItemIndex (names.indexOf (current), juce::dontSendNotification);
         remove.setVisible (current.isNotEmpty() && current != DrumMasterProcessor::generalMidiPreset);
+
+        wasWriting = proc.isMidiWriting();
+        const bool hasFile = proc.getWrittenMidiFile().existsAsFile();
+        write.setToggleState (wasWriting, juce::dontSendNotification);
+        write.setButtonText (wasWriting ? "STOP" : hasFile ? "DRAG .MID" : "WRITE");
+        write.getProperties().set ("icon", wasWriting ? "listen" : hasFile ? "midi" : "listen");
+        write.setTooltip (wasWriting ? "Stop the take and write the .mid file"
+                          : hasFile ? "Drag this into FL's playlist or piano roll (saved in " + DrumMasterProcessor::writtenMidiFolder().getFullPathName()
+                                          + "). Click to write a new take."
+                                    : "Write MIDI: press, then play the loop once. Every detected hit becomes a note, exactly where it was played");
+        misc.setToggleState (proc.getWriteMisc(), juce::dontSendNotification);
+        misc.setTooltip (proc.getWriteMisc() ? "Misc hits are written on note " + juce::String (proc.getMiscWriteNote()) + " (" + noteName (proc.getMiscWriteNote()) + "), a note no default kit uses"
+                                             : "Misc hits are not written. Click to write them on a note no default kit uses");
         repaint();
     }
 
     struct Row { juce::TextButton learn, clear; };
     DrumMasterProcessor& proc;
-    juce::TextButton back, mode, save, remove;
+    juce::TextButton back, mode, save, remove, misc;
+    FileDragButton write;
+    bool wasWriting = false;
     std::array<Row, plugin_dsp::numDrumTypes> rows;
     juce::ComboBox presets;
     juce::TextEditor presetName;

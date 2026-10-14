@@ -498,8 +498,16 @@ Claude decided the rest:
 | Presets are XML files in `Documents/The Drum Master/MIDI maps/` | Easy to find, back up and share | AppData (hidden from users) |
 | The page shows FL's note names (middle C = C5) | You use FL Studio | Standard names (C4) |
 | CMakeLists.txt: `NEEDS_MIDI_INPUT TRUE` | Required for a plugin to receive MIDI | None |
+| **MIDI write (F3b):** a take ends at the first jump of the song position | FL loops patterns; without this, every pass would stack on the last | Keep recording and remove duplicates (guesswork) |
+| MIDI write: drums are written on their usual GM note, else their lowest mapped note | Kick on 36, not 35, which most kits expect | Always the lowest note |
+| MIDI write: velocity relative to the loudest hit of the same drum (30 dB range) | Works at any input level | Absolute dBFS |
+| MIDI write: misc goes to note 34, or the next free note below | Just below the GM drums, so no default kit uses it | A note in the 80s |
+| MIDI write: the file starts at the bar where the take began | Dropped on a bar line in FL, the notes land where they were played | Start at the first note |
+| MIDI write: files are always saved to `Documents/The Drum Master/Written MIDI/` | Dragging needs a real file, and you keep every take | Temp folder |
 
-`VERIFY(host)`: FL routing of MIDI into an effect; MIDI vs audio alignment; the AU type change on macOS.
+`VERIFY(host)`: FL routing of MIDI into an effect; MIDI vs audio alignment; the AU type change on macOS;
+dragging the .mid from the plugin into FL's playlist and piano roll; FL's song position with pattern
+looping (the take should end after one pass).
 
 ---
 

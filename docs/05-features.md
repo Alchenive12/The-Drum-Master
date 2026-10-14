@@ -200,3 +200,33 @@ and when, so it never has to guess from the audio.
 - **Accepting MIDI changes the plugin's buses**: `NEEDS_MIDI_INPUT` in CMakeLists.txt. VST3 gets an
   event input. On macOS the AU type would become a "music effect" (aumf); macOS isn't built yet.
 
+### F3b — MIDI write (the hits become a .mid file)
+
+> Asked by the user on 2026-10-14: a WRITE button, no quantization, Misc not written by default,
+> and a small button next to WRITE that writes Misc on a note no default kit uses.
+
+- **Use:**
+  - Press WRITE on the MIDI page, then play the loop.
+  - The take ends at the first loop wrap (FL looping the pattern), when playback stops, or when you
+    press STOP.
+  - The button then reads DRAG .MID. Drag it into FL's playlist or piano roll.
+  - Every file is also saved in `Documents/The Drum Master/Written MIDI/`.
+- **Timing is exact:** each note sits where the hit was detected, with no quantization (detection is
+  accurate to under 1 ms). The file starts at the bar where the take began, so it keeps its place in
+  the bar, and it carries the tempo and time signature.
+- **Notes:** each drum's usual General MIDI note if the map has it (kick 36, snare 38, rim 37, clap 39,
+  closed hat 42, open hat 46, crash 49, ride 51), otherwise that drum's lowest mapped note. A drum
+  with no notes isn't written. Channel 10, 1/16 note long.
+- **Velocity:** from the hit's peak level. The loudest hit of each drum in the take is 127; 30 dB
+  quieter is 1.
+- **Misc:** not written by default. The MISC button writes misc hits on note 34, just below the
+  General MIDI drums, which no default kit uses. If your map uses 34, the next free note down is
+  used. The choice is saved with the project.
+- **One pass, not a stack:** looping the pattern would put each pass on top of the last, so the take
+  ends at the first jump of the song position. Hits from just before the jump, which are decided
+  about 40 ms later, still land in the right place.
+- **Accuracy:** the file is only as good as the detection (see `docs/03-decisions-for-review.md`,
+  Classifier results). Kick, snare and closed hat are mostly right. Open/closed hat, crash/ride and
+  claps will need fixing in the piano roll.
+- With MIDI mode on, the notes come from your MIDI, so a take just copies them back.
+

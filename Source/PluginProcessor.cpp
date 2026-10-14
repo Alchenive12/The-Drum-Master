@@ -7,7 +7,7 @@ namespace
 {
 constexpr std::array<const char*, 3> groupVolumeIds { "qm_kick_volume", "qm_snare_volume", "qm_hats_volume" };
 const juce::Identifier expectedTypesKey { "expected_types" }, detectModeKey { "detect_mode" }, uiZoomKey { "ui_zoom" },
-    stateVersionKey { "state_version" }, midiModeKey { "midi_mode" }, midiMapKey { "midi_map" }, midiPresetKey { "midi_preset" };
+    stateVersionKey { "state_version" }, midiModeKey { "midi_mode" }, midiMapKey { "midi_map" }, midiPresetKey { "midi_preset" }, writeMiscKey { "midi_write_misc" };
 const juce::Identifier presetTag { "DrumMasterMidiMap" }, presetMapKey { "map" };
 }
 
@@ -109,13 +109,15 @@ void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     if (forgetRequested.exchange (false))
         engine->resetLearning();
 
-    // Transport for the UI (Shadow Play ring) and for auto detect.
+    // Transport for the UI (Shadow Play ring), auto detect and MIDI write.
     bool playing = false;
+    juce::Optional<double> blockPpq;
     if (auto* hostPlayHead = getPlayHead())
         if (const auto position = hostPlayHead->getPosition())
         {
             playing = position->getIsPlaying();
-            if (const auto ppq = position->getPpqPosition()) transportPpq.store (*ppq);
+            blockPpq = position->getPpqPosition();
+            if (blockPpq) transportPpq.store (*blockPpq);
             if (const auto bpm = position->getBpm()) transportBpm.store (*bpm);
             if (const auto sig = position->getTimeSignature())
                 transportBeatsPerBar.store (juce::jmax (1, juce::roundToInt (4.0 * sig->numerator / juce::jmax (1, sig->denominator))));
@@ -143,6 +145,37 @@ void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         engine->setAllowedTypes (types);
         appliedTypes = types;
     }
+    // MIDI write: hits are timed in quarter notes from the host position (the host compensates the
+    // 50 ms latency, so an onset at input sample n sits at the ppq of input sample n). The anchor
+    // follows the playhead block by block; a jump (FL looping the pattern, a click elsewhere) ends
+    // the take there, so loop passes never stack. Hits are decided ~40 ms late, so ones from before
+    // the jump still use the old anchor.
+    const std::int64_t blockStart = samplesProcessed;
+    const bool writing = midiWriting.load();
+    const double quartersPerSample = transportBpm.load() / (60.0 * transportRate.load());
+    const double hostPpq = blockPpq ? *blockPpq : static_cast<double> (blockStart) * quartersPerSample;
+    engine->setRecording (writing);
+    const bool clockRuns = playing || ! blockPpq;   // a stopped host's position stands still
+    if (writing && ! writeOriginSet.load())
+    {
+        writeAnchorPpq = hostPpq;   // the take's clock starts with playback
+        writeAnchorSample = blockStart;
+        writeEndSample = -1;
+        if (clockRuns)
+        {
+            writeOrigin.store (hostPpq);
+            writeOriginSet.store (true);
+        }
+    }
+    else if (writing && writeEndSample < 0)
+    {
+        const double expected = writeAnchorPpq + static_cast<double> (blockStart - writeAnchorSample) * quartersPerSample;
+        if (clockRuns && std::abs (hostPpq - expected) > 0.25) writeEndSample = blockStart;   // the playhead jumped
+        else { writeAnchorPpq = hostPpq; writeAnchorSample = blockStart; }
+    }
+    if (writing && writeEndSample >= 0 && blockStart - writeEndSample > static_cast<std::int64_t> (0.1 * transportRate.load()))
+        writeDone.store (true);   // every hit from before the jump has been decided
+    auto ppqAt = [&] (std::int64_t sample) { return writeAnchorPpq + static_cast<double> (sample - writeAnchorSample) * quartersPerSample; };
     samplesProcessed += numSamples;
 
     if (numOut <= 0 || numSamples <= 0)
@@ -156,6 +189,9 @@ void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         scopeIn[(w + i) % scopeSize].store (mono (i), std::memory_order_relaxed);
     engine->process (left, right, n, midiHits.data(), numMidiHits);
     midiDriving.store (engine->midiDriving());
+    plugin_dsp::ShadowEvent rec;
+    while (engine->recordedHits().pop (rec))
+        if (writing && writeOriginSet.load() && (writeEndSample < 0 || rec.sample < writeEndSample)) writeQueue.push ({ ppqAt (rec.sample), rec.type, rec.levelDb });
     for (std::size_t i = 0; i < n; ++i)   // ...and "after"
         scopeOut[(w + i) % scopeSize].store (mono (i), std::memory_order_relaxed);
     scopeWrite.store (w + n, std::memory_order_release);
@@ -221,8 +257,72 @@ void DrumMasterProcessor::rebaseLink() noexcept
     linkVirtual = linkBase;
 }
 
+juce::File DrumMasterProcessor::writtenMidiFolder()
+{
+    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("The Drum Master").getChildFile ("Written MIDI");
+}
+
+void DrumMasterProcessor::startMidiWrite()
+{
+    plugin_dsp::WrittenHit h;
+    while (writeQueue.pop (h)) {}
+    writtenHits.clear();
+    writtenFile = juce::File();
+    writeSawPlay = false;
+    writeDone.store (false);
+    writeOriginSet.store (false);
+    midiWriting.store (true);
+}
+
+void DrumMasterProcessor::stopMidiWrite()
+{
+    if (! midiWriting.exchange (false)) return;
+    plugin_dsp::WrittenHit h;
+    while (writeQueue.pop (h)) writtenHits.push_back (h);
+
+    // Notes from the start of the bar the take began in, so the file keeps its place in the bar.
+    const int beatsPerBar = transportBeatsPerBar.load();
+    const double origin = std::floor (writeOrigin.load() / beatsPerBar) * beatsPerBar;
+    const auto notes = plugin_dsp::toNotes (writtenHits, getMidiMap(), writeMisc, origin);
+    if (notes.empty() || ! writtenMidiFolder().createDirectory()) return;
+
+    constexpr int ticksPerQuarter = 960, noteTicks = ticksPerQuarter / 4;
+    juce::MidiMessageSequence seq;
+    seq.addEvent (juce::MidiMessage::tempoMetaEvent (juce::roundToInt (60.0e6 / transportBpm.load())), 0.0);
+    seq.addEvent (juce::MidiMessage::timeSignatureMetaEvent (beatsPerBar, 4), 0.0);
+    for (const auto& n : notes)
+    {
+        if (n.ppq < 0.0) continue;   // decided just before the take's first bar line
+        const double t = std::round (n.ppq * ticksPerQuarter);
+        seq.addEvent (juce::MidiMessage::noteOn (10, n.note, static_cast<juce::uint8> (n.velocity)), t);
+        seq.addEvent (juce::MidiMessage::noteOff (10, n.note), t + noteTicks);
+    }
+    seq.sort();
+    seq.updateMatchedPairs();
+    juce::MidiFile file;
+    file.setTicksPerQuarterNote (ticksPerQuarter);
+    file.addTrack (seq);
+    const auto out = writtenMidiFolder().getChildFile ("The Drum Master " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M-%S") + ".mid");
+    juce::FileOutputStream stream (out);
+    if (stream.openedOk() && file.writeTo (stream))
+    {
+        writtenFile = out;
+        writtenNoteCount = static_cast<int> (notes.size());
+    }
+}
+
 void DrumMasterProcessor::timerCallback()
 {
+    // MIDI write: collect the timed hits; the take ends when playback stops.
+    if (midiWriting.load())
+    {
+        plugin_dsp::WrittenHit h;
+        while (writeQueue.pop (h)) writtenHits.push_back (h);
+        const bool playing = transportPlaying.load();
+        if (playing) writeSawPlay = true;
+        if ((writeSawPlay && ! playing) || writeDone.load()) stopMidiWrite();
+    }
+
     // Link keeps the dB offsets between the three group volumes: when exactly one of them moved
     // since the last tick, the other two move by the same number of dB (clamped to their range; the
     // unclamped position is kept, so a knob pushed against its rail comes back to its offset).
@@ -337,6 +437,7 @@ void DrumMasterProcessor::getStateInformation (juce::MemoryBlock& destData)
     state.setProperty (midiModeKey, midiMode.load(), nullptr);
     state.setProperty (midiMapKey, juce::String (getMidiMap().toString()), nullptr);
     state.setProperty (midiPresetKey, midiPresetName, nullptr);
+    state.setProperty (writeMiscKey, writeMisc, nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -359,6 +460,7 @@ void DrumMasterProcessor::setStateInformation (const void* data, int sizeInBytes
                 plugin_dsp::MidiNoteMap::fromString (state.getProperty (midiMapKey).toString().toStdString(), map);
             setMidiMap (map);
             midiPresetName = state.getProperty (midiPresetKey, generalMidiPreset).toString();
+            writeMisc = static_cast<bool> (state.getProperty (writeMiscKey, false));
             rebaseLink();
         }
 }

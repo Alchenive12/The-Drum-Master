@@ -165,6 +165,9 @@ public:
 
     /** Hits for the Shadow Play visualiser (read on the UI thread). */
     SpscQueue<ShadowEvent, 256>& shadowEvents() noexcept { return shadow; }
+    /** MIDI write (F3b): while recording, every hit is also queued here for the plugin to time. */
+    void setRecording (bool on) noexcept { recording = on; }
+    SpscQueue<ShadowEvent, 1024>& recordedHits() noexcept { return recorded; }
 
     /** MIDI mode (docs/05-features.md F3): while on and notes keep arriving, the notes say which drum hits
         and when; audio detection only takes over again after midiTimeoutSeconds without a note. */
@@ -291,6 +294,7 @@ private:
         e.levelDb = h.peakDb;
         e.confidence = h.confidence;
         shadow.push (e);
+        if (recording) recorded.push (e);
 
         // Learn this loop's spectrum of a type from its clear, single-type hits. Misc learns too, so
         // what lands there (toms, types switched off) doesn't keep its generic, bass-heavy spectrum.
@@ -418,6 +422,8 @@ private:
     std::array<DualResEstimator, 2> estimator;
     std::array<DrumChannel, numDrumTypes> channels;
     SpscQueue<ShadowEvent, 256> shadow;
+    SpscQueue<ShadowEvent, 1024> recorded;
+    bool recording = false;
 
     std::vector<float> preDelayLine, dryDelayLine, shareLo, shareHi;
     std::array<std::array<float, numBands>, numDrumTypes> generic {}, typePower {};

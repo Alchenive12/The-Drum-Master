@@ -186,6 +186,10 @@ master is listening" [Claude].
   - CLEAR: removes all the drum's notes.
 - **Preset row:** a menu (General MIDI + your files), a name field, SAVE, and DELETE (only for your
   own presets).
+- **WRITE MIDI (bottom right, F3b):**
+  - WRITE becomes STOP while recording; the status line counts the hits.
+  - When the take is done it reads DRAG .MID. Drag it out; a click starts a new take.
+  - The small MISC toggle next to it writes misc hits too (the tooltip names the note).
 - See `screenshots/midi.png`.
 
 ## About [Claude]

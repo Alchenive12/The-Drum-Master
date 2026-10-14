@@ -146,6 +146,7 @@ Anything more is added in phase 5.
 | `midi_mode` | MIDI mode on/off (docs/05-features.md F3) | off |
 | `midi_map` | Note → drum map as text, `36=kick 38=snare ...` | General MIDI |
 | `midi_preset` | Name of the loaded MIDI map preset ("" = edited by hand) | General MIDI |
+| `midi_write_misc` | MIDI write also writes misc hits (on a note no default kit uses) | off |
 
 ## Totals
 - **Host parameters:** 6 global + 10 quick mix + 70 per drum + 4 advanced = **90**, plus 7 reserved for
