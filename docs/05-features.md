@@ -230,3 +230,68 @@ and when, so it never has to guess from the audio.
   claps will need fixing in the piano roll.
 - With MIDI mode on, the notes come from your MIDI, so a take just copies them back.
 
+---
+
+## F4 — Loop learning: two models vote, the winners become string fingerprints (plan, 2026-10-14)
+
+> The user's idea (2026-10-14). Not built yet. Phase 1 (concept), with the plan for the home training session.
+
+### In one sentence
+Give the plugin a loop (a file, or a few bars of playback). It studies it with no time limit, using
+two models and the loop's repetitions. It then hangs one string per sound it found, each with that
+sound's fingerprint, exactly as if the user had uploaded the samples. From then on, live hits are
+matched against those fingerprints.
+
+### The parts
+1. **The fast model (today's, live).** It decides 40 ms after each hit, with the 225-number log-mel
+   picture and a small network (225 → 96 → 9).
+2. **A new slow model (loop learning only).** It sees each hit's whole length, up to about 1 s, so
+   decays and rings count. Speed doesn't matter, so it can be ~100× bigger. It's trained on full-length
+   samples.
+3. **Repetition.** A loop repeats the same samples, so the plugin groups hits that sound alike, using
+   their fingerprints.
+4. **The vote.**
+   - Each group is labelled from all its hits, by both models.
+   - The two models get **weights per drum type**, learned on test data rather than set equal. The
+     slow model should count more for open hat, crash and ride, where more time helps (measured up to
+     100 ms and beyond). The fast one is enough for kick and snare.
+5. **Fingerprints.**
+   - Each group's cleanest hit becomes that string's fingerprint (same as F5, uploaded samples).
+   - A wrong group is fixed with one click, which fixes every hit of that sound.
+6. **Bonus (distillation).** The slow model can label lots of unlabelled audio to train the fast
+   model, so live detection improves too, even without loop learning.
+
+### Hard parts, stated honestly
+- **Inference must run inside the plugin, in C++, with no Python.**
+  - A bigger MLP reuses `TinyMlp.h` as is.
+  - A convolutional network needs a small conv layer in `dsp/` (about 200 lines). The alternative,
+    ONNX Runtime, is a large dependency.
+  - Start with the bigger MLP on a longer picture. Move to a CNN only if it measurably wins.
+- **Voting can't fix a sound that both models consistently mishear**, such as the synthetic snare
+  heard as a hat. That's what the one-click fix is for.
+- **Training on your own samples:**
+  - Split by **pack**, not by sample, so the test kits are truly unseen.
+  - Keep MDB Drums and the electronic loops as the untouched yardstick, so before/after stays
+    comparable with `docs/testing/results/2026-10-14-start-of-week-vs-now.txt`.
+  - Check each pack's licence (EULA) before shipping weights trained on it. Packs that forbid it are
+    test-only.
+
+### Home training session (RTX 3060 Ti)
+1. **Data.** Label your one-shots by folder name, as `dsp/tools/bench.cpp --oneshots` already does.
+   Build loops from them with `research/classifier-train/synth_aug.py`, extended to read your folders.
+2. **Training tool.** Replace scikit-learn's CPU MLP in `train.py` with PyTorch on the GPU, for both
+   models. The fast model keeps exporting to `HitClassifierWeights.h`.
+3. **Training.**
+   - Retrain the fast model on Groove + E-GMD + your packs.
+   - Train the slow model on full-length hits.
+   - Learn the per-type vote weights on held-out packs.
+4. **Measure.** Use the same sets as 2026-10-14: per type, the fast model alone, the slow model alone,
+   the vote, and the vote plus repetition grouping. Compare against the v1 bar (kick/snare/closed hat
+   F1 at least 0.85 with at least 85 % precision; other types at least 70 % precision when they fire).
+
+### What can be prepared away from home
+- **Measure grouping and voting with today's model** on the electronic loops, whose true samples are
+  known.
+- **Extend `extract.cpp` and `train.py`** for full-length features and PyTorch, and test them on the
+  public data.
+

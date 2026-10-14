@@ -69,6 +69,7 @@
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
 ## Next steps
+0b. F4 loop learning (plan in docs/05-features.md): fast + slow (full-length, bigger) models vote, repetition grouping, fingerprints on strings. At home: train both on the user's packs (split by pack, PyTorch on the RTX 3060 Ti, EULA check). Away: measure grouping+vote with today's model; extend extract.cpp/train.py.
 0. Argon review (D-C18): D6 open, fix the rise-spectrum bins together with a re-measure of the Puppet Show kick-sub targets (E-GMD download, needs approval). Argon's weak-spot hypotheses are parked for phase 5.
 1. ~~Classifier~~ done: learned network in (D-C1, results in docs/03). Weak spots to hear at home: open vs closed hat, crash vs ride, claps, very noisy snares.
 2. ~~CI green on the plugin wiring~~ done: run 27 green (ac7e881); the Windows VST3 artifact can be tried in FL.
