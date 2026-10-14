@@ -2,6 +2,7 @@
 // The whole plugin DSP (docs/02-algorithm.md; decisions D-C10..D-C12 in docs/03-decisions-for-review.md).
 //
 //   input (mono sum) -> OnsetDetector -> HitClassifier -> HitTracker (gates on the output timeline)
+//   (MIDI mode, docs/05-features.md F3: mapped notes -> HitClassifier as labelled hits, instead of the detector)
 //   input (L, R) -> pre-delay -> DualResEstimator per channel -> 9 drum estimates ("stems")
 //   stems -> DrumChannel per type -> changes, scaled by that type's gate
 //   output = input delayed by D (50 ms) + sum of changes -> advanced section (HPF, LPF,
@@ -41,6 +42,13 @@
 
 namespace plugin_dsp
 {
+/** MIDI mode: a note that named a drum, at a sample offset inside the block being processed. */
+struct MidiHit
+{
+    std::size_t offset = 0;
+    DrumType type = DrumType::misc;
+};
+
 /** One detected hit for the Shadow Play visualiser (sample = onset on the output timeline). */
 struct ShadowEvent
 {
@@ -94,6 +102,7 @@ public:
         std::fill (dryDelayLine.begin(), dryDelayLine.end(), 0.0f);
         prePos = dryPos = 0;
         inputIndex = 0;
+        lastMidiSample = -1;
         typePower = generic;
         typeCount.fill (0);
         heard.fill (0);
@@ -157,8 +166,18 @@ public:
     /** Hits for the Shadow Play visualiser (read on the UI thread). */
     SpscQueue<ShadowEvent, 256>& shadowEvents() noexcept { return shadow; }
 
-    /** In-place processing of 1 or 2 channels. */
-    void process (float* left, float* right, std::size_t numSamples) noexcept
+    /** MIDI mode (docs/05-features.md F3): while on and notes keep arriving, the notes say which drum hits
+        and when; audio detection only takes over again after midiTimeoutSeconds without a note. */
+    void setMidiMode (bool on) noexcept { midiMode = on; }
+    /** True while MIDI notes, not audio detection, decide the hits. */
+    bool midiDriving() const noexcept
+    {
+        return midiMode && lastMidiSample >= 0 && inputIndex - lastMidiSample < static_cast<std::int64_t> (midiTimeoutSeconds * sr);
+    }
+    static constexpr double midiTimeoutSeconds = 4.0;
+
+    /** In-place processing of 1 or 2 channels. midiHits (sorted by offset) are this block's mapped notes. */
+    void process (float* left, float* right, std::size_t numSamples, const MidiHit* midiHits = nullptr, std::size_t numMidiHits = 0) noexcept
     {
         if (spectraChanged)
         {
@@ -177,9 +196,15 @@ public:
             const float inL = left[i], inR = stereo ? right[i] : inL;
             const float mono = stereo ? 0.5f * (inL + inR) : inL;
 
-            // --- detection on the undelayed input
+            // --- detection on the undelayed input (MIDI mode: the notes, while they keep coming)
+            for (; numMidiHits > 0 && midiHits->offset <= i; ++midiHits, --numMidiHits)
+                if (midiMode)
+                {
+                    classifier.addMidiHit (inputIndex, midiHits->type);
+                    lastMidiSample = inputIndex;
+                }
             OnsetEvent ev;
-            if (detector.processSample (mono, ev)) classifier.addEvent (ev);
+            if (detector.processSample (mono, ev) && ! midiDriving()) classifier.addEvent (ev);
             classifier.pushSample (mono);
             ClassifiedHit hit;
             while (classifier.popClassified (hit)) onHit (hit);
@@ -380,7 +405,8 @@ private:
     }
 
     double sr = 48000.0;
-    std::int64_t lookahead = 2400, inputIndex = 0;
+    std::int64_t lookahead = 2400, inputIndex = 0, lastMidiSample = -1;
+    bool midiMode = false;
     std::size_t preDelay = 0, prePos = 0, dryPos = 0, binsLo = 0, binsHi = 0;
     DrumParams params;
     std::array<ChannelSettings, numDrumTypes> mapped {};

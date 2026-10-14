@@ -7,7 +7,8 @@ namespace
 {
 constexpr std::array<const char*, 3> groupVolumeIds { "qm_kick_volume", "qm_snare_volume", "qm_hats_volume" };
 const juce::Identifier expectedTypesKey { "expected_types" }, detectModeKey { "detect_mode" }, uiZoomKey { "ui_zoom" },
-    stateVersionKey { "state_version" };
+    stateVersionKey { "state_version" }, midiModeKey { "midi_mode" }, midiMapKey { "midi_map" }, midiPresetKey { "midi_preset" };
+const juce::Identifier presetTag { "DrumMasterMidiMap" }, presetMapKey { "map" };
 }
 
 DrumMasterProcessor::DrumMasterProcessor()
@@ -26,6 +27,8 @@ DrumMasterProcessor::DrumMasterProcessor()
         groupVolumes[g] = apvts.getParameter (groupVolumeIds[g]);
     linkParam = apvts.getParameter ("qm_link");
     bypassParam = apvts.getParameter ("global_bypass");
+    setMidiMap (plugin_dsp::MidiNoteMap::generalMidi());
+    midiPresetName = generalMidiPreset;
 
     engine->prepare (48000.0);   // real rate comes in prepareToPlay; latency is 50 ms at every rate
     setLatencySamples (engine->latencySamples());
@@ -68,7 +71,7 @@ juce::AudioProcessorParameter* DrumMasterProcessor::getBypassParameter() const
     return bypassParam;   // host bypass = our bypass: the 50 ms latency stays, so nothing jumps
 }
 
-void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
 
@@ -83,6 +86,25 @@ void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     for (std::size_t i = 0; i < specs.size(); ++i)
         specs[i].apply (dspParams, raw[i]->load (std::memory_order_relaxed));
     engine->setParams (dspParams);
+
+    // MIDI mode: note-ons -> drums (and MIDI learn, which works with the mode off too).
+    const bool midiOn = midiMode.load();
+    engine->setMidiMode (midiOn);
+    std::size_t numMidiHits = 0;
+    for (const auto meta : midiMessages)
+    {
+        const auto msg = meta.getMessage();
+        if (! msg.isNoteOn()) continue;   // velocity 0 counts as a note-off
+        const int note = msg.getNoteNumber();
+        if (int target = learnTarget.load(); target >= 0 && learnTarget.compare_exchange_strong (target, -1))
+            midiMap[static_cast<std::size_t> (note)].store (static_cast<std::int8_t> (target));
+        lastMidiNote.store (note);
+        midiNoteCount.fetch_add (1);
+        const int drum = midiMap[static_cast<std::size_t> (note)].load();
+        if (midiOn && drum != plugin_dsp::MidiNoteMap::none && numMidiHits < midiHits.size() && numSamples > 0)
+            midiHits[numMidiHits++] = { static_cast<std::size_t> (juce::jlimit (0, numSamples - 1, meta.samplePosition)),
+                                        static_cast<plugin_dsp::DrumType> (drum) };
+    }
 
     if (forgetRequested.exchange (false))
         engine->resetLearning();
@@ -132,7 +154,8 @@ void DrumMasterProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     auto mono = [left, right] (std::size_t i) { return right != nullptr ? 0.5f * (left[i] + right[i]) : left[i]; };
     for (std::size_t i = 0; i < n; ++i)   // the spectrum's "before"
         scopeIn[(w + i) % scopeSize].store (mono (i), std::memory_order_relaxed);
-    engine->process (left, right, n);
+    engine->process (left, right, n, midiHits.data(), numMidiHits);
+    midiDriving.store (engine->midiDriving());
     for (std::size_t i = 0; i < n; ++i)   // ...and "after"
         scopeOut[(w + i) % scopeSize].store (mono (i), std::memory_order_relaxed);
     scopeWrite.store (w + n, std::memory_order_release);
@@ -234,6 +257,70 @@ void DrumMasterProcessor::timerCallback()
         rebaseLink();
 }
 
+plugin_dsp::MidiNoteMap DrumMasterProcessor::getMidiMap() const noexcept
+{
+    plugin_dsp::MidiNoteMap m;
+    for (std::size_t n = 0; n < midiMap.size(); ++n) m.drum[n] = midiMap[n].load();
+    return m;
+}
+
+void DrumMasterProcessor::setMidiMap (const plugin_dsp::MidiNoteMap& m) noexcept
+{
+    for (std::size_t n = 0; n < midiMap.size(); ++n) midiMap[n].store (m.drum[n]);
+    midiPresetName = {};
+}
+
+juce::File DrumMasterProcessor::midiPresetFolder()
+{
+    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("The Drum Master").getChildFile ("MIDI maps");
+}
+
+juce::StringArray DrumMasterProcessor::getMidiPresetNames() const
+{
+    juce::StringArray names;
+    for (const auto& f : midiPresetFolder().findChildFiles (juce::File::findFiles, false, "*.xml"))
+        names.add (f.getFileNameWithoutExtension());
+    names.sortNatural();
+    names.removeString (generalMidiPreset);
+    names.insert (0, generalMidiPreset);
+    return names;
+}
+
+bool DrumMasterProcessor::loadMidiPreset (const juce::String& name)
+{
+    auto map = plugin_dsp::MidiNoteMap::generalMidi();
+    if (name != generalMidiPreset)
+    {
+        const auto xml = juce::XmlDocument::parse (midiPresetFolder().getChildFile (juce::File::createLegalFileName (name) + ".xml"));
+        if (xml == nullptr || ! xml->hasTagName (presetTag.toString())
+            || ! plugin_dsp::MidiNoteMap::fromString (xml->getStringAttribute (presetMapKey.toString()).toStdString(), map))
+            return false;
+    }
+    setMidiMap (map);
+    midiPresetName = name;
+    return true;
+}
+
+bool DrumMasterProcessor::saveMidiPreset (const juce::String& name)
+{
+    const auto legal = juce::File::createLegalFileName (name.trim());
+    if (legal.isEmpty() || legal == generalMidiPreset || ! midiPresetFolder().createDirectory()) return false;
+    juce::XmlElement xml (presetTag);
+    xml.setAttribute ("version", 1);
+    xml.setAttribute (presetMapKey, juce::String (getMidiMap().toString()));
+    if (! xml.writeTo (midiPresetFolder().getChildFile (legal + ".xml"))) return false;
+    midiPresetName = legal;
+    return true;
+}
+
+bool DrumMasterProcessor::deleteMidiPreset (const juce::String& name)
+{
+    if (name == generalMidiPreset) return false;
+    const bool ok = midiPresetFolder().getChildFile (juce::File::createLegalFileName (name) + ".xml").deleteFile();
+    if (ok && midiPresetName == name) midiPresetName = {};
+    return ok;
+}
+
 juce::AudioProcessorEditor* DrumMasterProcessor::createEditor()
 {
     // Phase 4: the puppet stage (docs/04-ui-concept.md).
@@ -247,6 +334,9 @@ void DrumMasterProcessor::getStateInformation (juce::MemoryBlock& destData)
     state.setProperty (expectedTypesKey, static_cast<int> (expectedTypes.load()), nullptr);
     state.setProperty (detectModeKey, detectMode.load() == static_cast<int> (DetectMode::autoArmed) ? "auto" : "manual", nullptr);
     state.setProperty (uiZoomKey, uiZoom, nullptr);
+    state.setProperty (midiModeKey, midiMode.load(), nullptr);
+    state.setProperty (midiMapKey, juce::String (getMidiMap().toString()), nullptr);
+    state.setProperty (midiPresetKey, midiPresetName, nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -263,6 +353,12 @@ void DrumMasterProcessor::setStateInformation (const void* data, int sizeInBytes
             detectMode.store (state.getProperty (detectModeKey, "auto").toString() == "auto" ? static_cast<int> (DetectMode::autoArmed)
                                                                                                 : static_cast<int> (DetectMode::manual));
             uiZoom = state.getProperty (uiZoomKey, "main").toString();
+            midiMode.store (static_cast<bool> (state.getProperty (midiModeKey, false)));
+            auto map = plugin_dsp::MidiNoteMap::generalMidi();   // sessions from before MIDI mode: GM
+            if (state.hasProperty (midiMapKey))
+                plugin_dsp::MidiNoteMap::fromString (state.getProperty (midiMapKey).toString().toStdString(), map);
+            setMidiMap (map);
+            midiPresetName = state.getProperty (midiPresetKey, generalMidiPreset).toString();
             rebaseLink();
         }
 }

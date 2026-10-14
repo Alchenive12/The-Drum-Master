@@ -26,6 +26,7 @@
 | D-C16 | The Puppet Show engine (built from Claude's prompt-04 design; agents answered only the targets) | feature | open |
 | D-C17 | The UI details the user left to Claude (layout, deep edit, pages, art, window) | UI | open |
 | D-C18 | External code review (Argon, 2026-10-14): what was fixed, what wasn't, and why | review | open |
+| D-C19 | MIDI mode details left to Claude (timing, fallback, merging, storage, UI) | feature | open |
 
 ---
 
@@ -477,6 +478,28 @@ with a test before fixing it. Every new test fails on main and passes after the 
 
 `VERIFY(dsp)`: listen at home for retriggered hits with Attack/Decay turned up (D3), and check
 that hat and snare tails now end sooner with Decay settings (D1).
+
+---
+
+## D-C19 — MIDI mode: the details Claude decided
+
+You chose: MIDI in, General MIDI with several notes per drum, presets with the project and as files.
+Claude decided the rest:
+
+| Decision | Why | Alternative |
+|---|---|---|
+| A note goes into the classifier as a labelled hit (the network is skipped, everything else runs) | The rise spectrum, peak level, tail tracking, shares and Puppet Show all keep working unchanged | Bypass the classifier entirely: simpler, but the engine and Puppet Show would lose their spectra |
+| Notes within 6 ms are one hit | Same window as audio grouping. Kick + hat as two hits would teach the kick the hat's spectrum | Every note separate |
+| While notes keep coming, audio onsets without a note are ignored | The notes are the truth. A crash with no note shouldn't be guessed at | Classify those too |
+| No note for 4 s: audio detection takes over | A pattern with gaps, or MIDI that stops, still gets processed | Stay MIDI-only |
+| Hit time = note time (no snapping to the audio onset) | With FL's latency compensation they should line up; the 2 ms pre-roll covers small offsets | Snap to the nearest detected onset (more code, and onsets are reported ~40 ms late) |
+| MIDI mode is saved state, not a host parameter | Automating it makes no sense, and the 97-parameter table stays as it is | An automatable toggle |
+| Velocity is ignored | The hit's level comes from the audio | Scale the gate by velocity |
+| Presets are XML files in `Documents/The Drum Master/MIDI maps/` | Easy to find, back up and share | AppData (hidden from users) |
+| The page shows FL's note names (middle C = C5) | You use FL Studio | Standard names (C4) |
+| CMakeLists.txt: `NEEDS_MIDI_INPUT TRUE` | Required for a plugin to receive MIDI | None |
+
+`VERIFY(host)`: FL routing of MIDI into an effect; MIDI vs audio alignment; the AU type change on macOS.
 
 ---
 

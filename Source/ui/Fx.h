@@ -315,6 +315,13 @@ inline void icon (Graphics& g, const juce::String& name, Rectangle<float> r, Col
         head.addTriangle (tip.x - s * 0.02f, tip.y - s * 0.2f, tip.x + s * 0.2f, tip.y + s * 0.02f, tip.x - s * 0.16f, tip.y + s * 0.1f);
         g.fillPath (head);
     }
+    else if (name == "midi")   // a 5-pin DIN socket
+    {
+        g.drawEllipse (Rectangle<float> (s * 0.86f, s * 0.86f).withCentre (ctr), lw * 0.8f);
+        for (int i = 0; i < 5; ++i)
+            g.fillEllipse (Rectangle<float> (s * 0.13f, s * 0.13f).withCentre (polar (ctr, pi * (0.75f + 0.25f * static_cast<float> (i)), s * 0.26f)));
+        g.fillRect (Rectangle<float> (s * 0.14f, s * 0.08f).withCentre ({ ctr.x, ctr.y - s * 0.39f }));
+    }
     else if (name == "about")
     {
         g.setFont (whisper (s * 1.35f));

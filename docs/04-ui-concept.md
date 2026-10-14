@@ -175,6 +175,19 @@ master is listening" [Claude].
   each knob's pointer: when a knob turns, its string follows. He is working them.
 - **FORGET THIS LOOP:** resets what was learned (presence and spectra).
 
+## The Score (MIDI mode) [user + Claude, 2026-10-14]
+- Opened by the round MIDI button left of LISTEN on the stage. The button glows while MIDI mode is on.
+- **Top right:** the MIDI MODE switch.
+- **Status line:** what decides the hits right now (the notes, or the audio as fallback), plus the
+  last note received. Its light flickers as notes arrive.
+- **One row per drum:**
+  - the drum's notes, as number + FL name;
+  - LEARN: the next note played joins this drum (CANCEL while waiting);
+  - CLEAR: removes all the drum's notes.
+- **Preset row:** a menu (General MIDI + your files), a name field, SAVE, and DELETE (only for your
+  own presets).
+- See `screenshots/midi.png`.
+
 ## About [Claude]
 - Version and credits. The Groove MIDI and Expanded Groove MIDI credit (CC BY 4.0) is **required**
   (D-C2). v2 adds the fonts' credit (SIL OFL 1.1).
@@ -219,6 +232,7 @@ master is listening" [Claude].
 | The master's hands (advanced) | `screenshots/advanced.png` |
 | Shadow Play enlarged | `screenshots/shadow.png` |
 | About and credits | `screenshots/about.png` |
+| The Score: MIDI mode's note map and presets (`DRUM_MASTER_DEMO=midi`) | `screenshots/midi.png` |
 
 **Checked in the sandbox:**
 - The plugin builds (Linux, Release, LTO) with no warnings from our code.

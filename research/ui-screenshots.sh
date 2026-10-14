@@ -2,7 +2,7 @@
 # File: research/ui-screenshots.sh
 # Screenshot one page of the editor from the Standalone build, under a virtual X display.
 # Needs: Xvfb running on :77 (Xvfb :77 -screen 0 1400x900x24 &), xdotool, ImageMagick.
-# usage: ui-screenshots.sh <stage|listen|kick|snare|new|show|curtain|advanced|about|shadow> <out.png> [seconds]
+# usage: ui-screenshots.sh <stage|listen|kick|snare|new|show|curtain|advanced|about|midi|shadow> <out.png> [seconds]
 # BUILD = the CMake build directory (default: build)
 # The capture is taken from the root window at the editor's position (capturing the app's own
 # window returns an empty image without a window manager). Before the shot, a click on an empty

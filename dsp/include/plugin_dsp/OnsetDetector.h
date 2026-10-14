@@ -49,6 +49,7 @@ struct OnsetEvent
     std::uint32_t bandMask = 0;              // bit b set: band b had an onset in this event
     std::array<float, numBands> fluxDb {};   // flux of each participating band (0 otherwise)
     std::array<float, numBands> levelDb {};  // band levels at the first onset frame (all bands)
+    std::uint32_t midiTypes = 0;             // MIDI mode: the drums the notes named (HitClassifier skips its network)
 };
 
 class OnsetDetector

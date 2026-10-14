@@ -143,6 +143,9 @@ Anything more is added in phase 5.
 | `detect_mode` | manual / auto-detect-armed | auto-detect-armed (changed in phase 4, D-C17: a fresh instance listens and the strings drop in) |
 | `learned_templates` | Per-type templates adapted to this loop | generic templates |
 | `ui_zoom` | Which puppet or page is open | main |
+| `midi_mode` | MIDI mode on/off (docs/05-features.md F3) | off |
+| `midi_map` | Note → drum map as text, `36=kick 38=snare ...` | General MIDI |
+| `midi_preset` | Name of the loaded MIDI map preset ("" = edited by hand) | General MIDI |
 
 ## Totals
 - **Host parameters:** 6 global + 10 quick mix + 70 per drum + 4 advanced = **90**, plus 7 reserved for

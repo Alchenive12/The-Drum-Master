@@ -42,6 +42,22 @@ Stereo loopKickHats (double sr, std::size_t length, std::vector<std::size_t>& ki
     return { x, x };
 }
 
+/** Like processAll, with MIDI notes (absolute sample, drum) handed to each block. */
+Stereo processWithMidi (DrumEngine& e, const Stereo& in, const std::vector<std::pair<std::size_t, DrumType>>& notes, std::size_t block = 512)
+{
+    Stereo out = in;
+    std::size_t next = 0;
+    std::vector<MidiHit> hits;
+    for (std::size_t i = 0; i < out.l.size(); i += block)
+    {
+        const std::size_t n = std::min (block, out.l.size() - i);
+        hits.clear();
+        for (; next < notes.size() && notes[next].first < i + n; ++next) hits.push_back ({ notes[next].first - i, notes[next].second });
+        e.process (out.l.data() + i, out.r.data() + i, n, hits.data(), hits.size());
+    }
+    return out;
+}
+
 /** Energy (dB) of a filtered signal in [from, from + len). */
 double bandEnergyDb (const std::vector<float>& x, const BiquadCoeffs& c, const std::vector<std::size_t>& starts, std::size_t offset, std::size_t len)
 {
@@ -194,6 +210,53 @@ int main()
         DSP_CHECK (e->presentTypes() == 0);
         processAll (*e, loopKickHats (sr, static_cast<std::size_t> (2.5 * sr), kicks, hats));
         DSP_CHECK ((e->presentTypes() & bit (DrumType::kick)) != 0);
+    }
+
+    // 7) MIDI mode: the notes decide the hits. Snares the network would call closed hats (the synthetic
+    //    snare is bright noise) are snares; kick + hat notes 2 ms apart are one hit; audio onsets
+    //    without a note add nothing; with MIDI mode on but no notes, audio detection still works.
+    {
+        const double sr = 48000.0;
+        const auto beat = static_cast<std::size_t> (0.5 * sr);
+        std::vector<synth::Hit> hits;
+        std::vector<std::pair<std::size_t, DrumType>> notes;
+        for (std::size_t t = static_cast<std::size_t> (0.2 * sr); t + beat < static_cast<std::size_t> (4.0 * sr); t += beat)
+        {
+            hits.push_back ({ synth::Drum::kick, t, 0.9f });
+            hits.push_back ({ synth::Drum::closedHat, t + 96, 0.3f });
+            hits.push_back ({ synth::Drum::snare, t + beat / 2, 0.7f });
+            hits.push_back ({ synth::Drum::crash, t + beat / 4, 0.3f });   // no note: must be ignored
+            notes.push_back ({ t, DrumType::kick });
+            notes.push_back ({ t + 96, DrumType::closedHat });
+            notes.push_back ({ t + beat / 2, DrumType::snare });
+        }
+        const auto x = synth::render (hits, sr, static_cast<std::size_t> (4.5 * sr));
+        auto e = std::make_unique<DrumEngine>();
+        e->prepare (sr);
+        e->setMidiMode (true);
+        processWithMidi (*e, { x, x }, notes);
+        int kicks = 0, snares = 0, other = 0;
+        ShadowEvent ev;
+        while (e->shadowEvents().pop (ev))
+        {
+            if (ev.type == DrumType::kick) ++kicks;
+            else if (ev.type == DrumType::snare) ++snares;
+            else ++other;
+        }
+        std::printf ("MIDI mode: %d kick hits, %d snares, %d other (7 + 7 expected, 0 other)\n", kicks, snares, other);
+        DSP_CHECK (kicks == 7 && snares == 7 && other == 0);
+        DSP_CHECK (e->midiDriving());
+        DSP_CHECK ((e->presentTypes() & (bit (DrumType::snare) | bit (DrumType::closedHat))) == (bit (DrumType::snare) | bit (DrumType::closedHat)));
+        DSP_CHECK ((e->presentTypes() & bit (DrumType::crash)) == 0);
+
+        auto f = std::make_unique<DrumEngine>();   // MIDI mode on, no notes: audio detection
+        f->prepare (sr);
+        f->setMidiMode (true);
+        processAll (*f, { x, x });
+        int found = 0;
+        while (f->shadowEvents().pop (ev)) ++found;
+        DSP_CHECK (! f->midiDriving());
+        DSP_CHECK (found >= 20);
     }
 
     DSP_TEST_END;

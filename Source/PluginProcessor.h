@@ -1,12 +1,13 @@
 // File: Source/PluginProcessor.h
 // The Drum Master processor: the 97 parameters of docs/02-parameters.md (Source/Parameters.h),
 // the whole DSP in plugin_dsp::DrumEngine, a fixed 50 ms latency, saved non-automatable state
-// (expected drum types, detect mode, UI page), the quick-mix Link behaviour, and the puppet-stage
-// editor (PluginEditor.h, phase 4).
+// (expected drum types, detect mode, UI page, MIDI mode and note map), the quick-mix Link behaviour,
+// MIDI map presets, and the puppet-stage editor (PluginEditor.h, phase 4).
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <plugin_dsp/DrumEngine.h>
+#include <plugin_dsp/MidiMap.h>
 
 #include <array>
 #include <atomic>
@@ -32,7 +33,7 @@ public:
     bool hasEditor() const override { return true; }
 
     const juce::String getName() const override { return JucePlugin_Name; }
-    bool acceptsMidi() const override { return false; }
+    bool acceptsMidi() const override { return true; }   // MIDI mode
     bool producesMidi() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
     juce::AudioProcessorParameter* getBypassParameter() const override;
@@ -77,6 +78,30 @@ public:
     static constexpr std::size_t scopeSize = 4096;
     void copyScope (float* in, float* out, std::size_t n) const noexcept;
 
+    // MIDI mode (docs/05-features.md F3): drum MIDI notes say which drum hits, instead of detection.
+    bool getMidiMode() const noexcept { return midiMode.load(); }
+    void setMidiMode (bool on) noexcept { midiMode.store (on); }
+    plugin_dsp::MidiNoteMap getMidiMap() const noexcept;
+    /** An edit by hand: the map no longer matches a preset. */
+    void setMidiMap (const plugin_dsp::MidiNoteMap& m) noexcept;
+    /** The next note-on received is assigned to this drum (-1 cancels). Works with MIDI mode off too. */
+    void learnMidiNote (int drumIndex) noexcept { learnTarget.store (drumIndex); }
+    int getLearnTarget() const noexcept { return learnTarget.load(); }
+    /** The last note-on received (-1: none yet) and how many have arrived (the UI's activity light). */
+    int getLastMidiNote() const noexcept { return lastMidiNote.load(); }
+    std::uint32_t getMidiNoteCount() const noexcept { return midiNoteCount.load(); }
+    /** True while MIDI notes, not audio detection, decide the hits. */
+    bool isMidiDriving() const noexcept { return midiDriving.load(); }
+
+    /** Presets: "General MIDI" is built in; others are files in midiPresetFolder(). "" = edited by hand. */
+    static constexpr const char* generalMidiPreset = "General MIDI";
+    static juce::File midiPresetFolder();
+    juce::StringArray getMidiPresetNames() const;
+    juce::String getMidiPresetName() const { return midiPresetName; }
+    bool loadMidiPreset (const juce::String& name);
+    bool saveMidiPreset (const juce::String& name);
+    bool deleteMidiPreset (const juce::String& name);
+
     juce::String getUiPage() const { return uiZoom; }
     void setUiPage (const juce::String& page) { uiZoom = page; }
 
@@ -102,6 +127,13 @@ private:
     std::atomic<std::size_t> scopeWrite { 0 };   // total samples written (the ring index is this mod scopeSize)
     std::int64_t samplesProcessed = 0;   // audio thread only: the engine's input index at block start
     std::uint32_t appliedTypes = 0xffffffffu;   // audio thread only
+
+    std::atomic<bool> midiMode { false }, midiDriving { false };
+    std::array<std::atomic<std::int8_t>, 128> midiMap {};   // drum index per note, MidiNoteMap::none = ignored
+    std::atomic<int> learnTarget { -1 }, lastMidiNote { -1 };
+    std::atomic<std::uint32_t> midiNoteCount { 0 };
+    std::array<plugin_dsp::MidiHit, 256> midiHits {};   // audio thread only: this block's mapped notes
+    juce::String midiPresetName { generalMidiPreset };  // message thread
     bool wasPlaying = false;          // audio thread only
     juce::String uiZoom { "main" };
 

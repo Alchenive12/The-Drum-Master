@@ -203,7 +203,7 @@ class StagePage final : public juce::Component
 {
 public:
     std::function<void (int)> onOpenSlot;      // slot index
-    std::function<void()> onPuppet, onShow, onAbout, onShadow, onAddString, onListen;
+    std::function<void()> onPuppet, onShow, onAbout, onMidi, onShadow, onAddString, onListen;
 
     StagePage (DrumMasterProcessor& p, StageModel& m) : proc (p), model (m)
     {
@@ -212,20 +212,23 @@ public:
         styled (addString, "pill", "plus");
         styled (show, "pill", "stage", colours::limelight);
         styled (about, "round", "about");
+        styled (midi, "round", "midi");
         styled (bypass, "round", "power", colours::blood);
         styled (link, "pill", "link", colours::ecto);
-        for (auto* b : { &listen, &addString, &show, &about })
+        for (auto* b : { &listen, &addString, &show, &about, &midi })
             addAndMakeVisible (*b);
         addAndMakeVisible (bypass);
         listen.setTooltip ("Auto detect: clears the strings and lets them drop in as the master hears each drum");
         addString.setTooltip ("Hang a new string by hand and choose what hangs on it");
         show.setTooltip ("The Puppet Show: genre-aware smart EQ, behind the curtain");
         about.setTooltip ("About The Drum Master");
+        midi.setTooltip ("MIDI mode: let the drum pattern's notes say which drum hits");
         bypass.setTooltip ("Bypass (the 50 ms latency stays, so nothing jumps)");
         listen.onClick = [this] { if (onListen) onListen(); };
         addString.onClick = [this] { if (onAddString) onAddString(); };
         show.onClick = [this] { if (onShow) onShow(); };
         about.onClick = [this] { if (onAbout) onAbout(); };
+        midi.onClick = [this] { if (onMidi) onMidi(); };
 
         const char* quick[3][3][2] = { { { "qm_kick_volume", "Volume" }, { "qm_kick_punch", "Punch" }, { "qm_kick_weight", "Weight" } },
                                        { { "qm_snare_volume", "Volume" }, { "qm_snare_snap", "Snap" }, { "qm_snare_fat", "Fat" } },
@@ -243,8 +246,12 @@ public:
         link.setTooltip ("Link: the three group volumes keep their dB offsets");
     }
 
+    /** The MIDI button glows while MIDI mode is on. */
+    void setMidiLit (bool on) { if (midi.getToggleState() != on) midi.setToggleState (on, juce::dontSendNotification); }
+
     void resized() override
     {
+        midi.setBounds (614, 14, 32, 32);
         listen.setBounds (654, 14, 100, 32);
         addString.setBounds (762, 14, 104, 32);
         show.setBounds (874, 14, 128, 32);
@@ -414,7 +421,7 @@ public:
         return { xs[static_cast<std::size_t> (i)], drumY (model.slots[static_cast<std::size_t> (i)]) };
     }
 
-    juce::TextButton listen { "LISTEN" }, addString { "STRING" }, show { "PUPPET SHOW" }, about { "" };
+    juce::TextButton listen { "LISTEN" }, addString { "STRING" }, show { "PUPPET SHOW" }, about { "" }, midi { "" };
 
 private:
     enum class Target { none, slot, puppet, ring };
@@ -1385,6 +1392,227 @@ private:
     fx::CachedLayer background;
 };
 
+// ------------------------------------------------------------------------------------- midi
+/** MIDI mode (docs/05-features.md F3): the drum pattern's notes say which drum hits. One row per
+    drum with its notes, LEARN (the next note played joins that drum) and CLEAR; presets below. */
+class MidiPage final : public juce::Component
+{
+public:
+    std::function<void()> onBack;
+    bool demoActivity = false;   // screenshots: pretend notes are arriving
+
+    explicit MidiPage (DrumMasterProcessor& p) : proc (p)
+    {
+        addAndMakeVisible (styleBack (back));
+        back.onClick = [this] { if (onBack) onBack(); };
+        styled (mode, "switch", "", colours::ecto);
+        mode.setClickingTogglesState (true);
+        mode.setTooltip ("MIDI mode: send the drum pattern's MIDI to this plugin and the notes, not the ears, say which drum hits");
+        mode.onClick = [this] { proc.setMidiMode (mode.getToggleState()); refresh(); };
+        addAndMakeVisible (mode);
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            auto& r = rows[i];
+            styled (r.learn, "pill", "midi", drumColour (order[i]));
+            r.learn.setButtonText ("LEARN");
+            r.learn.setTooltip ("Play a note: it joins this drum (and leaves any other)");
+            r.learn.onClick = [this, i] {
+                proc.learnMidiNote (proc.getLearnTarget() == static_cast<int> (plugin_dsp::index (order[i])) ? -1 : static_cast<int> (plugin_dsp::index (order[i])));
+                refresh();
+            };
+            styled (r.clear, "pill", "", colours::blood);
+            r.clear.setButtonText ("CLEAR");
+            r.clear.setTooltip ("Remove every note of this drum");
+            r.clear.onClick = [this, i] {
+                auto m = proc.getMidiMap();
+                m.clear (order[i]);
+                proc.setMidiMap (m);
+                refresh();
+            };
+            addAndMakeVisible (r.learn);
+            addAndMakeVisible (r.clear);
+        }
+        presets.setTooltip ("MIDI map presets: General MIDI is built in; yours are saved in Documents/The Drum Master/MIDI maps");
+        presets.onChange = [this] {
+            const auto name = presets.getText();
+            if (name.isNotEmpty() && name != proc.getMidiPresetName()) proc.loadMidiPreset (name);
+            refresh();
+        };
+        addAndMakeVisible (presets);
+        presetName.setTextToShowWhenEmpty ("preset name", colours::boneDim);
+        presetName.setFont (sans (14.0f));
+        presetName.setJustification (juce::Justification::centredLeft);
+        presetName.setIndents (10, 0);
+        presetName.setColour (juce::TextEditor::backgroundColourId, juce::Colours::white.withAlpha (0.04f));
+        presetName.setColour (juce::TextEditor::outlineColourId, colours::boneFaint);
+        presetName.setColour (juce::TextEditor::focusedOutlineColourId, colours::ecto.withAlpha (0.6f));
+        presetName.setColour (juce::TextEditor::textColourId, colours::bone);
+        presetName.onReturnKey = [this] { save.triggerClick(); };
+        addAndMakeVisible (presetName);
+        styled (save, "pill", "plus", colours::ecto);
+        save.setButtonText ("SAVE");
+        save.setTooltip ("Save the current map as a preset (type a name, or overwrite the selected one)");
+        save.onClick = [this] {
+            auto name = presetName.getText().trim();
+            if (name.isEmpty()) name = presets.getText();
+            if (proc.saveMidiPreset (name)) presetName.clear();
+            refresh();
+        };
+        addAndMakeVisible (save);
+        styled (remove, "danger", "scissors", colours::blood);
+        remove.setButtonText ("DELETE");
+        remove.setTooltip ("Delete the selected preset file");
+        remove.onClick = [this] { proc.deleteMidiPreset (presets.getText()); refresh(); };
+        addAndMakeVisible (remove);
+        refresh();
+    }
+
+    void visibilityChanged() override { if (isVisible()) refresh(); }
+
+    /** ~15 Hz from the editor's timer: activity light, finished learns. */
+    void tick()
+    {
+        const auto count = proc.getMidiNoteCount();
+        const double now = juce::Time::getMillisecondCounterHiRes() * 0.001;
+        if (count != lastCount) { lastCount = count; lastNoteAt = now; }
+        activity = demoActivity ? 0.5f + 0.5f * std::sin (static_cast<float> (now) * 6.0f) : juce::jmax (0.0f, 1.0f - static_cast<float> (now - lastNoteAt) * 2.0f);
+        if (learning >= 0 && proc.getLearnTarget() < 0)
+        {
+            proc.setMidiMap (proc.getMidiMap());   // a learned note: the map no longer matches its preset
+            refresh();
+        }
+        repaint (statusArea);
+    }
+
+    void resized() override
+    {
+        back.setBounds (20, 16, 104, 32);
+        mode.setBounds (880, 16, 200, 32);
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int y = rowY (i);
+            rows[i].learn.setBounds (660, y + 4, 112, 30);
+            rows[i].clear.setBounds (782, y + 4, 92, 30);
+        }
+        presets.setBounds (226, 610, 250, 34);
+        presetName.setBounds (488, 610, 200, 34);
+        save.setBounds (700, 610, 96, 34);
+        remove.setBounds (806, 610, 104, 34);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        background.draw (g, baseW, baseH, [this] (juce::Graphics& ig, juce::Image& img, float s) {
+            const auto r = juce::Rectangle<float> (static_cast<float> (baseW), static_cast<float> (baseH));
+            art::room (ig, r, 0.8f);
+            fx::vignette (ig, r, 0.9f);
+            fx::softShadow (ig, card, 22.0f, 0.9f, 24.0f, 10.0f);
+            fx::frost (ig, img, s, card, 22.0f, 18);
+            fx::glass (ig, card, 22.0f, 0.72f);
+            ig.setFont (display (46.0f));
+            ig.setColour (colours::bone);
+            ig.drawText ("The Score", juce::Rectangle<float> (250.0f, 22.0f, 600.0f, 52.0f), juce::Justification::centred, false);
+            ig.setFont (whisper (18.0f));
+            ig.setColour (colours::boneDim);
+            ig.drawText ("let the notes tell him which drum it was", juce::Rectangle<float> (250.0f, 72.0f, 600.0f, 24.0f), juce::Justification::centred, false);
+            drawOverline (ig, "DRUM", juce::Rectangle<float> (card.getX() + 40.0f, card.getY() + 18.0f, 200.0f, 14.0f), colours::ecto);
+            drawOverline (ig, "NOTES  (FL NAMES, MIDDLE C = C5)", juce::Rectangle<float> (card.getX() + 236.0f, card.getY() + 18.0f, 300.0f, 14.0f), colours::ecto);
+            drawOverline (ig, "PRESET", juce::Rectangle<float> (226.0f, 590.0f, 200.0f, 14.0f), colours::ecto);
+        });
+
+        // status: what decides the hits right now
+        const bool on = proc.getMidiMode() || demoActivity, driving = proc.isMidiDriving() || demoActivity;
+        const int last = demoActivity ? 36 : proc.getLastMidiNote();
+        const auto dot = statusArea.toFloat().removeFromLeft (18.0f).withSizeKeepingCentre (8.0f, 8.0f);
+        const auto lit = driving ? colours::ecto : colours::boneDim;
+        fx::glowDot (g, dot.getCentre(), 14.0f, lit.withAlpha (0.25f + 0.6f * activity));
+        g.setColour (lit.withAlpha (0.5f + 0.5f * activity));
+        g.fillEllipse (dot);
+        juce::String status = ! on ? "MIDI MODE IS OFF  -  THE MASTER LISTENS TO THE AUDIO"
+                            : driving ? "THE NOTES DECIDE EVERY HIT"
+                                      : "NO NOTES FOR 4 S  -  LISTENING TO THE AUDIO UNTIL THEY COME";
+        if (last >= 0) status += "    LAST NOTE " + noteName (last);
+        g.setFont (caps (10.0f, 0.18f));
+        g.setColour (colours::boneDim);
+        g.drawText (status, statusArea.toFloat().withTrimmedLeft (24.0f), juce::Justification::centredLeft, false);
+
+        // the rows
+        const auto map = proc.getMidiMap();
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const auto t = order[i];
+            const float y = static_cast<float> (rowY (i));
+            if (i > 0)
+            {
+                g.setColour (juce::Colours::white.withAlpha (0.06f));
+                g.fillRect (card.getX() + 30.0f, y - 2.0f, card.getWidth() - 60.0f, 1.0f);
+            }
+            const auto c = drumColour (t);
+            fx::glowDot (g, { card.getX() + 46.0f, y + 19.0f }, 12.0f, c.withAlpha (0.4f));
+            g.setColour (c);
+            g.fillEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre ({ card.getX() + 46.0f, y + 19.0f }));
+            g.setFont (sans (15.0f));
+            g.setColour (colours::bone);
+            g.drawText (rowName (t), juce::Rectangle<float> (card.getX() + 62.0f, y, 170.0f, 38.0f), juce::Justification::centredLeft, false);
+            juce::String notes;
+            for (int n = 0; n < 128; ++n)
+                if (map.drum[static_cast<std::size_t> (n)] == static_cast<std::int8_t> (plugin_dsp::index (t)))
+                    notes += (notes.isEmpty() ? "" : "   ") + juce::String (n) + " " + noteName (n);
+            const bool waiting = proc.getLearnTarget() == static_cast<int> (plugin_dsp::index (t));
+            g.setFont (waiting ? caps (10.0f, 0.18f) : mono (12.0f));
+            g.setColour (waiting ? c : notes.isEmpty() ? colours::boneDim : colours::bone.withAlpha (0.85f));
+            g.drawFittedText (waiting ? juce::String ("PLAY A NOTE...") : notes.isEmpty() ? juce::String ("no notes  -  hits from the audio are ignored") : notes,
+                              juce::Rectangle<float> (card.getX() + 236.0f, y, 330.0f, 38.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.8f);
+        }
+    }
+
+private:
+    static constexpr std::array<DrumType, plugin_dsp::numDrumTypes> order { DrumType::kick, DrumType::snare, DrumType::rimshot, DrumType::clap, DrumType::closedHat,
+                                                              DrumType::openHat, DrumType::crash, DrumType::ride, DrumType::misc };
+    static int rowY (std::size_t i) { return 160 + static_cast<int> (i) * 44; }
+    static juce::String rowName (DrumType t)
+    {
+        return t == DrumType::misc ? juce::String ("Toms / misc") : juce::String (plugin_dsp::drumTypeName (t)).substring (0, 1).toUpperCase() + juce::String (plugin_dsp::drumTypeName (t)).substring (1);
+    }
+    static juce::String noteName (int n) { return juce::MidiMessage::getMidiNoteName (n, true, true, 5); }
+
+    void refresh()
+    {
+        const bool on = proc.getMidiMode() || demoActivity;
+        mode.setToggleState (on, juce::dontSendNotification);
+        mode.setButtonText (on ? "MIDI MODE ON" : "MIDI MODE OFF");
+        learning = proc.getLearnTarget();
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const bool waiting = learning == static_cast<int> (plugin_dsp::index (order[i]));
+            rows[i].learn.setToggleState (waiting, juce::dontSendNotification);
+            rows[i].learn.setButtonText (waiting ? "CANCEL" : "LEARN");
+        }
+        const auto names = proc.getMidiPresetNames();
+        presets.clear (juce::dontSendNotification);
+        for (int i = 0; i < names.size(); ++i) presets.addItem (names[i], i + 1);
+        const auto current = proc.getMidiPresetName();
+        if (current.isEmpty()) presets.setText ("Custom (not saved)", juce::dontSendNotification);
+        else presets.setSelectedItemIndex (names.indexOf (current), juce::dontSendNotification);
+        remove.setVisible (current.isNotEmpty() && current != DrumMasterProcessor::generalMidiPreset);
+        repaint();
+    }
+
+    struct Row { juce::TextButton learn, clear; };
+    DrumMasterProcessor& proc;
+    juce::TextButton back, mode, save, remove;
+    std::array<Row, plugin_dsp::numDrumTypes> rows;
+    juce::ComboBox presets;
+    juce::TextEditor presetName;
+    fx::CachedLayer background;
+    const juce::Rectangle<float> card { 150.0f, 130.0f, 800.0f, 450.0f };
+    const juce::Rectangle<int> statusArea { 160, 104, 780, 20 };
+    int learning = -1;
+    std::uint32_t lastCount = 0;
+    double lastNoteAt = -10.0;
+    float activity = 0.0f;
+};
+
 /** Red velvet curtains over everything (The Puppet Show's entrance). */
 class CurtainOverlay final : public juce::Component
 {
@@ -1450,13 +1678,13 @@ class DrumMasterEditor final : public juce::AudioProcessorEditor, private juce::
 {
 public:
     explicit DrumMasterEditor (DrumMasterProcessor& p)
-        : juce::AudioProcessorEditor (p), proc (p), stage (p, model), deep (p, model), show (p, model), advanced (p)
+        : juce::AudioProcessorEditor (p), proc (p), stage (p, model), deep (p, model), show (p, model), advanced (p), midi (p)
     {
         setLookAndFeel (&lnf);
         addAndMakeVisible (content);
         content.setBounds (0, 0, ui::baseW, ui::baseH);
         for (juce::Component* c : { static_cast<juce::Component*> (&stage), static_cast<juce::Component*> (&deep), static_cast<juce::Component*> (&show),
-                                    static_cast<juce::Component*> (&advanced), static_cast<juce::Component*> (&about),
+                                    static_cast<juce::Component*> (&advanced), static_cast<juce::Component*> (&about), static_cast<juce::Component*> (&midi),
                                     static_cast<juce::Component*> (&shadow), static_cast<juce::Component*> (&curtain) })
         {
             content.addChildComponent (c);
@@ -1492,7 +1720,7 @@ public:
     }
 
 private:
-    enum class Page { stage, deep, show, advanced, about };
+    enum class Page { stage, deep, show, advanced, about, midi };
     enum class Anim { none, zoomIn, zoomOut, curtainTo, fadeTo };
 
     void wire()
@@ -1501,6 +1729,7 @@ private:
         stage.onOpenSlot = [this] (int i) { openSlot (i); };
         stage.onPuppet = [this] { fadeTo (Page::advanced); };
         stage.onAbout = [this] { fadeTo (Page::about); };
+        stage.onMidi = [this] { fadeTo (Page::midi); };
         stage.onShow = [this] { curtainTo (Page::show); };
         stage.onShadow = [this] { shadow.setVisible (true); };
         stage.onListen = [this] { if (demo.isEmpty()) proc.armAutoDetect(); model.pendingCount = 0; };
@@ -1546,6 +1775,7 @@ private:
         advanced.onBack = [this] { fadeTo (Page::stage); };
         advanced.onForget = [this] { proc.forgetLoop(); };
         about.onBack = [this] { fadeTo (Page::stage); };
+        midi.onBack = [this] { fadeTo (Page::stage); };
     }
 
     juce::Component& pageComponent (Page p)
@@ -1557,13 +1787,14 @@ private:
             case Page::show: return show;
             case Page::advanced: return advanced;
             case Page::about: return about;
+            case Page::midi: return midi;
         }
         return stage;
     }
 
     void setPageNow (Page p)
     {
-        for (auto q : { Page::stage, Page::deep, Page::show, Page::advanced, Page::about })
+        for (auto q : { Page::stage, Page::deep, Page::show, Page::advanced, Page::about, Page::midi })
         {
             auto& c = pageComponent (q);
             c.setVisible (q == p);
@@ -1571,7 +1802,7 @@ private:
             c.setTransform ({});
         }
         page = p;
-        const char* names[] = { "main", "deep", "show", "advanced", "about" };
+        const char* names[] = { "main", "deep", "show", "advanced", "about", "midi" };
         if (p != Page::deep) proc.setUiPage (names[static_cast<int> (p)]);
     }
 
@@ -1742,6 +1973,7 @@ private:
         else if (demo == "show") { show.showDemoOn(); setPageNow (Page::show); }
         else if (demo == "advanced") setPageNow (Page::advanced);
         else if (demo == "about") setPageNow (Page::about);
+        else if (demo == "midi") { midi.demoActivity = true; setPageNow (Page::midi); }
         else if (demo == "shadow") shadow.setVisible (true);
         else if (demo == "curtain") { curtain.setVisible (true); curtain.progress = 0.72f; curtain.toFront (false); }
     }
@@ -1836,6 +2068,11 @@ private:
         if (stage.isVisible()) stage.tick();
         if (deep.isVisible()) deep.tick();
         if (show.isVisible() && (frame & 1) == 0) show.refresh();   // the live EQ graph runs at 30 fps
+        if ((frame & 3) == 0)
+        {
+            if (midi.isVisible()) midi.tick();
+            stage.setMidiLit (proc.getMidiMode());
+        }
         if (advanced.isVisible())
         {
             advanced.sway = model.sway * 2.0f;
@@ -1858,7 +2095,7 @@ private:
                 setPageNow (Page::deep);
                 return;
             }
-        setPageNow (p == "show" ? Page::show : p == "advanced" ? Page::advanced : p == "about" ? Page::about : Page::stage);
+        setPageNow (p == "show" ? Page::show : p == "advanced" ? Page::advanced : p == "about" ? Page::about : p == "midi" ? Page::midi : Page::stage);
     }
 
     DrumMasterProcessor& proc;
@@ -1870,6 +2107,7 @@ private:
     ui::ShowPage show;
     ui::AdvancedPage advanced;
     ui::AboutPage about;
+    ui::MidiPage midi;
     ui::ShadowOverlay shadow { model };
     ui::CurtainOverlay curtain;
     juce::TooltipWindow tooltips { this, 600 };

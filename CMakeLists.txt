@@ -27,7 +27,7 @@ juce_add_plugin(DrumMaster
     FORMATS                  VST3 AU Standalone   # AU is built on macOS only
     PRODUCT_NAME             "The Drum Master"
     IS_SYNTH                 FALSE
-    NEEDS_MIDI_INPUT         FALSE
+    NEEDS_MIDI_INPUT         TRUE    # MIDI mode (docs/05-features.md F3)
     NEEDS_MIDI_OUTPUT        FALSE
     COPY_PLUGIN_AFTER_BUILD  FALSE
     NEEDS_WEB_BROWSER        FALSE

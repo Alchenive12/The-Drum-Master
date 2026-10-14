@@ -139,3 +139,64 @@ While the track plays, every detected hit is drawn as a shape: a **circle for th
   down into the ring, so each shape appears under the puppet that caught it. A click enlarges Shadow
   Play to fill the window, and a second click shrinks it back.
 - **Q8, name:** Shadow Play.
+
+---
+
+## F3 — MIDI mode (the notes say which drum hits)
+
+> Asked by the user on 2026-10-14. Answers: MIDI **in** (not out); General MIDI default with
+> several notes allowed per drum; presets saved with the project **and** as files.
+
+### In one sentence
+Send the drum pattern's MIDI into the plugin, and every note tells the master exactly which drum hit
+and when, so it never has to guess from the audio.
+
+### How the user will use it
+1. Route the drum pattern's MIDI to The Drum Master. In FL Studio that's a MIDI Out channel playing
+   the same pattern, sent to the plugin's MIDI input port (`VERIFY(host)`: the exact FL routing).
+2. Open the MIDI page (the round MIDI button on the stage) and switch MIDI MODE on.
+3. The default map is General MIDI. To change it, press LEARN on a drum and play a note, or CLEAR a drum.
+4. Save the map as a preset to reuse it in other projects.
+
+### Behaviour
+- **Default map (General MIDI):**
+
+  | Drum | Notes |
+  |---|---|
+  | Kick | 35, 36 |
+  | Snare | 38, 40 |
+  | Rimshot | 37 |
+  | Clap | 39 |
+  | Closed hat | 42, 44 (pedal hat) |
+  | Open hat | 46 |
+  | Crash | 49, 57, 52 (china), 55 (splash) |
+  | Ride | 51, 59, 53 (bell) |
+  | Misc | toms 41, 43, 45, 47, 48, 50 |
+
+  All other notes are ignored. FL names note 36 "C3"; the page uses FL's names.
+- **One drum per note, any number of notes per drum.** LEARN moves a note to the new drum.
+- **The note decides the hit, the audio still shapes it.**
+  - A note becomes a hit at the note's time. The classifier's network is skipped.
+  - The hit still gets its rise spectrum, peak level and tail from the audio, so the per-drum
+    shares, The Puppet Show and the tail tracking work as before.
+  - Notes within 6 ms of each other are one layered hit (kick + hat).
+- **Audio onsets without a note add nothing** while the notes keep coming.
+- **Fallback:** if MIDI mode is on but no note has arrived for 4 s, audio detection takes over again,
+  and it hands back at the next note.
+- **The strings still drop in** (auto detect counts MIDI hits like confident detections). Manual-mode
+  strings still apply: a note for a drum without a string goes to Misc.
+- **Presets:**
+  - "General MIDI" is built in.
+  - Your own presets are XML files in `Documents/The Drum Master/MIDI maps/`.
+  - The project always saves the current map, the mode, and the preset name. "Custom" means it was
+    edited after loading.
+
+### Hard parts, stated honestly
+- **Timing:** the hit starts at the note's time, with the usual 2 ms pre-roll before it.
+  - If the drum audio reaches the plugin later than the MIDI (sampler latency, uncompensated routing),
+    the gate opens a little early. That's harmless.
+  - If the audio is **earlier** than the note, the first part of the transient is missed.
+  - `VERIFY(host)`: check alignment in FL. If needed, a MIDI offset knob is a small follow-up.
+- **Accepting MIDI changes the plugin's buses**: `NEEDS_MIDI_INPUT` in CMakeLists.txt. VST3 gets an
+  event input. On macOS the AU type would become a "music effect" (aumf); macOS isn't built yet.
+

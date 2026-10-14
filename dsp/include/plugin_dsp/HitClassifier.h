@@ -29,6 +29,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
 
 namespace plugin_dsp
@@ -171,6 +172,21 @@ public:
         if (pendingCount < pending.size()) pending[pendingCount++] = e;
     }
 
+    /** MIDI mode: a note named drum t at input sample `sample`. Notes within 6 ms are one hit (kick + hat). */
+    void addMidiHit (std::int64_t sample, DrumType t) noexcept
+    {
+        for (std::size_t i = 0; i < pendingCount; ++i)
+            if (pending[i].midiTypes != 0 && std::llabs (pending[i].sample - sample) <= 6 * msSamples)
+            {
+                pending[i].midiTypes |= bit (t);
+                return;
+            }
+        OnsetEvent e;
+        e.sample = sample;
+        e.midiTypes = bit (t);
+        addEvent (e);
+    }
+
     bool popClassified (ClassifiedHit& out) noexcept
     {
         if (readyCount == 0) return false;
@@ -239,9 +255,12 @@ private:
         for (std::int64_t i = o; i < o + 10 * msSamples; ++i) peak = std::max (peak, std::fabs (raw[static_cast<std::size_t> (i) & mask]));
         hit.peakDb = peak > 1e-6f ? 20.0f * std::log10 (peak) : -120.0f;
 
-        // The network: one probability per type.
+        // The network: one probability per type. In MIDI mode the notes already said which drums.
         std::array<float, numDrumTypes> p {};
-        network.run (features.extract (o), p);
+        if (ev.midiTypes != 0)
+            for (std::size_t t = 0; t < numDrumTypes; ++t) p[t] = (ev.midiTypes >> t) & 1u ? 1.0f : 0.0f;
+        else
+            network.run (features.extract (o), p);
         measured.probability = p;
         measured.magnitude = mag;
 
