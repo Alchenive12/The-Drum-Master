@@ -1,0 +1,45 @@
+THE DRUM MASTER - detection: start of the week (main 971c3b6) vs now (cdb52dd, ccr-e2c7e997-kfwew6), 2026-10-14
+
+Real drums, research/classifier-eval/eval.cpp (OnsetDetector + HitClassifier), tolerance 25 ms.
+Sets from research/classifier-eval/export_sets.py: MDB Drums drum-only (23 tracks, acoustic), 40 loops from held-out Dirt-Samples one-shots (electronic).
+Start and now are IDENTICAL (diff empty) on both sets and equal to the table in docs/03-decisions-for-review.md:
+
+== acoustic (now)
+files 23, tolerance 25 ms
+onsets: tp 6031 fp 1170 fn 498  F1 0.879
+type            tp     fp     fn  precision recall     F1
+kick          1334    345    205       0.79   0.87   0.83
+snare         1522    516   1131       0.75   0.57   0.65
+closed hat    1031    608   1339       0.63   0.44   0.51
+open hat        12    134    257       0.08   0.04   0.06
+crash           32    267    119       0.11   0.21   0.14
+ride           248    337    603       0.42   0.29   0.35
+rimshot         32     81      6       0.28   0.84   0.42
+clap             0    283      0       0.00   0.00   0.00
+misc            66   1965     56       0.03   0.54   0.06
+
+
+== electronic (now)
+files 40, tolerance 25 ms
+onsets: tp 1700 fp 70 fn 17  F1 0.975
+type            tp     fp     fn  precision recall     F1
+kick           423    114    129       0.79   0.77   0.78
+snare          135    197     38       0.41   0.78   0.53
+closed hat     622    104    794       0.86   0.44   0.58
+open hat        23     13    138       0.64   0.14   0.23
+crash            4     49     24       0.08   0.14   0.10
+ride             5     23     95       0.18   0.05   0.08
+rimshot          5      8     54       0.38   0.08   0.14
+clap            40     78     85       0.34   0.32   0.33
+misc            19    463     58       0.04   0.25   0.07
+
+
+Synthetic engine benchmark, dsp/tools/bench.cpp: sections 1-2 (detection) of start and now are IDENTICAL to docs/testing/results/2026-10-02-synthetic-baseline.txt.
+
+Onset report delay (onset -> event reported), real sets; the promise is maxReportDelay() = 37.9 ms at 44.1 kHz:
+  acoustic start: over promise 78, over 40 ms 32  |  events 7201  mean 26.8 ms  median 27.5  95% 34.3  max 43.5  (promise 37.9 ms)
+  acoustic now: over promise 0, over 40 ms 0  |  events 7201  mean 22.0 ms  median 22.4  95% 29.6  max 34.8  (promise 37.9 ms)
+  electronic start: over promise 7, over 40 ms 5  |  events 1761  mean 26.4 ms  median 26.7  95% 31.1  max 41.8  (promise 37.9 ms)
+  electronic now: over promise 0, over 40 ms 0  |  events 1761  mean 21.4 ms  median 21.4  95% 25.1  max 34.8  (promise 37.9 ms)
+
+Every late event still met the engine's 48 ms deadline (50 ms lookahead - 2 ms pre-roll), so nothing was audible; D5 restores the margin.
