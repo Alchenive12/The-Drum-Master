@@ -84,6 +84,7 @@ public:
     {
         detector.reset();
         classifier.reset();
+        classifier.resetLearning();
         tracker.reset();
         puppetShow.reset();
         for (auto& e : estimator) e.reset();
@@ -266,11 +267,12 @@ private:
         e.confidence = h.confidence;
         shadow.push (e);
 
-        // Learn this loop's spectrum of a type from its clear, single-type hits.
+        // Learn this loop's spectrum of a type from its clear, single-type hits. Misc learns too, so
+        // what lands there (toms, types switched off) doesn't keep its generic, bass-heavy spectrum.
         const std::size_t t = index (h.primary);
-        if (h.primary == DrumType::misc || h.weight[t] < 0.7f || h.confidence < 0.7f) return;
+        if (h.weight[t] < 0.7f || h.confidence < 0.7f) return;
         for (std::size_t u = 0; u < numDrumTypes; ++u)
-            if (u != t && h.weight[u] >= 0.3f) return;
+            if (u != t && u != index (DrumType::misc) && h.weight[u] >= 0.3f) return;
         float total = 0.0f;
         for (float v : h.rise) total += v;
         if (total <= 1e-12f) return;

@@ -109,5 +109,45 @@ int main()
         DSP_CHECK_NEAR (static_cast<double> (tr.lastEnd (DrumType::closedHat) - static_cast<std::int64_t> (t0)) / sr, 1.0, 0.001);
     }
 
+    // 6) The tail-drop rule works although the hit is registered 45 ms late: a closed hat over a
+    //    -60 dB noise bed ends near its 30 dB drop, not when it sinks into the bed (and silence
+    //    before the loop doesn't drag the floor down to -140 dB).
+    {
+        HitTracker tr;
+        tr.prepare (sr);
+        auto x = synth::render ({ { synth::Drum::closedHat, t0, 0.5f } }, sr, t0 + static_cast<std::size_t> (sr));
+        synth::Rng rng (9);
+        for (std::size_t i = t0 / 2; i < x.size(); ++i) x[i] += static_cast<float> (0.001 * rng.next());
+        run (tr, x, { hitOf (DrumType::closedHat, t0) }, sr);
+        const double ch = 1000.0 * static_cast<double> (tr.lastEnd (DrumType::closedHat) - static_cast<std::int64_t> (t0)) / sr;
+        std::printf ("closed hat over a noise bed ends at %.0f ms\n", ch);
+        DSP_CHECK (ch > 40.0 && ch < 110.0);
+    }
+
+    // 7) Misc as "the unexplained rest" of a kick hit opens no misc gate; a misc hit does.
+    {
+        HitTracker tr;
+        tr.prepare (sr);
+        ClassifiedHit h = hitOf (DrumType::kick, t0, 0.6f);
+        h.weight[index (DrumType::misc)] = 0.4f;
+        ClassifiedHit m = hitOf (DrumType::misc, t0 + 4800, 0.8f);
+        const auto x = synth::render ({ { synth::Drum::kick, t0, 1.0f }, { synth::Drum::tom, t0 + 4800, 1.0f } }, sr, t0 + static_cast<std::size_t> (sr));
+        run (tr, x, { h, m }, sr);
+        DSP_CHECK (tr.gate (DrumType::misc, static_cast<std::int64_t> (t0 + 100)) <= 0.0f);
+        DSP_CHECK_NEAR (tr.gate (DrumType::misc, static_cast<std::int64_t> (t0 + 4900)), 0.8, 1e-6);
+    }
+
+    // 8) Retrigger: the new hit's 2 ms pre-roll already counts as that hit (age -1), like an isolated hit.
+    {
+        HitTracker tr;
+        tr.prepare (sr);
+        const std::size_t t1 = t0 + static_cast<std::size_t> (0.2 * sr);
+        const auto x = synth::render ({ { synth::Drum::kick, t0, 1.0f }, { synth::Drum::kick, t1, 1.0f } }, sr, t1 + static_cast<std::size_t> (sr));
+        run (tr, x, { hitOf (DrumType::kick, t0), hitOf (DrumType::kick, t1) }, sr);
+        DSP_CHECK (tr.timeSinceOnset (DrumType::kick, static_cast<std::int64_t> (t1 - 50)) == -1);
+        DSP_CHECK (tr.timeSinceOnset (DrumType::kick, static_cast<std::int64_t> (t1 - 200)) == static_cast<std::int64_t> (t1 - 200 - t0));
+        DSP_CHECK (tr.timeSinceOnset (DrumType::kick, static_cast<std::int64_t> (t1)) == 0);
+    }
+
     DSP_TEST_END;
 }

@@ -174,6 +174,7 @@ void DrumMasterProcessor::setExpectedTypes (std::uint32_t mask) noexcept
 void DrumMasterProcessor::armAutoDetect() noexcept
 {
     expectedTypes.store (0);
+    heardTypes.store (0);
     forgetRequested.store (true);
     detectMode.store (static_cast<int> (DetectMode::autoArmed));
 }
@@ -194,12 +195,14 @@ void DrumMasterProcessor::rebaseLink() noexcept
 {
     for (std::size_t g = 0; g < groupVolumes.size(); ++g)
         linkBase[g] = groupVolumes[g]->convertFrom0to1 (groupVolumes[g]->getValue());
+    linkVirtual = linkBase;
 }
 
 void DrumMasterProcessor::timerCallback()
 {
     // Link keeps the dB offsets between the three group volumes: when exactly one of them moved
-    // since the last tick, the other two move by the same number of dB (clamped to their range).
+    // since the last tick, the other two move by the same number of dB (clamped to their range; the
+    // unclamped position is kept, so a knob pushed against its rail comes back to its offset).
     std::array<float, 3> now {};
     int moved = -1, movedCount = 0;
     for (std::size_t g = 0; g < groupVolumes.size(); ++g)
@@ -218,13 +221,17 @@ void DrumMasterProcessor::timerCallback()
         {
             if (static_cast<int> (g) == moved) continue;
             auto* p = groupVolumes[g];
-            const float target = p->getNormalisableRange().snapToLegalValue (now[g] + delta);
+            linkVirtual[g] += delta;
+            const float target = p->getNormalisableRange().snapToLegalValue (linkVirtual[g]);
             p->beginChangeGesture();
             p->setValueNotifyingHost (p->convertTo0to1 (target));
             p->endChangeGesture();
+            linkBase[g] = p->convertFrom0to1 (p->getValue());
         }
+        linkVirtual[static_cast<std::size_t> (moved)] = linkBase[static_cast<std::size_t> (moved)] = now[static_cast<std::size_t> (moved)];
     }
-    if (movedCount > 0) rebaseLink();
+    else if (movedCount > 0)
+        rebaseLink();
 }
 
 juce::AudioProcessorEditor* DrumMasterProcessor::createEditor()

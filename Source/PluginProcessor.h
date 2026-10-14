@@ -106,7 +106,7 @@ private:
     juce::String uiZoom { "main" };
 
     std::array<juce::RangedAudioParameter*, 3> groupVolumes {};
-    std::array<float, 3> linkBase {};
+    std::array<float, 3> linkBase {}, linkVirtual {};   // actual dB at the last tick; unclamped, so offsets survive a rail
     juce::RangedAudioParameter* linkParam = nullptr;
     juce::RangedAudioParameter* bypassParam = nullptr;
 

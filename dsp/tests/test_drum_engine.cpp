@@ -168,5 +168,33 @@ int main()
         std::printf ("real-time factor: %.3f (%.1f %% of one core for stereo 48 kHz)\n", secs / 4.0, 100.0 * secs / 4.0);
         DSP_CHECK (dsptest::allFinite (out.l) && dsptest::allFinite (out.r));
     }
+    // 5) Manual mode, hats switched off: the hats become misc hits, but misc doesn't take the kick's
+    //    sub-bass share (misc learns its spectrum from its own hits like every other type).
+    {
+        const double sr = 48000.0;
+        auto e = std::make_unique<DrumEngine>();
+        e->prepare (sr);
+        e->setAllowedTypes (bit (DrumType::kick) | bit (DrumType::snare));
+        std::vector<std::size_t> kicks, hats;
+        processAll (*e, loopKickHats (sr, static_cast<std::size_t> (3.5 * sr), kicks, hats));
+        const float kickShare = e->shareAt (DualResEstimator::Band::low, DrumType::kick, 1);   // 47 Hz (N = 1024 at 48 kHz)
+        std::printf ("manual mode (hats off): kick share at 47 Hz %.3f\n", static_cast<double> (kickShare));
+        DSP_CHECK (kickShare > 0.9f);
+    }
+
+    // 6) reset() forgets what was heard (presence too); kicks after it count from scratch.
+    {
+        const double sr = 48000.0;
+        auto e = std::make_unique<DrumEngine>();
+        e->prepare (sr);
+        std::vector<std::size_t> kicks, hats;
+        processAll (*e, loopKickHats (sr, static_cast<std::size_t> (2.5 * sr), kicks, hats));
+        DSP_CHECK ((e->presentTypes() & bit (DrumType::kick)) != 0);
+        e->reset();
+        DSP_CHECK (e->presentTypes() == 0);
+        processAll (*e, loopKickHats (sr, static_cast<std::size_t> (2.5 * sr), kicks, hats));
+        DSP_CHECK ((e->presentTypes() & bit (DrumType::kick)) != 0);
+    }
+
     DSP_TEST_END;
 }

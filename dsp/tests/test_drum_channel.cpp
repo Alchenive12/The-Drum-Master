@@ -180,5 +180,48 @@ int main()
         }
     }
 
+    // Retrigger: the hit age jumps from an old, deeply cut tail (-60 dB) to a new attack (+9 dB)
+    // while the gate stays open. The shape gain glides (~0.5 ms) instead of stepping in one sample.
+    {
+        DrumChannel ch;
+        ch.prepare (sr);
+        ChannelSettings s;
+        s.attack = 1.0f;
+        s.decay = -1.0f;
+        ch.setSettings (s);
+        float prev = 0.0f, maxStep = 0.0f;
+        for (std::int64_t i = 0; i < 4800; ++i)
+        {
+            const std::int64_t age = i < 2400 ? 20000 + i : (i < 2496 ? -1 : i - 2496);   // old tail, pre-roll, new hit
+            float dl = 0.0f, dr = 0.0f;
+            ch.process (0.1f, 0.1f, age, 1.0f, dl, dr);
+            if (i > 0) maxStep = std::max (maxStep, std::fabs (dl - prev));
+            prev = dl;
+        }
+        DSP_CHECK (maxStep < 0.02f);   // a one-sample step would be ~0.28 (0.1 x (2.8 - 0.001))
+    }
+
+    // Compressor switched off and on again starts from a fresh envelope (no duck from an old peak).
+    {
+        DrumChannel ch;
+        ch.prepare (sr);
+        ChannelSettings s;
+        s.comp = 1.0f;
+        ch.setSettings (s);
+        float dl = 0.0f, dr = 0.0f;
+        for (int i = 0; i < 480; ++i) ch.process (0.9f, 0.9f, 1000, 1.0f, dl, dr);   // loud: envelope charges
+        s.comp = 0.0f;
+        s.levelDb = -1.0f;   // keep the chain non-neutral while the compressor is off
+        ch.setSettings (s);
+        for (int i = 0; i < 480; ++i) ch.process (0.01f, 0.01f, 1000, 1.0f, dl, dr);
+        s.comp = 1.0f;
+        s.levelDb = 0.0f;
+        ch.setSettings (s);
+        const float makeup = dbToGain (0.5f * 24.0f * (1.0f - 1.0f / 6.0f));
+        ch.process (0.01f, 0.01f, 1000, 1.0f, dl, dr);
+        ch.process (0.01f, 0.01f, 1000, 1.0f, dl, dr);
+        DSP_CHECK_NEAR (0.01f + dl, 0.01f * makeup, 1e-4);   // quiet signal: no reduction, only make-up
+    }
+
     DSP_TEST_END;
 }

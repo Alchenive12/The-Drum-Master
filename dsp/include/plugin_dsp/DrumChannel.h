@@ -64,6 +64,7 @@ public:
     {
         sr = sampleRate;
         releaseCoeff = static_cast<float> (std::exp (-1.0 / (0.080 * sr)));
+        shapeCoeff = static_cast<float> (std::exp (-1.0 / (0.0005 * sr)));
         reset();
     }
 
@@ -73,6 +74,7 @@ public:
             for (auto& f : ch) f.reset();
         envelope = 0.0f;
         smoothedCompGain = dbToGain (makeupDb);
+        smoothedShape = attackGain;
     }
 
     /** Call once per block (not per sample): designs filters and derived constants. */
@@ -108,7 +110,7 @@ public:
         ratio = 1.5f + 4.5f * s.comp;
         makeupDb = s.comp > 0.0f ? 0.5f * (-thresholdDb - 6.0f) * (1.0f - 1.0f / ratio) : 0.0f;
         compAttack = static_cast<float> (std::exp (-1.0 / (static_cast<double> (std::max (0.1f, s.compAttackMs)) * 0.001 * sr)));
-        if (compWasOff) smoothedCompGain = dbToGain (makeupDb);   // start settled, no fade-in
+        if (compWasOff) { envelope = 0.0f; smoothedCompGain = dbToGain (makeupDb); }   // start settled, no fade-in
         drive = 1.0f + 4.0f * s.sat;
         satNorm = satRef / std::tanh (drive * satRef);
         ceiling = dbToGain (-12.0f * s.clip);
@@ -142,9 +144,11 @@ public:
             r *= smoothedCompGain;
         }
 
+        // A retrigger jumps the age from an old tail to a new attack while the gate stays open: glide.
         const float shape = shapeGain (age);
-        l *= shape;
-        r *= shape;
+        smoothedShape = gate > 0.0f ? shapeCoeff * smoothedShape + (1.0f - shapeCoeff) * shape : shape;
+        l *= smoothedShape;
+        r *= smoothedShape;
 
         if (settings.sat > 0.0f)
         {
@@ -225,6 +229,7 @@ private:
     float attackGain = 1.0f, tailGainUp = 1.0f, tailSlopeDbPerSample = 0.0f, level = 1.0f;
     std::int64_t attackLen = 384;
     float thresholdDb = -6.0f, ratio = 1.5f, makeupDb = 0.0f, compAttack = 0.9f, releaseCoeff = 0.999f;
+    float shapeCoeff = 0.96f, smoothedShape = 1.0f;
     float envelope = 0.0f, smoothedCompGain = 1.0f, drive = 1.0f, satNorm = 1.0f, ceiling = 1.0f;
     static constexpr float satRef = 0.5f;
 };

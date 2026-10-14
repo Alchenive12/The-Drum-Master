@@ -9,11 +9,16 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <limits>
 
 namespace
 {
 using plugin_dsp::OnsetDetector;
 using plugin_dsp::OnsetEvent;
+
+/** Longest wait (samples) between an event's onset and the sample that reported it, minus the
+    detector's promised maxReportDelay(); must stay <= 0. Updated by detect(). */
+std::int64_t lateBy = std::numeric_limits<std::int64_t>::min();
 
 std::vector<OnsetEvent> detect (const std::vector<float>& x, double sr)
 {
@@ -21,10 +26,17 @@ std::vector<OnsetEvent> detect (const std::vector<float>& x, double sr)
     d.prepare (sr);
     std::vector<OnsetEvent> ev;
     OnsetEvent e;
-    for (float v : x)
-        if (d.processSample (v, e)) ev.push_back (e);
-    for (std::size_t i = 0; i < static_cast<std::size_t> (sr * 0.2); ++i)   // flush the tail
-        if (d.processSample (0.0f, e)) ev.push_back (e);
+    std::int64_t n = 0;
+    auto push = [&] (float v) {
+        if (d.processSample (v, e))
+        {
+            ev.push_back (e);
+            lateBy = std::max (lateBy, n - e.sample - d.maxReportDelay());
+        }
+        ++n;
+    };
+    for (float v : x) push (v);
+    for (std::size_t i = 0; i < static_cast<std::size_t> (sr * 0.2); ++i) push (0.0f);   // flush the tail
     return ev;
 }
 
@@ -125,6 +137,18 @@ int main()
             }
         }
 
+        // 2b) A hat 5 ms after a kick joins the kick's event; the event is still reported in time.
+        {
+            const std::size_t t0 = static_cast<std::size_t> (0.3 * sr);
+            const std::size_t t1 = t0 + static_cast<std::size_t> (0.005 * sr);
+            const std::vector<synth::Hit> hits { { synth::Drum::kick, t0, 1.0f }, { synth::Drum::closedHat, t1, 0.3f } };
+            lateBy = std::numeric_limits<std::int64_t>::min();
+            const auto ev = detect (synth::render (hits, sr, t0 + static_cast<std::size_t> (sr)), sr);
+            std::printf ("[%.0f Hz] kick + late hat: %zu event(s), reported %.1f ms vs promised delay\n",
+                         sr, ev.size(), 1000.0 * static_cast<double> (lateBy) / sr);
+            DSP_CHECK (lateBy <= 0);
+        }
+
         // 3) Dense 4-bar loop with overlaps (kick + hats, clap on snare, crash, open hat, rimshot).
         {
             const auto hits = synth::denseLoop (sr, 4, static_cast<std::size_t> (0.2 * sr));
@@ -149,8 +173,9 @@ int main()
             for (const auto& e : ev) DSP_CHECK (e.sample < static_cast<std::int64_t> (0.02 * sr));
         }
 
-        // 5) Report delay stays inside the 50 ms lookahead.
+        // 5) Report delay stays inside the 50 ms lookahead, and every event above kept to it.
         {
+            DSP_CHECK (lateBy <= 0);
             OnsetDetector d;
             d.prepare (sr);
             DSP_CHECK (1000.0 * static_cast<double> (d.maxReportDelay()) / sr < 40.0);

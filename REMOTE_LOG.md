@@ -14,12 +14,13 @@
 
 ## Current trip
 - Pipeline phase:                4 — UI built, then redesigned ("v2 look": modern, creepy, eerie; docs/04-ui-concept.md "Look (v2)", screenshots in docs/screenshots/); phase 3 DSP done
-- Branch: ccr-7db4799d-xb6ed3 (session-assigned, UI v2; stands in for `remote/<feature>`). Previous trip: claude/away-from-home-protocol-pc5bni (merged as PR #1)
+- Branch: ccr-e2c7e997-kfwew6 (session-assigned: fixes from Argon's external code review, D-C18). Before: ccr-7db4799d-xb6ed3 (UI v2). Earlier trip: claude/away-from-home-protocol-pc5bni (merged as PR #1)
 - Goal: phase 3 done in code (detector, learned classifier, tracker, processors, engine, 97-param plugin, The Puppet Show engine). Waiting on: agents' answers to prompt 04 (Puppet Show), home test in FL, review of docs/03-decisions-for-review.md. User away ~1 week and delegated decisions: every one is listed in docs/03-decisions-for-review.md
 
 ## Done this trip
 | Commit msg | Files | Verification level (0–4) | Notes |
 |---|---|---|---|
+| [untested] dsp: fixes from Argon's code review (tracker peak/floor, misc gates + learning, retrigger glide, reset, onset report, comp envelope, Link offsets) | HitTracker.h, DrumEngine.h, DrumChannel.h, OnsetDetector.h, Source/PluginProcessor.{h,cpp}, tests (tracker, onset, channel, engine), docs/03-decisions-for-review.md (D-C18), REMOTE_LOG.md | 2 | Each defect reproduced by a new test first (fails on main, passes now). gcc Release 12/12, clang -Werror 12/12, GCC ASan/UBSan: no errors (test_drum_engine is over the 300 s sanitizer timeout on this slow sandbox; main itself takes 297 s). VST3 built in sandbox with the Link change; pluginval left to CI. D6 (rise-band bins) NOT fixed: needs a Puppet Show kick-sub re-measure |
 | [untested] protocol: ponytail skill (MIT, DietrichGebert/ponytail) | .claude/skills/ponytail/SKILL.md, REMOTE_PROTOCOL.md, REMOTE_LOG.md | 0 | Docs only |
 | [untested] protocol: token-saving rules + caveman skill | REMOTE_PROTOCOL.md, .claude/skills/caveman/SKILL.md, REMOTE_LOG.md | 0 | Docs only |
 | test: offline benchmark + findings + home test plan | dsp/tools/{bench.cpp, wav_io.h, sample_packs.h} (new), dsp/CMakeLists.txt (PLUGIN_DSP_BENCH, off by default), docs/06-testing.md, docs/07-home-test-plan.md, docs/testing/results/, .gitignore (no audio) | 2 | bench compiled and run in the sandbox on the real engine; synthetic results deterministic. Key finding: snare taken for closed hat; confirm with real packs at home |
@@ -65,6 +66,7 @@
 <!-- Levels: 0 static review · 1 API checked vs JUCE source · 2 pure C++ compiled+tested in sandbox · 3 CI green (+pluginval) · 4 tested at home in DAW -->
 
 ## Next steps
+0. Argon review (D-C18): D6 open, fix the rise-spectrum bins together with a re-measure of the Puppet Show kick-sub targets (E-GMD download, needs approval). Argon's weak-spot hypotheses are parked for phase 5.
 1. ~~Classifier~~ done: learned network in (D-C1, results in docs/03). Weak spots to hear at home: open vs closed hat, crash vs ride, claps, very noisy snares.
 2. ~~CI green on the plugin wiring~~ done: run 27 green (ac7e881); the Windows VST3 artifact can be tried in FL.
 3. The Puppet Show: v1 targets + engine done (D-C15, D-C16). Listen at home (Mud row least trusted). v2: re-measure targets from the user's genre-named packs (measure_kits.py + measure_rise.cpp).
@@ -85,6 +87,8 @@
 | VERIFY(ui) | Source/ui/Fx.h, Theme.h (D-C17 v2) | v2 look under FL on Windows: Direct2D renderer draws the cached scenery, blur and grain like the Linux screenshots; embedded fonts load (Instrument Serif / Geist); sharp at HiDPI and when resizing; editor CPU (sandbox: stage 48 % of a core, software renderer) |
 | VERIFY(dsp) | PuppetShow.h (D-C16) | Puppet Show on real loops per genre: Mud row least trusted (reads -10..-13 on MDB rock -> full +3.7 dB boost) |
 | VERIFY(dsp) | HitClassifier.h (D-C1) | Open/closed hat, crash/ride, clap and noisy-snare labels on real loops (see the results table in docs/03) |
+| VERIFY(dsp) | HitTracker.h, DrumChannel.h (D-C18) | Retriggered hits with Attack/Decay turned up glide instead of clicking; hat/snare tails now end at their per-type drop (shorter Decay-knob reach) |
+| VERIFY(host) | PluginProcessor.cpp (D-C18) | Quick-mix Link: push one volume so another hits +12 dB, come back: offsets restored |
 | VERIFY(host) | PluginProcessor.cpp (D-C13) | FL shows 50 ms latency (pluginval reads 0 before prepare, as with the template); Link with FL automation; transport stop ends auto detect |
 
 ## Decisions (and why)

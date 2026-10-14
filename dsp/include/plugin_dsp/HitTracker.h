@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <vector>
 
 namespace plugin_dsp
 {
@@ -58,6 +59,10 @@ public:
         midFilter[0].setCoeffs (BiquadCoeffs::highPass (sr, 150.0, 0.707));
         midFilter[1].setCoeffs (BiquadCoeffs::lowPass (sr, 5000.0, 0.707));
         highFilter.setCoeffs (BiquadCoeffs::highPass (sr, 5000.0, 0.707));
+        std::size_t ring = 1;   // level history: hits arrive ~40-48 ms after their onset
+        while (ring < static_cast<std::size_t> (0.100 * sr)) ring <<= 1;
+        levelHistory.assign (ring, {});
+        historyMask = ring - 1;
         reset();
     }
 
@@ -68,6 +73,7 @@ public:
         for (auto& f : midFilter) f.reset();
         energy.fill (0.0f);
         floorDb.fill (-60.0f);
+        std::fill (levelHistory.begin(), levelHistory.end(), std::array<float, numRanges> { -140.0f, -140.0f, -140.0f, -140.0f });
         for (auto& list : segments) list = SegmentList {};
         inputIndex = 0;
     }
@@ -82,20 +88,24 @@ public:
             energy[r] = envCoeff * energy[r] + (1.0f - envCoeff) * v[r] * v[r];
             const float db = 10.0f * std::log10 (energy[r] + 1e-14f);
             levelDb[r] = db;
-            floorDb[r] = std::min (floorDb[r] + floorRise, db);
+            floorDb[r] = std::min (floorDb[r] + floorRise, std::max (-80.0f, db));   // digital silence must not pin it at -140
         }
+        levelHistory[static_cast<std::size_t> (inputIndex) & historyMask] = levelDb;
         for (std::size_t t = 0; t < numDrumTypes; ++t)
             for (auto& seg : segments[t].items)
-                if (seg.used && seg.end == open) updateTail (seg, t);
+                if (seg.used && seg.end == open) updateTail (seg, t, inputIndex, levelDb[rangeOf (t)]);
         ++inputIndex;
     }
 
-    /** Register a classified hit: every type with weight >= minWeight gets a segment. */
+    /** Register a classified hit: every type with weight >= minWeight gets a segment (misc only when
+        it is the hit's main type; otherwise its weight is just the unexplained rest). The hit arrives
+        after its onset, so its peak and tail so far are replayed from the level history. */
     void addHit (const ClassifiedHit& h) noexcept
     {
+        const std::int64_t oldest = std::max<std::int64_t> (0, inputIndex - static_cast<std::int64_t> (levelHistory.size()));
         for (std::size_t t = 0; t < numDrumTypes; ++t)
         {
-            if (h.weight[t] < settings.minWeight) continue;
+            if (t == index (DrumType::misc) ? h.primary != DrumType::misc : h.weight[t] < settings.minWeight) continue;
             SegmentList& list = segments[t];
             for (auto& seg : list.items)   // retrigger: the previous hit of this type ends here
                 if (seg.used && seg.onset < h.sample && seg.end > h.sample) seg.end = h.sample;
@@ -106,6 +116,8 @@ public:
             s.onset = h.sample;
             s.weight = std::min (1.0f, h.weight[t]);
             s.cap = h.sample + static_cast<std::int64_t> (settings.maxSeconds[t] * sr);
+            for (std::int64_t n = std::max (s.onset, oldest); n < inputIndex && s.end == open; ++n)
+                updateTail (s, t, n, levelHistory[static_cast<std::size_t> (n) & historyMask][rangeOf (t)]);
         }
     }
 
@@ -130,14 +142,15 @@ public:
         return g;
     }
 
-    /** Samples since the newest onset of type t at or before tau (-1 if none within its segment). */
+    /** Samples since the newest onset of type t at or before tau; -1 inside a hit's pre-roll (also
+        when it retriggers a sounding one) or when no segment covers tau. */
     std::int64_t timeSinceOnset (DrumType type, std::int64_t tau) const noexcept
     {
-        std::int64_t best = -1;
+        std::int64_t best = open;
         for (const auto& seg : segments[index (type)].items)
-            if (seg.used && tau >= seg.onset && tau < std::min (seg.end, seg.cap) + release)
-                if (best < 0 || tau - seg.onset < best) best = tau - seg.onset;
-        return best;
+            if (seg.used && tau >= seg.onset - preRoll && tau < std::min (seg.end, seg.cap) + release)
+                best = std::min (best, tau - seg.onset);
+        return best == open ? -1 : std::max<std::int64_t> (-1, best);
     }
 
     /** End of the newest segment of type t (open while the tail is still sounding). For tests. */
@@ -183,12 +196,10 @@ private:
         return 0.5f - 0.5f * std::cos (3.14159265f * x);
     }
 
-    void updateTail (Segment& seg, std::size_t type) noexcept
+    void updateTail (Segment& seg, std::size_t type, std::int64_t n, float level) noexcept
     {
-        const std::int64_t n = inputIndex;
         if (n < seg.onset) return;
         const std::size_t r = rangeOf (type);
-        const float level = levelDb[r];
         if (n <= seg.onset + peakWindow)
         {
             seg.peakDb = std::max (seg.peakDb, level);
@@ -212,6 +223,8 @@ private:
     Biquad lowFilter, highFilter;
     std::array<Biquad, 2> midFilter {};
     std::array<float, numRanges> energy {}, levelDb {}, floorDb {};
+    std::vector<std::array<float, numRanges>> levelHistory;
+    std::size_t historyMask = 0;
     std::array<SegmentList, numDrumTypes> segments {};
 };
 } // namespace plugin_dsp

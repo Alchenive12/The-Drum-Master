@@ -193,7 +193,7 @@ private:
     struct Pending
     {
         bool active = false;
-        std::int64_t frameEnd = 0, lastDecision = 0;
+        std::int64_t frameEnd = 0;
         OnsetEvent event;
     };
 
@@ -281,7 +281,7 @@ private:
         historyCount = std::min (historyCount + 1, medianFrames);
 
         // Close the pending event once no more bands can join it.
-        if (pending.active && frameEnd - pending.lastDecision > groupSamples + static_cast<std::int64_t> (hop))
+        if (pending.active && frameEnd - pending.frameEnd > groupSamples + static_cast<std::int64_t> (hop))
             finalisePending();
     }
 
@@ -310,7 +310,6 @@ private:
         }
         pending.event.bandMask |= 1u << b;
         pending.event.fluxDb[b] = std::max (pending.event.fluxDb[b], flux);
-        pending.lastDecision = sampleCount;
     }
 
     void finalisePending() noexcept

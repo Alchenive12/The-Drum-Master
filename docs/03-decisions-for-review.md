@@ -25,6 +25,7 @@
 | D-C15 | Puppet Show v1 targets: averaged answers, kick rows anchored to real kits, M1 redefined | feature | open |
 | D-C16 | The Puppet Show engine (built from Claude's prompt-04 design; agents answered only the targets) | feature | open |
 | D-C17 | The UI details the user left to Claude (layout, deep edit, pages, art, window) | UI | open |
+| D-C18 | External code review (Argon, 2026-10-14): what was fixed, what wasn't, and why | review | open |
 
 ---
 
@@ -447,6 +448,35 @@ edit, and strings side by side and centred. Claude decided the rest:
   without audio. It never touches the sound.
 - `VERIFY(host)`: Shadow Play's ring position with FL's latency compensation, and editor CPU at
   60 fps in FL.
+
+---
+
+## D-C18 — External code review (Argon, 2026-10-14)
+
+Argon reviewed the DSP core and plugin wiring and reported 8 defects. Claude reproduced each one
+with a test before fixing it. Every new test fails on main and passes after the fix.
+
+| ID | Claim | Verdict | What changed |
+|---|---|---|---|
+| D1 | The hit tracker never measures a hit's peak (the hit arrives 40 ms late, after the 20 ms peak window), so the per-type tail drop and the flam guard are dead. Silence pins the noise floor at −140 dB. | **Real, worse than reported.** A closed hat over a −60 dB noise bed stayed open until the 1 s cap. | The tracker keeps 100 ms of level history and replays a hit's start when the hit arrives; the floor can't sink below −80 dB. Closed hat now ends at 72 ms (it was 134 ms in silence and 1000 ms over noise). |
+| D2 | Misc as "the unexplained rest" opens misc gates on ordinary hits, blocks the engine's spectrum learning, and lets switched-off types steal the kick's sub share. | **Real, theft worse than reported.** In manual mode with hats off, misc took 55 % of the kick's 47 Hz bin (Argon estimated 25 %). | A misc gate opens only for hits whose main type is misc. The engine's learning ignores the misc rest. Misc learns its own spectrum like every other type. The kick keeps 100 % of its sub. |
+| D3 | A retrigger skips the new hit's 2 ms pre-roll, and the attack/tail gain jumps up to 69 dB in one sample. | **Real.** | The pre-roll counts as the new hit (age −1). The shape gain glides over about 0.5 ms while the gate is open. |
+| D4 | `reset()` keeps the classifier's presence data; `prepare()` resets before `setParams()`; LISTEN leaves old strings visible. | **1st and 3rd real; 2nd not a bug.** The targets already hold the latest parameters when `prepare()` runs. | `reset()` also forgets presence. LISTEN clears the heard strings at once. |
+| D5 | The onset detector waits up to ~12 ms longer than needed before reporting a layered event, past its promised maximum delay. | **Logic real, impact not reproduced.** The worst case on the synthetic kit (0–6.5 ms gaps, 4 pairs) was still 4.7 ms inside the budget. | It now closes the event as soon as no band can join. Events are identical, only reported sooner. Tests now check every event's report time. |
+| D6 | The rise spectrum's two lowest bands (30–60 and 60–100 Hz) read the same FFT bin. | **Real, but not fixed yet.** | Fixing it changes The Puppet Show's kick-sub measurement, whose targets were anchored to 43 real kits measured with the current bins. The fix and a re-measure go together (a heavy download, so it needs your OK). |
+| D7 | Switching the compressor off and on again ducks from a stale envelope. | **Real, small.** | The envelope restarts when the compressor switches on. |
+| D8 | Quick-mix Link loses the dB offsets when a linked volume hits its rail. | **Real.** | Link keeps each volume's unclamped position, so a volume pushed against its rail comes back to its offset. Argon's fix also pulled back the knob you are dragging, so Claude didn't use it. |
+
+**Not done:**
+- **Per-block cost.** Argon noted the channel filters are designed twice per block. That costs
+  well under 1 % of a block, so it was left as is.
+- **Weak spots.** Argon's hypotheses for the weak spots are good research leads, not bugs: clap
+  burst features, open/closed-hat revision at 90 ms, high-band flatness for crash vs ride, a
+  background term in the shares, ADAA instead of oversampling, and level-relative compressor
+  thresholds. They are parked for phase 5.
+
+`VERIFY(dsp)`: listen at home for retriggered hits with Attack/Decay turned up (D3), and check
+that hat and snare tails now end sooner with Decay settings (D1).
 
 ---
 
