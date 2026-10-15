@@ -48,7 +48,7 @@ def label_from(text):
             return t
     return None
 
-def scan(root, test_only):
+def scan(root, test_only, collections=()):
     shots = []
     root = os.path.abspath(os.path.expandvars(root))
     for d, _, files in os.walk(root):
@@ -60,7 +60,9 @@ def scan(root, test_only):
             if "loop" in rel.lower(): continue
             # pack: Splice keeps sounds under .../packs/<pack name>/..., others: first folder under the root
             low = [x.lower() for x in parts]
-            pack = parts[low.index("packs") + 1] if "packs" in low[:-1] else (parts[0] if len(parts) > 1 else "(root)")
+            if "packs" in low[:-1]: pack = parts[low.index("packs") + 1]
+            elif parts[0] in collections and len(parts) > 2: pack = parts[0] + "/" + parts[1]   # folder of packs
+            else: pack = parts[0] if len(parts) > 1 else os.path.basename(root)
             t = label_from(os.path.splitext(f)[0])
             for folder in reversed(parts[:-1]):
                 if t: break
@@ -73,7 +75,13 @@ def load(path):
     try:
         x, sr = sf.read(path, always_2d=True)
     except Exception:
-        return None
+        try:   # FL Studio's packs: RIFF/WAVE holding an Ogg Vorbis stream (format 0x674f)
+            import io
+            b = open(path, "rb").read(64 * 1024 * 1024)
+            if not (b[:4] == b"RIFF" and b"OggS" in b[:4096]): return None
+            x, sr = sf.read(io.BytesIO(b[b.index(b"OggS"):]), always_2d=True)
+        except Exception:
+            return None
     x = x.mean(axis=1)
     if len(x) == 0 or len(x) / sr > 4.0: return None   # empty, or a loop / long sound
     if sr != SR: x = resample_poly(x, SR, sr)
@@ -125,9 +133,16 @@ def main():
     ap.add_argument("--test-only", nargs="*", default=[])
     ap.add_argument("--loops-per-pack", type=int, default=6)
     ap.add_argument("--test-share", type=float, default=0.2)
+    ap.add_argument("--samples-per-loop", type=float, default=0,
+                    help="if > 0, a pack gets max(--loops-per-pack, samples / this) loops, capped by --max-loops")
+    ap.add_argument("--max-loops", type=int, default=60)
+    ap.add_argument("--collections", nargs="*", default=[], help="first-level folder names that hold several packs")
+    ap.add_argument("--skip", nargs="*", default=[], help="folders to leave out entirely (path prefixes)")
     a = ap.parse_args()
     rng = np.random.default_rng(2026)
-    shots = [s for r in a.roots for s in scan(r, a.test_only)]
+    shots = [s for r in a.roots for s in scan(r, a.test_only, set(a.collections))]
+    skip = [os.path.abspath(x).lower() for x in a.skip]
+    shots = [s for s in shots if not any(os.path.abspath(s["path"]).lower().startswith(x) for x in skip)]
     packs = {}
     for s in shots: packs.setdefault(s["pack"], []).append(s)
     print(f"{len(shots)} labelled one-shots in {len(packs)} packs")
@@ -146,7 +161,9 @@ def main():
         out = os.path.join(a.out, split)
         os.makedirs(out, exist_ok=True)
         cache = {}
-        for k in range(a.loops_per_pack):
+        nloops = a.loops_per_pack
+        if a.samples_per_loop > 0: nloops = min(a.max_loops, max(nloops, int(len(lst) / a.samples_per_loop)))
+        for k in range(nloops):
             kit = {}
             for t, paths in bytype.items():
                 for _ in range(4):   # a few tries: some files are unreadable or too long

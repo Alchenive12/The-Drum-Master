@@ -45,7 +45,11 @@ def main():
         name = os.path.splitext(row["audio_filename"])[0].replace("/", "_")   # unique across E-GMD kits too
         link = os.path.join(out, name + ".wav")
         if not os.path.exists(link):
-            os.symlink(os.path.abspath(wav), link)
+            try: os.symlink(os.path.abspath(wav), link)
+            except OSError:   # Windows without symlink rights: hard link (same drive), else copy
+                try: os.link(os.path.abspath(wav), link)
+                except OSError:
+                    import shutil; shutil.copyfile(wav, link)
         with open(os.path.join(out, name + ".txt"), "w") as f:
             for s, types in events:
                 f.write(f"{s} {','.join(sorted(types))}\n")
