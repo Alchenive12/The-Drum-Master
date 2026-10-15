@@ -276,18 +276,45 @@ matched against those fingerprints.
   - Check each pack's licence (EULA) before shipping weights trained on it. Packs that forbid it are
     test-only.
 
-### Home training session (RTX 3060 Ti)
-1. **Data.** Label your one-shots by folder name, as `dsp/tools/bench.cpp --oneshots` already does.
-   Build loops from them with `research/classifier-train/synth_aug.py`, extended to read your folders.
-2. **Training tool.** Replace scikit-learn's CPU MLP in `train.py` with PyTorch on the GPU, for both
-   models. The fast model keeps exporting to `HitClassifierWeights.h`.
-3. **Training.**
-   - Retrain the fast model on Groove + E-GMD + your packs.
-   - Train the slow model on full-length hits.
-   - Learn the per-type vote weights on held-out packs.
-4. **Measure.** Use the same sets as 2026-10-14: per type, the fast model alone, the slow model alone,
-   the vote, and the vote plus repetition grouping. Compare against the v1 bar (kick/snare/closed hat
-   F1 at least 0.85 with at least 85 % precision; other types at least 70 % precision when they fire).
+### Home training session (RTX 3060 Ti): step by step
+This needs a Claude session that runs **on your PC** (the Claude Desktop app, or `claude remote-control` in
+a terminal in the repo folder). A cloud session can't reach your samples, GPU, FL or Visual Studio.
+
+**Licences first.**
+- **Testing on any sample is fine. Training shipped weights needs the pack's licence to allow it.**
+- **Splice:** as far as we know, Splice's licence forbids using its sounds to train AI/ML models. Check the
+  current terms. Until then, give your Splice folder as `--test-only`.
+- **Free packs from the web:** train only on CC0 or explicitly ML-permitted packs. Others are `--test-only`.
+
+**Steps (PowerShell in the repo folder):**
+1. **Tools:**
+   - `pip install numpy scipy scikit-learn soundfile pandas mido`
+   - `pip install torch --index-url https://download.pytorch.org/whl/cu124` (the CUDA build, for the GPU)
+   - `cmake -S research/loop-learning -B build-research`
+   - `cmake --build build-research --config Release` (Visual Studio). This builds `extract_long`,
+     `extract` and `eval`.
+2. **Your packs → kit loops, split by pack:**
+
+   `python research/loop-learning/home_packs.py --out D:\dm-data\home --roots D:\Samples --test-only "$env:USERPROFILE\Documents\Splice"`
+
+   `packs.csv` lists every pack and its split.
+3. **Pictures:**
+   - `build-research\Release\extract_long.exe D:\dm-data\home\train D:\dm-data\ll\home_train.csv`, and the
+     same for `test` → `home_test.csv`.
+   - For the fast model, `build-research\Release\extract.exe D:\dm-data\home\train <S>\X_home.csv`
+     (`test` → `X_hometest.csv`).
+4. **The public sets, as yardsticks and as training data:**
+   - `research/lookahead-test/fetch_data.sh` (MDB Drums, Dirt-Samples) plus
+     `research/classifier-eval/export_sets.py` and `research/loop-learning/kit_loops.py`: the test sets.
+   - Groove and E-GMD: `research/classifier-train/README.md` (download, `prep_gmd.py`), then `extract_long`
+     on each.
+5. **Train the slow model (GPU):**
+
+   `python research/loop-learning/train_slow_torch.py --train gmd.csv egmd.csv synth.csv home_train.csv --test acoustic.csv electronic.csv kit.csv home_test.csv --egmd-subset <egmd>\subset.csv --out slow.npz`
+6. **Measure the vote:** `python research/loop-learning/vote_eval.py slow.npz acoustic.csv electronic.csv kit.csv home_test.csv`
+7. **Fast model (optional, with your packs):** `python research/classifier-train/train.py <S> dsp/include/plugin_dsp/HitClassifierWeights.h --hidden 96 --aug 1`
+   (it picks up `X_home*.csv`). Then rebuild the plugin, run the DSP tests, and compare `eval` before and
+   after on every set.
 
 ### First measurements (2026-10-14, away from home)
 Raw numbers: `docs/testing/results/2026-10-14-loop-learning.txt`. Tools: `research/loop-learning/`.

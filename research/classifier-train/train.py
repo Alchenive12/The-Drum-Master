@@ -91,6 +91,13 @@ def main():
         held_kits = {"Acoustic Kit", "808 Simple", "Heavy Metal", "Nu RNB", "Cassette (Lo-Fi Compress)", "Jazz"}
         kmask = np.array([k in held_kits for k in kits])
         parts_X.append(Xk[~kmask]); parts_y.append(yk[~kmask])
+    # The user's own packs (research/loop-learning/home_packs.py -> extract): X_home*.csv train,
+    # X_hometest*.csv are packs never trained on (split by pack), scored below.
+    home_tr = [load(p) for p in sorted(glob.glob(f"{S}/X_home*.csv")) if "hometest" not in os.path.basename(p)]
+    home_te = [load(p) for p in sorted(glob.glob(f"{S}/X_hometest*.csv"))]
+    for _, Xh, yh in home_tr:
+        parts_X.append(Xh); parts_y.append(yh)
+    if home_tr: print("home packs (train):", sum(len(a[2]) for a in home_tr), "events")
     Xtr = np.vstack(parts_X); ytr = np.vstack(parts_y)
     print("train label counts:", dict(zip(TYPES, ytr.sum(0))))
 
@@ -122,6 +129,8 @@ def main():
     if have_egmd:
         evals.append(("e-gmd held-out kits (never seen)", Xk[kmask], yk[kmask]))
     evals += [("MDB acoustic (never seen)", Xa, ya), ("electronic loops (never seen)", Xe, ye)]
+    if home_te:
+        evals.append(("your test packs (never seen)", np.vstack([a[1] for a in home_te]), np.vstack([a[2] for a in home_te])))
     summary_parts = []
     for name, X, y in evals:
         f1s = report(name, y, clf.predict_proba(norm(X)))
@@ -140,6 +149,7 @@ def main():
         f.write("// Trained on the Groove MIDI Dataset (Gillick, Roberts, Engel, Tsao, Bamman 2019) and the\n")
         f.write("// Expanded Groove MIDI Dataset (Callender, Hawthorne, Engel 2020), Magenta, both CC BY 4.0\n")
         f.write("// (https://magenta.tensorflow.org/datasets/groove, /datasets/e-gmd), and our own synthetic loops.\n")
+        if home_tr: f.write("// Also trained on the owner's licensed sample packs (packs whose terms forbid ML training are test-only).\n")
         f.write(f"// Held-out results (per-type F1 at 0.5): {summary}\n")
         f.write("#pragma once\n\n#include \"TinyMlp.h\"\n\n#include <cstddef>\n\nnamespace plugin_dsp\n{\n")
         f.write(f"constexpr std::size_t hitClassifierHidden = {hidden};\n\n")

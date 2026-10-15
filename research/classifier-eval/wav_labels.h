@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
-#include <dirent.h>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <sstream>
@@ -100,15 +100,12 @@ inline std::vector<Label> readLabels (const std::string& path)
 
 inline std::vector<std::string> listSet (const std::string& dir)
 {
-    std::vector<std::string> names;
-    if (DIR* d = opendir (dir.c_str()))
+    std::vector<std::string> names;   // std::filesystem, so the tools also build with Visual Studio
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator (dir, ec))
     {
-        while (dirent* e = readdir (d))
-        {
-            std::string n = e->d_name;
-            if (n.size() > 4 && n.substr (n.size() - 4) == ".wav") names.push_back (n.substr (0, n.size() - 4));
-        }
-        closedir (d);
+        const std::string n = e.path().filename().string();
+        if (n.size() > 4 && n.substr (n.size() - 4) == ".wav") names.push_back (n.substr (0, n.size() - 4));
     }
     std::sort (names.begin(), names.end());
     return names;

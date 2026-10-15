@@ -14,7 +14,6 @@
 
 #include <cstdio>
 #include <cstring>
-#include <dirent.h>
 #include <fstream>
 #include <map>
 #include <set>

@@ -25,11 +25,11 @@ TYPES = ["kick", "snare", "closed hat", "open hat", "crash", "ride", "rimshot", 
 NT = len(TYPES)
 
 def load(path):
-    with open(path) as f:
-        head = f.readline().strip().split(",")
-    files = np.loadtxt(path, delimiter=",", skiprows=1, usecols=[0], dtype=str)
-    data = np.loadtxt(path, delimiter=",", skiprows=1, usecols=range(1, len(head)), dtype=np.float32)
-    cols = head[1:]
+    import pandas as pd   # much faster than np.loadtxt on the large (GB) training sets
+    df = pd.read_csv(path, dtype={"file": str})
+    files = df["file"].to_numpy()
+    cols = list(df.columns[1:])
+    data = df[cols].to_numpy(dtype=np.float32)
     yi = [i for i, c in enumerate(cols) if c.startswith("y")]
     pi = [i for i, c in enumerate(cols) if c.startswith("p")]
     fi = [i for i, c in enumerate(cols) if c.startswith("f")]
