@@ -1,6 +1,7 @@
 // File: dsp/tests/test_hit_classifier.cpp
 // OnsetDetector -> HitClassifier on the synthetic kit: every drum alone at three levels, kick + hat
-// together, the dense loop, the manual allowed-type mask, and auto-detect presence.
+// together, the dense loop, the manual allowed-type mask, auto-detect presence, and the second-network
+// rule (docs/09).
 // Prints a confusion summary so tuning is visible in the CI log.
 // The classifier is a learned network (D-C1); its real accuracy is measured on real drums in
 // research/classifier-eval. This synthetic kit is not realistic (its snare is mostly bright noise,
@@ -93,7 +94,10 @@ int main()
                                  got ? drumTypeName (got->primary) : "(none)");
             }
             std::printf ("[%.0f Hz] isolated: %d / %zu correct\n", sr, correct, hits.size());
-            DSP_CHECK (correct >= static_cast<int> (0.6 * static_cast<double> (hits.size())));
+            // 55 % (was 60 %): since the snare training (docs/08-snare-training.md) the network gets this
+            // synthetic kit's snare right (it never did before) but reads its simple clap and ride as hats,
+            // while real claps and rides from sample packs improved. Real-sound results live in docs/08.
+            DSP_CHECK (correct >= static_cast<int> (0.55 * static_cast<double> (hits.size())));
             DSP_CHECK (kicksWrong == 0);   // the kick is right at every level
         }
 
@@ -159,6 +163,62 @@ int main()
             c.setAllowedTypes (allDrumTypes & ~bit (DrumType::openHat));
             const auto out = run (synth::render ({ { synth::Drum::openHat, t0, 0.5f } }, sr, t0 + static_cast<std::size_t> (sr)), sr, c);
             for (const auto& h : out) DSP_CHECK (h.weight[index (DrumType::openHat)] <= 0.0f);
+        }
+
+        // 5) Second network (docs/09 §1): it only ever raises a type's probability, except that it may
+        //    not lift another type above a main-network winner that is at least mainLeadsAbove sure.
+        {
+            std::vector<synth::Hit> hits;
+            std::size_t pos = static_cast<std::size_t> (0.3 * sr);
+            for (float g : { 1.0f, 0.2f })
+                for (std::size_t dr = 0; dr < synth::numDrums; ++dr)
+                {
+                    hits.push_back ({ static_cast<synth::Drum> (dr), pos, g });
+                    pos += static_cast<std::size_t> (0.8 * sr);
+                }
+            const auto x = synth::render (hits, sr, pos);
+            HitClassifier::Settings mainOnly;
+            mainOnly.secondNet = false;
+            HitClassifier a, b;
+            a.prepare (sr, mainOnly);
+            b.prepare (sr);
+            const float lead = HitClassifier::Settings {}.mainLeadsAbove;
+            OnsetDetector d;
+            d.prepare (sr);
+            OnsetEvent e;
+            ClassifiedHit ha, hb;
+            int compared = 0, led = 0;
+            for (std::size_t i = 0; i < x.size() + static_cast<std::size_t> (0.3 * sr); ++i)
+            {
+                const float v = i < x.size() ? x[i] : 0.0f;
+                if (d.processSample (v, e)) { a.addEvent (e); b.addEvent (e); }
+                a.pushSample (v);
+                b.pushSample (v);
+                int na = 0, nb = 0;
+                while (a.popClassified (ha)) ++na;
+                while (b.popClassified (hb)) ++nb;
+                if (na != 1 || nb != 1) continue;   // compare only when each classified exactly this hit
+                const auto& pa = a.lastMeasurements().probability;
+                const auto& pb = b.lastMeasurements().probability;
+                std::size_t top = 0, topB = 0;
+                for (std::size_t t = 1; t < numDrumTypes; ++t)
+                {
+                    if (t == index (DrumType::misc)) continue;
+                    if (pa[t] > pa[top]) top = t;
+                    if (pb[t] > pb[topB]) topB = t;
+                }
+                ++compared;
+                if (pa[top] >= lead)
+                {
+                    ++led;
+                    DSP_CHECK (topB == top);
+                    DSP_CHECK (pb[top] >= pa[top] - 1e-6f);
+                }
+                else
+                    for (std::size_t t = 0; t < numDrumTypes; ++t) DSP_CHECK (pb[t] >= pa[t] - 1e-6f);
+            }
+            std::printf ("[%.0f Hz] second network: %d hits compared, main network led on %d\n", sr, compared, led);
+            DSP_CHECK (compared >= static_cast<int> (hits.size()) / 2);
         }
     }
 

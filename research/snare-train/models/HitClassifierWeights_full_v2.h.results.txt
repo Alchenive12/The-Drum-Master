@@ -1,0 +1,25 @@
+model: full
+ONE-SHOTS FROM PACKS IT NEVER TRAINED ON ((validation sounds from the training packs))
+   (each sound alone at 3 velocities; plugin decision rule at sensitivity 50; missed = wrong)
+   group        sounds      old      new
+   808              29    96.6%   100.0%
+   clap             95    29.5%    65.6%
+   closed hat       45    46.7%    66.7%
+   crash            25    22.7%    34.7%
+   kick            112    71.1%    92.3%
+   open hat         23    21.7%    82.6%
+   perc             62    26.9%    30.1%
+   ride             27     0.0%    17.3%
+   rimshot          10    40.0%    76.7%
+   snare           108    27.2%    75.0%
+   ALL             536    40.5%    68.0%
+   snares were labelled (old): {'kick': 10, 'snare': 88, 'closedHat': 58, 'openHat': 7, 'crash': 33, 'rimshot': 1, 'clap': 42, 'misc': 68}
+   snares were labelled (new): {'snare': 243, 'closedHat': 18, 'openHat': 7, 'crash': 4, 'clap': 18, 'misc': 17}
+BEATS BUILT FROM VALIDATION KITS (2-bar beats, every onset; plugin decision rule)
+   old: snare hits called snare 25.2% | clap 35.4% | hat-only onsets called hat 46.6% | kick-only called kick 64.6% | NON-snare onsets called snare 2.9%  (12841 onsets)
+   new: snare hits called snare 53.8% | clap 33.6% | hat-only onsets called hat 92.3% | kick-only called kick 83.4% | NON-snare onsets called snare 0.9%  (12841 onsets)
+REGRESSION CHECK: real drum loops, tracks not used for model selection (per-type F1 at 0.5)
+   MDB acoustic      old: macro 0.44 | kick=0.82 snare=0.72 closed=0.47 openHa=0.08 crash=0.13 ride=0.26 rimsho=0.70 clap=  -  misc=0.36
+   MDB acoustic      new: macro 0.37 | kick=0.73 snare=0.61 closed=0.35 openHa=0.12 crash=0.00 ride=0.29 rimsho=0.50 clap=  -  misc=0.34
+   electronic loops  old: macro 0.31 | kick=0.75 snare=0.53 closed=0.58 openHa=0.21 crash=0.12 ride=0.07 rimsho=0.19 clap=0.31 misc=0.04
+   electronic loops  new: macro 0.39 | kick=0.79 snare=0.64 closed=0.68 openHa=0.38 crash=0.07 ride=0.12 rimsho=0.28 clap=0.51 misc=0.00

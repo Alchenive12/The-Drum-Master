@@ -1,0 +1,24 @@
+model: full
+ONE-SHOTS FROM PACKS IT NEVER TRAINED ON (CymaticsLofiToolkit-V1-m2d, Sickrate & SIIK Essentials I (WAV Samples), Splice - user-2587851674, Splice2, stuff to save/Aneraxx - Ultimate Future Bounce Vol. 1, stuff to save/MHA - Atmos, stuff to save/SLCTD Collections - Sample Pack)
+   (each sound alone at 3 velocities; plugin decision rule at sensitivity 50; missed = wrong)
+   group        sounds      old      new
+   808               1   100.0%   100.0%
+   clap            123    22.0%    46.6%
+   closed hat       79    41.4%    40.5%
+   crash            20    30.0%    61.7%
+   kick            139    75.3%    90.6%
+   open hat         19     1.8%     0.0%
+   perc             69    18.4%    27.1%
+   ride             26     0.0%    51.3%
+   rimshot           1    66.7%     0.0%
+   snare            93    33.7%    68.5%
+   ALL             570    38.0%    56.9%
+   snares were labelled (old): {'kick': 6, 'snare': 94, 'closedHat': 46, 'openHat': 3, 'crash': 31, 'rimshot': 8, 'clap': 16, 'misc': 70}
+   snares were labelled (new): {'kick': 8, 'snare': 191, 'crash': 2, 'rimshot': 3, 'clap': 17, 'misc': 53}
+   layered hits (old): snare/clap/rim found under a kick or hat 20.0%  (snares 50.0%, 20 tests)
+   layered hits (new): snare/clap/rim found under a kick or hat 25.0%  (snares 66.7%, 20 tests)
+REGRESSION CHECK: real drum loops, tracks not used for model selection (per-type F1 at 0.5)
+   MDB acoustic      old: macro 0.44 | kick=0.82 snare=0.72 closed=0.47 openHa=0.08 crash=0.13 ride=0.26 rimsho=0.70 clap=  -  misc=0.36
+   MDB acoustic      new: macro 0.40 | kick=0.81 snare=0.72 closed=0.44 openHa=0.09 crash=0.13 ride=0.22 rimsho=0.48 clap=  -  misc=0.31
+   electronic loops  old: macro 0.31 | kick=0.75 snare=0.53 closed=0.58 openHa=0.21 crash=0.12 ride=0.07 rimsho=0.19 clap=0.31 misc=0.04
+   electronic loops  new: macro 0.35 | kick=0.75 snare=0.51 closed=0.54 openHa=0.22 crash=0.05 ride=0.21 rimsho=0.45 clap=0.40 misc=0.02

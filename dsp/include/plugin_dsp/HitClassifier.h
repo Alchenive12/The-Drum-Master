@@ -3,8 +3,10 @@
 // docs/03-decisions-for-review.md).
 //
 //   onset o -> HitFeatures (32-band log-mel picture from o - 25 ms to o + 40 ms, 225 numbers)
-//           -> TinyMlp (225 -> 48 ReLU -> 9 sigmoid, weights in HitClassifierWeights.h, trained on
-//              the Groove MIDI + Expanded Groove MIDI datasets (CC BY 4.0) and our own synthetic loops)
+//           -> TinyMlp (225 -> 224 ReLU -> 9 sigmoid, weights in HitClassifierWeights.h, docs/08)
+//              and the first network (225 -> 96 -> 9, HitClassifierWeightsV1.h, Groove + E-GMD, CC BY 4.0),
+//              which is better on live acoustic drums; per type the larger of the two probabilities
+//              (docs/09 §1; Settings::secondNet)
 //           -> one independent probability per type = its weight (multi-label: kick + hat is both)
 //
 // Then: types the user switched off (manual mode) get 0 and their probability moves to misc; the
@@ -20,6 +22,7 @@
 #include "DrumTypes.h"
 #include "Fft.h"
 #include "HitClassifierWeights.h"
+#include "HitClassifierWeightsV1.h"
 #include "HitFeatures.h"
 #include "OnsetDetector.h"
 #include "TinyMlp.h"
@@ -53,6 +56,7 @@ public:
     static constexpr std::array<double, numBands + 1> bandEdges { 30, 60, 100, 160, 250, 400, 630, 1000,
                                                                   1600, 2500, 4000, 6300, 10000, 16000 };
     using Network = TinyMlp<HitFeatures::numFeatures, hitClassifierHidden, numDrumTypes>;
+    using NetworkV1 = TinyMlp<HitFeatures::numFeatures, hitClassifierV1Hidden, numDrumTypes>;
 
     struct Settings
     {
@@ -60,9 +64,14 @@ public:
         float presentMinConfidence = 0.65f;
         double presentMinSpanSeconds = 1.5;
         float learnRate = 0.1f;   // long-term spectra, per confident hit
+
+        // Post-processing without retraining (docs/09).
+        bool secondNet = true;          // also run the first (CC BY) network and keep, per type, the larger probability
+        float mainLeadsAbove = 0.6f;    // ...but when the main network's top type is at least this sure, the
+                                        // second network may not lift any other type above it
     };
 
-    HitClassifier() : network (hitClassifierWeights()) {}
+    HitClassifier() : network (hitClassifierWeights()), networkV1 (hitClassifierV1Weights()) {}
 
     void prepare (double sampleRate) { prepare (sampleRate, Settings {}); }
 
@@ -71,8 +80,8 @@ public:
         sr = sampleRate;
         settings = s;
         features.prepare (sampleRate);
-        windowSamples = features.samplesAfterOnset();
         msSamples = std::max<std::int64_t> (8, static_cast<std::int64_t> (std::lround (sr / 1000.0)));
+        windowSamples = features.samplesAfterOnset();
 
         fftSize = sampleRate >= 88000.0 ? 2048 : 1024;
         fft.prepare (fftSize);
@@ -138,8 +147,9 @@ public:
     /** What the last classification saw (tuning, tests, research/classifier-eval). */
     struct Measurements
     {
-        std::array<float, numDrumTypes> probability {};   // raw network output, before the allowed mask
+        std::array<float, numDrumTypes> probability {};   // network output (both networks), before the allowed mask
         std::array<float, numBands> magnitude {};         // rise spectrum, power^1/4
+        HitFeatures::Vector features {};                  // what the networks saw (research dumps)
     };
     const Measurements& lastMeasurements() const noexcept { return measured; }
 
@@ -255,12 +265,14 @@ private:
         for (std::int64_t i = o; i < o + 10 * msSamples; ++i) peak = std::max (peak, std::fabs (raw[static_cast<std::size_t> (i) & mask]));
         hit.peakDb = peak > 1e-6f ? 20.0f * std::log10 (peak) : -120.0f;
 
-        // The network: one probability per type. In MIDI mode the notes already said which drums.
+        // The networks: one probability per type. In MIDI mode the notes already said which drums.
         std::array<float, numDrumTypes> p {};
+        const auto x = features.extract (o);
+        measured.features = x;
         if (ev.midiTypes != 0)
             for (std::size_t t = 0; t < numDrumTypes; ++t) p[t] = (ev.midiTypes >> t) & 1u ? 1.0f : 0.0f;
         else
-            network.run (features.extract (o), p);
+            runNetworks (x, p);
         measured.probability = p;
         measured.magnitude = mag;
 
@@ -299,6 +311,25 @@ private:
         }
     }
 
+    /** Per type, the larger of the two networks' probabilities. On the eval sets this beat averaging
+        (any blend), logit averaging and -/+ 1-2 ms shift averaging (docs/09 §1, §2). */
+    void runNetworks (const HitFeatures::Vector& x, std::array<float, numDrumTypes>& p) const noexcept
+    {
+        network.run (x, p);
+        if (! settings.secondNet) return;
+        std::size_t top = 0;
+        for (std::size_t t = 1; t < numDrumTypes; ++t)
+            if (t != index (DrumType::misc) && p[t] > p[top]) top = t;
+        const float topP = p[top];
+        std::array<float, numDrumTypes> a {};
+        networkV1.run (x, a);
+        for (std::size_t t = 0; t < numDrumTypes; ++t)
+        {
+            p[t] = std::max (p[t], a[t]);
+            if (t != top && topP >= settings.mainLeadsAbove) p[t] = std::min (p[t], topP - 0.01f);
+        }
+    }
+
     void learn (const ClassifiedHit& hit, std::array<float, numBands> mag) noexcept
     {
         // Presence (auto detect): every type this hit clearly contains, not only the primary one
@@ -332,6 +363,7 @@ private:
     Settings settings;
     HitFeatures features;
     Network network;
+    NetworkV1 networkV1;
     std::size_t fftSize = 1024, mask = 0;
     std::int64_t windowSamples = 1920, msSamples = 48, sampleCount = 0;
     Fft fft;

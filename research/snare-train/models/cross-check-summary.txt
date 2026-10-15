@@ -1,0 +1,11 @@
+A (4 folds): one-shot snare 37.2->64.5 (64.9/71.2/48.7/73.8) | all 44.9->62.2 | MDB 0.392 (0.44) | elec 0.333 (0.31)
+D (4 folds): one-shot snare 37.2->73.9 (85.7/74.6/61.6/83.5) | all 44.9->63.2 | MDB 0.390 (0.44) | elec 0.333 (0.31)
+F (4 folds): one-shot snare 37.2->77.6 (85.7/76.0/69.1/88.2) | all 44.9->62.1 | MDB 0.400 (0.44) | elec 0.328 (0.31)
+M (4 folds): one-shot snare 37.2->74.3 (80.3/74.4/62.3/87.8) | all 44.9->64.2 | MDB 0.407 (0.44) | elec 0.340 (0.31)
+Mb (4 folds): one-shot snare 37.2->72.5 (71.3/68.1/71.5/83.3) | all 44.9->62.1 | beats: snare 28->48, false snares 2.5->1.5% | MDB 0.357 (0.44) | elec 0.378 (0.31)
+Rb (4 folds): one-shot snare 37.2->73.6 (71.3/70.1/72.5/83.3) | all 44.9->62.2 | beats: snare 28->49, false snares 2.5->1.5% | MDB 0.365 (0.44) | elec 0.380 (0.31)
+Pb (4 folds): one-shot snare 37.2->39.7 (55.6/43.8/23.0/46.3) | all 44.9->46.3 | beats: snare 28->27, false snares 2.5->2.2% | MDB 0.432 (0.44) | elec 0.318 (0.31)
+A 808:98 clap:62 closed hat:58 crash:37 kick:91 open hat:5 perc:31 ride:42 rimshot:15 snare:65
+M 808:96 clap:60 closed hat:60 crash:35 kick:89 open hat:19 perc:32 ride:46 rimshot:11 snare:74
+Mb 808:100 clap:58 closed hat:62 crash:34 kick:89 open hat:29 perc:23 ride:21 rimshot:23 snare:72
+Rb 808:100 clap:55 closed hat:62 crash:35 kick:90 open hat:37 perc:23 ride:20 rimshot:20 snare:74

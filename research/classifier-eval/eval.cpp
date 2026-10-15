@@ -3,7 +3,9 @@
 // and reports onset F1 and per-type precision / recall. Not part of the plugin build.
 //
 // Build: g++ -O2 -std=c++17 -I../../dsp/include eval.cpp -o eval   (wav_labels.h is next to it)
-// Run:   ./eval <set_dir> [--tolerance-ms 25]
+// Run:   ./eval <set_dir> [--tolerance-ms 25] [--half guard|report|all] [--second 0|1] [--lead L] [--dump file.csv]
+//   --half: tracks split like research/snare-train (sorted names, even = guard for tuning, odd = report)
+//   --second / --lead: HitClassifier::Settings::secondNet / mainLeadsAbove (docs/09)
 //
 // Matching: a detected event matches the nearest labelled event within the tolerance (labels
 // within 10 ms are one event, a set of types). Per type: predicted = weight >= 0.5 in the matched
@@ -27,14 +29,19 @@ using evalio::Label;
 
 int main (int argc, char** argv)
 {
-    if (argc < 2) { std::fprintf (stderr, "usage: eval <set_dir> [--tolerance-ms N]\n"); return 1; }
+    if (argc < 2) { std::fprintf (stderr, "usage: eval <set_dir> [--tolerance-ms N] [--half guard|report|all] [--second 0|1] [--lead L]\n"); return 1; }
     const std::string dir = argv[1];
     double tolMs = 25.0;
-    std::string dumpPath;
+    std::string dumpPath, half = "all";
+    HitClassifier::Settings settings;
     for (int i = 2; i + 1 < argc; ++i)
     {
-        if (std::string (argv[i]) == "--tolerance-ms") tolMs = std::atof (argv[i + 1]);
-        if (std::string (argv[i]) == "--dump") dumpPath = argv[i + 1];
+        const std::string a = argv[i];
+        if (a == "--tolerance-ms") tolMs = std::atof (argv[i + 1]);
+        if (a == "--dump") dumpPath = argv[i + 1];
+        if (a == "--half") half = argv[i + 1];
+        if (a == "--second") settings.secondNet = std::atoi (argv[i + 1]) != 0;
+        if (a == "--lead") settings.mainLeadsAbove = static_cast<float> (std::atof (argv[i + 1]));
     }
     std::FILE* dump = dumpPath.empty() ? nullptr : std::fopen (dumpPath.c_str(), "w");
     if (dump)
@@ -42,10 +49,21 @@ int main (int argc, char** argv)
         std::fprintf (dump, "truth,primary,file");
         for (std::size_t t = 0; t < numDrumTypes; ++t) std::fprintf (dump, ",p_%s", drumTypeName (static_cast<DrumType> (t)));
         for (int b = 0; b < 13; ++b) std::fprintf (dump, ",m%d", b);
+        std::fprintf (dump, ",sample");
+        for (std::size_t i = 0; i < HitFeatures::numFeatures; ++i) std::fprintf (dump, ",x%zu", i);
         std::fprintf (dump, "\n");
     }
 
-    const auto names = evalio::listSet (dir);
+    auto names = evalio::listSet (dir);
+    std::sort (names.begin(), names.end());
+    if (half != "all")
+    {
+        std::vector<std::string> keep;
+        for (std::size_t i = 0; i < names.size(); ++i)
+            if ((i % 2 == 0) == (half == "guard")) keep.push_back (names[i]);
+        names = keep;
+    }
+    long singleTotal = 0, singleRight = 0;   // single-label matched events: primary type right
 
     std::array<long, numDrumTypes> tp {}, fp {}, fn {};
     long onsetTp = 0, onsetFp = 0, onsetFn = 0;
@@ -61,7 +79,7 @@ int main (int argc, char** argv)
         OnsetDetector det;
         det.prepare (sr);
         HitClassifier cls;
-        cls.prepare (sr);
+        cls.prepare (sr, settings);
         std::vector<ClassifiedHit> hits;
         std::vector<HitClassifier::Measurements> meas;
         OnsetEvent e;
@@ -114,6 +132,8 @@ int main (int argc, char** argv)
                 float mx = 1e-20f;
                 for (float v : m.magnitude) mx = std::max (mx, v);
                 for (float v : m.magnitude) std::fprintf (dump, ",%.3f", static_cast<double> (v / mx));
+                std::fprintf (dump, ",%lld", static_cast<long long> (hit.sample));
+                for (float v : m.features) std::fprintf (dump, ",%.2f", static_cast<double> (v));
                 std::fprintf (dump, "\n");
             }
             if ((truth & (truth - 1)) == 0)   // single-label truth: record the confusion
@@ -121,6 +141,8 @@ int main (int argc, char** argv)
                 std::size_t g = 0;
                 while (! ((truth >> g) & 1u)) ++g;
                 ++confusion[std::string (drumTypeName (static_cast<DrumType> (g))) + " -> " + drumTypeName (hit.primary)];
+                ++singleTotal;
+                if (static_cast<std::size_t> (hit.primary) == g) ++singleRight;
             }
         }
         for (std::size_t i = 0; i < labels.size(); ++i)
@@ -143,6 +165,12 @@ int main (int argc, char** argv)
         const double r = tp[t] + fn[t] ? static_cast<double> (tp[t]) / static_cast<double> (tp[t] + fn[t]) : 0.0;
         std::printf ("%-11s %6ld %6ld %6ld  %9.2f %6.2f %6.2f\n", drumTypeName (static_cast<DrumType> (t)), tp[t], fp[t], fn[t], p, r, f1 (tp[t], fp[t], fn[t]));
     }
+    double macro = 0.0;
+    int nTypes = 0;
+    for (std::size_t t = 0; t < numDrumTypes; ++t)
+        if (tp[t] + fn[t] > 0) { macro += f1 (tp[t], fp[t], fn[t]); ++nTypes; }
+    std::printf ("macro F1 %.3f over %d types | primary right on single-label events %.1f%% (%ld)\n",
+                 nTypes ? macro / nTypes : 0.0, nTypes, singleTotal ? 100.0 * singleRight / singleTotal : 0.0, singleTotal);
     std::printf ("\nmost common confusions (single-label events):\n");
     std::vector<std::pair<long, std::string>> c;
     for (auto& kv : confusion) c.push_back ({ kv.second, kv.first });
