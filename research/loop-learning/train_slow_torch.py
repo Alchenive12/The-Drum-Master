@@ -63,30 +63,36 @@ def main():
     ap.add_argument("--epochs", type=int, default=80)
     ap.add_argument("--aug", type=int, default=1)
     ap.add_argument("--max-rows", type=int, default=600000)
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--lr", type=float, default=1e-3)
+    ap.add_argument("--dropout", type=float, default=0.2)
+    ap.add_argument("--data-on-cpu", action="store_true", help="keep the training rows in RAM, send batches to the GPU")
     a = ap.parse_args()
     hidden = [int(v) for v in a.hidden.split(",")]
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    torch.manual_seed(0)
-    rng = np.random.default_rng(0)
+    torch.manual_seed(a.seed)
+    rng = np.random.default_rng(a.seed)
 
-    Xs, Ys, heldsets = [], [], []
+    Xs, Ys, heldsets, Ws = [], [], [], []
     for p in a.train:
+        p, _, wt = p.partition("@")   # "file.csv@2": that file's rows count twice (repeated after the row cap)
         d = L.load(p)
         held = held_out_mask(d, p, a.egmd_subset)
-        Xs.append(d["L"][~held]); Ys.append(d["Y"][~held])
+        Xs.append(d["L"][~held]); Ys.append(d["Y"][~held]); Ws.append(np.full((~held).sum(), float(wt or 1)))
         if held.any():
             heldsets.append((os.path.basename(p) + " held-out", {k: (v[held] if isinstance(v, np.ndarray) and v.shape[:1] == held.shape else v) for k, v in d.items()}))
             heldsets[-1][1]["missed"] = np.zeros(L.NT, dtype=int)   # held-out rows only: no missed-label counts
         print(f"train {os.path.basename(p)}: {(~held).sum()} hits ({held.sum()} held out)")
-    X, Y = np.vstack(Xs).astype(np.float32), np.vstack(Ys).astype(np.float32)
+    X, Y, Wf = np.vstack(Xs).astype(np.float32), np.vstack(Ys).astype(np.float32), np.concatenate(Ws)
+    del Xs, Ys
     if len(X) > a.max_rows:
-        keep = rng.choice(len(X), a.max_rows, replace=False); X, Y = X[keep], Y[keep]
+        keep = rng.choice(len(X), a.max_rows, replace=False); X, Y, Wf = X[keep], Y[keep], Wf[keep]
 
     # oversample rare labels (as train.py), then EQ/level augmentation copies
     counts = Y.sum(0) + 1; target = np.median(counts)
-    rep = np.ones(len(Y))
+    rep = Wf.copy()
     for t in range(L.NT):
-        if counts[t] < target: rep[Y[:, t] == 1] = np.maximum(rep[Y[:, t] == 1], min(8.0, target / counts[t]))
+        if counts[t] < target: rep[Y[:, t] == 1] = np.maximum(rep[Y[:, t] == 1], Wf[Y[:, t] == 1] * min(8.0, target / counts[t]))
     idx = np.repeat(np.arange(len(Y)), np.round(rep).astype(int))
     X, Y = X[idx], Y[idx]
     X[:, SEGS * MELS] += rng.uniform(-24, 6, len(X)).astype(np.float32)   # the loop's level says little
@@ -99,24 +105,30 @@ def main():
     va, trn = perm[:nval], perm[nval:]
     layers, width = [], X.shape[1]
     for h in hidden:
-        layers += [nn.Linear(width, h), nn.ReLU(), nn.Dropout(0.2)]
+        layers += [nn.Linear(width, h), nn.ReLU(), nn.Dropout(a.dropout)]
         width = h
     layers.append(nn.Linear(width, L.NT))
     net = nn.Sequential(*layers).to(dev)
-    opt = torch.optim.AdamW(net.parameters(), lr=1e-3, weight_decay=1e-3)
+    opt = torch.optim.AdamW(net.parameters(), lr=a.lr, weight_decay=1e-3)
     lossf = nn.BCEWithLogitsLoss()
-    Xt = torch.tensor((X - mean) / std, device=dev); Yt = torch.tensor(Y, device=dev)
+    ddev = "cpu" if a.data_on_cpu else dev
+    X -= mean; X /= std
+    Xt = torch.from_numpy(X).to(ddev); Yt = torch.from_numpy(Y).to(ddev)
+    if a.data_on_cpu and dev == "cuda": Xt = Xt.pin_memory(); Yt = Yt.pin_memory()
     best, bestState, wait, t0 = 1e9, None, 0, time.time()
     for ep in range(a.epochs):
         net.train()
-        order = torch.randperm(len(trn), device=dev)
-        trn_t = torch.tensor(trn, device=dev)[order]
+        order = torch.randperm(len(trn), device=ddev)
+        trn_t = torch.tensor(trn, device=ddev)[order]
         for b in range(0, len(trn_t), 512):
             i = trn_t[b:b + 512]
-            opt.zero_grad(); lossf(net(Xt[i]), Yt[i]).backward(); opt.step()
+            xb, yb = Xt[i].to(dev, non_blocking=True), Yt[i].to(dev, non_blocking=True)
+            opt.zero_grad(); lossf(net(xb), yb).backward(); opt.step()
         net.eval()
         with torch.no_grad():
-            v = lossf(net(Xt[va]), Yt[va]).item()
+            vt = torch.from_numpy(va).to(ddev)
+            v = sum(lossf(net(Xt[vt[b:b + 8192]].to(dev)), Yt[vt[b:b + 8192]].to(dev)).item() * len(vt[b:b + 8192]) for b in range(0, len(vt), 8192)) / len(vt)
+        print(f"epoch {ep + 1} val {v:.4f} {time.time() - t0:.0f} s", flush=True)
         if v < best - 1e-4: best, bestState, wait = v, {k: t.clone() for k, t in net.state_dict().items()}, 0
         else:
             wait += 1

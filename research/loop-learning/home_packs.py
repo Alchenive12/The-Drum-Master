@@ -136,10 +136,11 @@ def main():
     ap.add_argument("--samples-per-loop", type=float, default=0,
                     help="if > 0, a pack gets max(--loops-per-pack, samples / this) loops, capped by --max-loops")
     ap.add_argument("--max-loops", type=int, default=60)
+    ap.add_argument("--seed", type=int, default=2026, help="loop randomness only; the pack split never changes")
     ap.add_argument("--collections", nargs="*", default=[], help="first-level folder names that hold several packs")
     ap.add_argument("--skip", nargs="*", default=[], help="folders to leave out entirely (path prefixes)")
     a = ap.parse_args()
-    rng = np.random.default_rng(2026)
+    rng = np.random.default_rng(a.seed)
     shots = [s for r in a.roots for s in scan(r, a.test_only, set(a.collections))]
     skip = [os.path.abspath(x).lower() for x in a.skip]
     shots = [s for s in shots if not any(os.path.abspath(s["path"]).lower().startswith(x) for x in skip)]
