@@ -19,10 +19,12 @@ Quick facts:
   in the sandbox: `cmake -S dsp -B build-dsp && cmake --build build-dsp && ctest --test-dir build-dsp`.
 - CI: `.github/workflows/build.yml` runs a Linux and Windows build, DSP tests, and pluginval on every push.
 - `processBlock`: no allocations, locks or I/O. Don't touch CMakeLists or CI without saying so.
-- `dsp/include/plugin_dsp/HitClassifierWeights.h` (from `remote/snare-training`) was trained on
-  commercial sample packs and is for **personal use only**. Don't ship it (docs/08).
+- `dsp/include/plugin_dsp/HitClassifierWeights.h` is generated (now `research/loop-learning/export_mlp2.py`,
+  225 -> 512 -> 256 -> 9, `TinyMlp2`; it also sets the network type and whether the V1 second network runs).
+  Trained on commercial sample packs: **personal use only**. Don't ship it (docs/08).
 - `HitClassifierWeightsV1.h` is the first network (Groove + E-GMD, CC BY 4.0, credit in the About box).
-  Since docs/09 it runs next to the main network (per-type max).
+  Off by default since the 2026-10-15 home run (`Settings::secondNet`; docs/05 F4).
+- Home GPU training: `research/loop-learning/home-run/` (runner + jobs on the owner's PC, data in `D:\dm-data`).
 - Real-drum eval in the sandbox: `research/lookahead-test/fetch_data.sh`, then `research/classifier-eval/export_sets.py`,
   then `eval <set> --half guard|report` (tune on guard, report on report).
   `export_kit_loops.py` adds `electronic_kit` (one sample per type per loop, like a produced beat).

@@ -64,11 +64,18 @@ def main():
     ap.add_argument("--aug", type=int, default=1)
     ap.add_argument("--max-rows", type=int, default=600000)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--max-train-rows", type=int, default=1500000, help="cap after weighting/oversampling, before augmentation")
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--dropout", type=float, default=0.2)
+    ap.add_argument("--picture", default="L", choices=["L", "F"],
+                    help="L: full-length picture (slow model); F: the plugin's 40 ms picture (a bigger fast model)")
+    ap.add_argument("--cosine", action="store_true", help="cosine learning-rate decay over --epochs")
+    ap.add_argument("--patience", type=int, default=8)
     ap.add_argument("--data-on-cpu", action="store_true", help="keep the training rows in RAM, send batches to the GPU")
     a = ap.parse_args()
     hidden = [int(v) for v in a.hidden.split(",")]
+    global MELS, SEGS
+    if a.picture == "F": MELS, SEGS = 32, 7
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(a.seed)
     rng = np.random.default_rng(a.seed)
@@ -78,7 +85,7 @@ def main():
         p, _, wt = p.partition("@")   # "file.csv@2": that file's rows count twice (repeated after the row cap)
         d = L.load(p)
         held = held_out_mask(d, p, a.egmd_subset)
-        Xs.append(d["L"][~held]); Ys.append(d["Y"][~held]); Ws.append(np.full((~held).sum(), float(wt or 1)))
+        Xs.append(d[a.picture][~held]); Ys.append(d["Y"][~held]); Ws.append(np.full((~held).sum(), float(wt or 1)))
         if held.any():
             heldsets.append((os.path.basename(p) + " held-out", {k: (v[held] if isinstance(v, np.ndarray) and v.shape[:1] == held.shape else v) for k, v in d.items()}))
             heldsets[-1][1]["missed"] = np.zeros(L.NT, dtype=int)   # held-out rows only: no missed-label counts
@@ -93,7 +100,8 @@ def main():
     rep = Wf.copy()
     for t in range(L.NT):
         if counts[t] < target: rep[Y[:, t] == 1] = np.maximum(rep[Y[:, t] == 1], Wf[Y[:, t] == 1] * min(8.0, target / counts[t]))
-    idx = np.repeat(np.arange(len(Y)), np.round(rep).astype(int))
+    if rep.sum() > a.max_train_rows: rep *= a.max_train_rows / rep.sum()   # keep RAM bounded (rows before augmentation)
+    idx = np.repeat(np.arange(len(Y)), rng.poisson(rep))
     X, Y = X[idx], Y[idx]
     X[:, SEGS * MELS] += rng.uniform(-24, 6, len(X)).astype(np.float32)   # the loop's level says little
     if a.aug > 0:
@@ -111,6 +119,7 @@ def main():
     net = nn.Sequential(*layers).to(dev)
     opt = torch.optim.AdamW(net.parameters(), lr=a.lr, weight_decay=1e-3)
     lossf = nn.BCEWithLogitsLoss()
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.epochs) if a.cosine else None
     ddev = "cpu" if a.data_on_cpu else dev
     X -= mean; X /= std
     Xt = torch.from_numpy(X).to(ddev); Yt = torch.from_numpy(Y).to(ddev)
@@ -129,10 +138,11 @@ def main():
             vt = torch.from_numpy(va).to(ddev)
             v = sum(lossf(net(Xt[vt[b:b + 8192]].to(dev)), Yt[vt[b:b + 8192]].to(dev)).item() * len(vt[b:b + 8192]) for b in range(0, len(vt), 8192)) / len(vt)
         print(f"epoch {ep + 1} val {v:.4f} {time.time() - t0:.0f} s", flush=True)
+        if sched: sched.step()
         if v < best - 1e-4: best, bestState, wait = v, {k: t.clone() for k, t in net.state_dict().items()}, 0
         else:
             wait += 1
-            if wait >= 8: break
+            if wait >= a.patience: break
     net.load_state_dict(bestState)
     print(f"{ep + 1} epochs, {time.time() - t0:.0f} s, validation loss {best:.4f}")
 
@@ -145,7 +155,7 @@ def main():
 
     saved = {}
     for name, d in heldsets + [(os.path.splitext(os.path.basename(p))[0], L.load(p)) for p in a.test]:
-        P = predict(d["L"])
+        P = predict(d[a.picture])
         saved["P_" + name] = P
         f1, prec, n = L.score(L.weights(P), d)
         print(f"{name:28s} slow F1: " + "  ".join(f"{L.TYPES[t]} {f1[t]:.2f}" for t in range(8) if n[t]))

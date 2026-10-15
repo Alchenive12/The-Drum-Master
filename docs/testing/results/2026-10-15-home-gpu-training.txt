@@ -1,0 +1,125 @@
+F4 + live classifier - home GPU training run (2026-10-15, owner's PC: RTX 3060 Ti, i7-11700K, PyTorch 2.14 cu126)
+Tools: research/loop-learning/{home_packs.py, extract_long.cpp, par_extract.py, train_slow_torch.py, vote_eval.py, train_fast_torch.py, export_mlp2.py}.
+Scoring = research/classifier-eval/eval.cpp exactly (loop_learning.score). 'fast (plugin today)' = branch home/full-length-training before this run:
+FULL 225-224-9 network + V1 second network (per-type max, main leads above 0.6) - the plugin as merged from remote/detection-postproc.
+
+== Data (audio stayed on the PC; only feature rows and weights left it)
+Owner's packs: 6,984 labelled one-shots in 63 packs (D:\stuff to save incl. KSHMR / Trap-hiphop / Future bass+bounce / MHA / SLCTD,
+  Sickrate & SIIK I+II, Splice + Splice2 + Documents\Splice, Cymatics Lofi, DABRO FB2, Drum Stems, FL Studio Packs). Scene / torrent folders left out.
+  Split by PACK (home_packs.py hash, ~20 %): test packs incl. KSHMR Vol. 2, MHA Atmos, SLCTD, Aneraxx, Ultrasonic Future Bass Vol 1, Dragon, ...
+  home_train: 1,298 kit loops (34,610 hits) + home2_train: 2,005 more loops, another seed (104,864 hits); home_test: 378 loops (9,654 hits) from test packs only.
+Free SampleRadar packs (MusicRadar, royalty-free, no redistribution; kept on the PC): 13 packs, 3,511 labelled one-shots -> 1,217 loops (63,386 hits), all train.
+Groove MIDI (CC BY 4.0): 235,035 hits (15 % of files held out, as train.py). E-GMD subset (CC BY 4.0): 30 performances x 43 kits = 1,290 files, 765,448 hits (6 kits held out).
+Synthetic (synth_aug.py, 600 loops): 27,560 hits. Test sets never trained on: acoustic (MDB 23 tracks), electronic + kit + electronic_kit (Dirt-Samples, held out), home_test.
+Leak check (dupcheck): of 22,460 training sounds, 1 (an FL Studio clap) is audio-identical to a Dirt test sound.
+
+== Full-length (slow) models: F1 per type (precision); columns kick, snare, closed hat, open hat, crash, ride, rimshot, clap
+-- r1_512
+== acoustic
+fast (plugin today)      0.82 (0.75)   0.70 (0.72)   0.57 (0.45)   0.11 (0.12)   0.14 (0.10)   0.37 (0.36)   0.15 (0.08)             -
+slow 1                   0.88 (0.88)   0.55 (0.87)   0.64 (0.51)   0.19 (0.17)   0.35 (0.48)   0.21 (0.74)   0.22 (0.13)             -
+== electronic
+fast (plugin today)      0.81 (0.76)   0.50 (0.35)   0.72 (0.81)   0.39 (0.56)   0.12 (0.09)   0.21 (0.24)   0.44 (0.47)   0.45 (0.41)
+slow 1                   0.91 (0.89)   0.81 (0.76)   0.78 (0.93)   0.73 (0.74)   0.67 (0.74)   0.74 (0.93)   0.45 (0.37)   0.65 (0.61)
+== kit
+fast (plugin today)      0.77 (0.71)   0.45 (0.31)   0.72 (0.79)   0.45 (0.71)   0.09 (0.07)   0.27 (0.28)   0.31 (0.32)   0.41 (0.41)
+slow 1                   0.91 (0.87)   0.81 (0.75)   0.82 (0.93)   0.75 (0.78)   0.64 (0.70)   0.78 (0.89)   0.36 (0.33)   0.69 (0.70)
+== electronic_kit2
+fast (plugin today)      0.77 (0.72)   0.42 (0.28)   0.69 (0.79)   0.47 (0.65)   0.12 (0.10)   0.21 (0.21)   0.24 (0.29)   0.45 (0.40)
+slow 1                   0.87 (0.80)   0.71 (0.66)   0.78 (0.90)   0.68 (0.78)   0.81 (0.84)   0.60 (0.76)   0.44 (0.44)   0.75 (0.75)
+== home_test
+fast (plugin today)      0.88 (0.85)   0.62 (0.53)   0.85 (0.82)   0.22 (0.21)   0.12 (0.08)   0.08 (0.06)   0.14 (0.14)   0.39 (0.30)
+slow 1                   0.92 (0.95)   0.76 (0.84)   0.91 (0.91)   0.49 (0.57)   0.65 (0.56)   0.66 (0.82)   0.17 (0.16)   0.66 (0.58)
+== web_test
+fast (plugin today)                -             -             -             -             -             -             -             -
+slow 1                             -             -             -             -             -             -             -             -
+-- r2_512
+== acoustic
+fast (plugin today)      0.82 (0.75)   0.70 (0.72)   0.57 (0.45)   0.11 (0.12)   0.14 (0.10)   0.37 (0.36)   0.15 (0.08)             -
+slow 1                   0.87 (0.85)   0.75 (0.91)   0.72 (0.66)   0.31 (0.50)   0.37 (0.46)   0.30 (0.68)   0.44 (0.30)             -
+== electronic
+fast (plugin today)      0.81 (0.76)   0.50 (0.35)   0.72 (0.81)   0.39 (0.56)   0.12 (0.09)   0.21 (0.24)   0.44 (0.47)   0.45 (0.41)
+slow 1                   0.88 (0.85)   0.77 (0.67)   0.75 (0.93)   0.76 (0.74)   0.64 (0.79)   0.66 (0.94)   0.37 (0.34)   0.62 (0.59)
+== kit
+fast (plugin today)      0.77 (0.71)   0.45 (0.31)   0.72 (0.79)   0.45 (0.71)   0.09 (0.07)   0.27 (0.28)   0.31 (0.32)   0.41 (0.41)
+slow 1                   0.90 (0.87)   0.78 (0.71)   0.77 (0.93)   0.73 (0.75)   0.62 (0.77)   0.65 (0.94)   0.40 (0.35)   0.70 (0.72)
+== electronic_kit2
+fast (plugin today)      0.77 (0.72)   0.42 (0.28)   0.69 (0.79)   0.47 (0.65)   0.12 (0.10)   0.21 (0.21)   0.24 (0.29)   0.45 (0.40)
+slow 1                   0.88 (0.84)   0.71 (0.66)   0.74 (0.90)   0.72 (0.80)   0.78 (0.86)   0.55 (0.94)   0.40 (0.42)   0.70 (0.71)
+== home_test
+fast (plugin today)      0.88 (0.85)   0.62 (0.53)   0.85 (0.82)   0.22 (0.21)   0.12 (0.08)   0.08 (0.06)   0.14 (0.14)   0.39 (0.30)
+slow 1                   0.91 (0.95)   0.74 (0.74)   0.90 (0.92)   0.49 (0.55)   0.63 (0.64)   0.58 (0.82)   0.15 (0.14)   0.63 (0.54)
+-- r2_1024
+== acoustic
+fast (plugin today)      0.82 (0.75)   0.70 (0.72)   0.57 (0.45)   0.11 (0.12)   0.14 (0.10)   0.37 (0.36)   0.15 (0.08)             -
+slow 1                   0.86 (0.87)   0.71 (0.88)   0.72 (0.66)   0.35 (0.48)   0.27 (0.48)   0.37 (0.72)   0.27 (0.16)             -
+== electronic
+fast (plugin today)      0.81 (0.76)   0.50 (0.35)   0.72 (0.81)   0.39 (0.56)   0.12 (0.09)   0.21 (0.24)   0.44 (0.47)   0.45 (0.41)
+slow 1                   0.90 (0.91)   0.79 (0.69)   0.75 (0.93)   0.73 (0.75)   0.68 (0.84)   0.70 (0.92)   0.40 (0.45)   0.68 (0.73)
+== kit
+fast (plugin today)      0.77 (0.71)   0.45 (0.31)   0.72 (0.79)   0.45 (0.71)   0.09 (0.07)   0.27 (0.28)   0.31 (0.32)   0.41 (0.41)
+slow 1                   0.90 (0.87)   0.81 (0.77)   0.77 (0.93)   0.70 (0.70)   0.53 (0.76)   0.78 (0.98)   0.32 (0.32)   0.72 (0.80)
+== electronic_kit2
+fast (plugin today)      0.77 (0.72)   0.42 (0.28)   0.69 (0.79)   0.47 (0.65)   0.12 (0.10)   0.21 (0.21)   0.24 (0.29)   0.45 (0.40)
+slow 1                   0.87 (0.80)   0.71 (0.66)   0.74 (0.90)   0.66 (0.72)   0.66 (0.83)   0.71 (0.94)   0.41 (0.46)   0.75 (0.82)
+== home_test
+fast (plugin today)      0.88 (0.85)   0.62 (0.53)   0.85 (0.82)   0.22 (0.21)   0.12 (0.08)   0.08 (0.06)   0.14 (0.14)   0.39 (0.30)
+slow 1                   0.90 (0.94)   0.74 (0.77)   0.90 (0.92)   0.46 (0.53)   0.66 (0.63)   0.63 (0.77)   0.13 (0.13)   0.64 (0.58)
+-- r3_bal
+== acoustic
+fast (plugin today)      0.82 (0.75)   0.70 (0.72)   0.57 (0.45)   0.11 (0.12)   0.14 (0.10)   0.37 (0.36)   0.15 (0.08)             -
+slow 1                   0.85 (0.84)   0.72 (0.87)   0.70 (0.61)   0.44 (0.59)   0.31 (0.49)   0.47 (0.71)   0.28 (0.17)             -
+== electronic
+fast (plugin today)      0.81 (0.76)   0.50 (0.35)   0.72 (0.81)   0.39 (0.56)   0.12 (0.09)   0.21 (0.24)   0.44 (0.47)   0.45 (0.41)
+slow 1                   0.89 (0.86)   0.77 (0.66)   0.75 (0.92)   0.72 (0.71)   0.60 (0.87)   0.79 (0.92)   0.46 (0.50)   0.62 (0.62)
+== kit
+fast (plugin today)      0.77 (0.71)   0.45 (0.31)   0.72 (0.79)   0.45 (0.71)   0.09 (0.07)   0.27 (0.28)   0.31 (0.32)   0.41 (0.41)
+slow 1                   0.89 (0.85)   0.81 (0.73)   0.79 (0.93)   0.76 (0.78)   0.51 (0.88)   0.74 (0.81)   0.41 (0.39)   0.65 (0.69)
+== electronic_kit2
+fast (plugin today)      0.77 (0.72)   0.42 (0.28)   0.69 (0.79)   0.47 (0.65)   0.12 (0.10)   0.21 (0.21)   0.24 (0.29)   0.45 (0.40)
+slow 1                   0.85 (0.78)   0.73 (0.66)   0.76 (0.90)   0.69 (0.76)   0.76 (0.96)   0.72 (0.85)   0.39 (0.53)   0.72 (0.77)
+== home_test
+fast (plugin today)      0.88 (0.85)   0.62 (0.53)   0.85 (0.82)   0.22 (0.21)   0.12 (0.08)   0.08 (0.06)   0.14 (0.14)   0.39 (0.30)
+slow 1                   0.91 (0.95)   0.76 (0.77)   0.90 (0.92)   0.48 (0.51)   0.65 (0.68)   0.65 (0.74)   0.13 (0.13)   0.65 (0.60)
+-- ens4
+== acoustic
+fast (plugin today)      0.82 (0.75)   0.70 (0.72)   0.57 (0.45)   0.11 (0.12)   0.14 (0.10)   0.37 (0.36)   0.15 (0.08)             -
+slow 1                   0.88 (0.87)   0.72 (0.90)   0.71 (0.62)   0.40 (0.74)   0.32 (0.56)   0.35 (0.76)   0.44 (0.30)             -
+== electronic
+fast (plugin today)      0.81 (0.76)   0.50 (0.35)   0.72 (0.81)   0.39 (0.56)   0.12 (0.09)   0.21 (0.24)   0.44 (0.47)   0.45 (0.41)
+slow 1                   0.92 (0.90)   0.84 (0.76)   0.76 (0.93)   0.77 (0.78)   0.68 (0.94)   0.72 (0.95)   0.56 (0.68)   0.69 (0.73)
+== kit
+fast (plugin today)      0.77 (0.71)   0.45 (0.31)   0.72 (0.79)   0.45 (0.71)   0.09 (0.07)   0.27 (0.28)   0.31 (0.32)   0.41 (0.41)
+slow 1                   0.92 (0.89)   0.84 (0.81)   0.79 (0.93)   0.78 (0.82)   0.62 (0.95)   0.80 (0.97)   0.44 (0.46)   0.69 (0.76)
+== electronic_kit2
+fast (plugin today)      0.77 (0.72)   0.42 (0.28)   0.69 (0.79)   0.47 (0.65)   0.12 (0.10)   0.21 (0.21)   0.24 (0.29)   0.45 (0.40)
+slow 1                   0.87 (0.81)   0.78 (0.74)   0.76 (0.91)   0.71 (0.81)   0.79 (0.92)   0.71 (1.00)   0.39 (0.54)   0.78 (0.81)
+== home_test
+fast (plugin today)      0.88 (0.85)   0.62 (0.53)   0.85 (0.82)   0.22 (0.21)   0.12 (0.08)   0.08 (0.06)   0.14 (0.14)   0.39 (0.30)
+slow 1                   0.92 (0.96)   0.78 (0.83)   0.91 (0.92)   0.50 (0.62)   0.69 (0.73)   0.65 (0.87)   0.13 (0.15)   0.67 (0.61)
+
+r1_512: gmd + synth + home + home2 + web (no E-GMD), 512-256. r2_*: + E-GMD, 512-256 / 1024-512. r3_bal: 1024-512, packs weighted (home x3, home2 x2, web x2), cosine LR, 120 epochs.
+ens4: the four averaged. Vote with the old fast model no longer helps (weights picked on other sets) - the slow models alone are better on every set.
+
+== Live (fast, 40 ms) classifier
+Fine-tuning the 225-224-9 FULL net (train_fast_torch.py, L2-SP, with and without E-GMD): mixed, small (fast1/fast2) - not used.
+A bigger net on the same 40 ms picture, trained from scratch (train_slow_torch.py --picture F, 225-512-256-9, synth x4, packs weighted):
+rebuilt into the plugin's own classifier (export_mlp2.py -> HitClassifierWeights.h, TinyMlp2), V1 second network OFF (it re-adds false snares:
+electronic snare 0.71 -> 0.53 with it), then extract_long (the plugin's detector + classifier) re-run on every test set. Exact plugin numbers:
+== acoustic              kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+plugin today     0.82 (0.75)   0.70 (0.72)   0.57 (0.45)   0.11 (0.12)   0.14 (0.10)   0.37 (0.36)   0.15 (0.08)             -   onsets 7201
+new plugin       0.83 (0.83)   0.65 (0.82)   0.63 (0.53)   0.08 (0.29)   0.15 (0.27)   0.38 (0.57)   0.18 (0.10)             -   onsets 7201
+== electronic              kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+plugin today     0.81 (0.76)   0.50 (0.35)   0.72 (0.81)   0.39 (0.56)   0.12 (0.09)   0.21 (0.24)   0.44 (0.47)   0.45 (0.41)   onsets 1770
+new plugin       0.83 (0.81)   0.68 (0.61)   0.70 (0.91)   0.59 (0.54)   0.22 (0.18)   0.26 (0.94)   0.51 (0.72)   0.67 (0.61)   onsets 1770
+== kit              kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+plugin today     0.77 (0.71)   0.45 (0.31)   0.72 (0.79)   0.45 (0.71)   0.09 (0.07)   0.27 (0.28)   0.31 (0.32)   0.41 (0.41)   onsets 1747
+new plugin       0.82 (0.78)   0.67 (0.60)   0.73 (0.90)   0.67 (0.65)   0.17 (0.18)   0.26 (0.78)   0.37 (0.49)   0.67 (0.60)   onsets 1747
+== electronic_kit2              kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+plugin today     0.77 (0.72)   0.42 (0.28)   0.69 (0.79)   0.47 (0.65)   0.12 (0.10)   0.21 (0.21)   0.24 (0.29)   0.45 (0.40)   onsets 1766
+new plugin       0.77 (0.73)   0.56 (0.48)   0.68 (0.88)   0.64 (0.65)   0.25 (0.27)   0.33 (0.94)   0.45 (0.67)   0.70 (0.62)   onsets 1766
+== home_test              kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+plugin today     0.88 (0.85)   0.62 (0.53)   0.85 (0.82)   0.22 (0.21)   0.12 (0.08)   0.08 (0.06)   0.14 (0.14)   0.39 (0.30)   onsets 9654
+new plugin       0.86 (0.88)   0.65 (0.66)   0.87 (0.87)   0.27 (0.40)   0.24 (0.20)   0.25 (0.33)   0.11 (0.10)   0.56 (0.45)   onsets 9654
+(225-1024-512-9 was no better: acoustic snare 0.65, electronic crash 0.17 - kept the smaller one.)
+DSP tests 14/14 with it (isolated synthetic kit 21-23 / 27 correct, was ~16; kick -6 dB -> -5.75 dB).

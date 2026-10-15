@@ -3,10 +3,10 @@
 // docs/03-decisions-for-review.md).
 //
 //   onset o -> HitFeatures (32-band log-mel picture from o - 25 ms to o + 40 ms, 225 numbers)
-//           -> TinyMlp (225 -> 224 ReLU -> 9 sigmoid, weights in HitClassifierWeights.h, docs/08)
-//              and the first network (225 -> 96 -> 9, HitClassifierWeightsV1.h, Groove + E-GMD, CC BY 4.0),
-//              which is better on live acoustic drums; per type the larger of the two probabilities
-//              (docs/09 §1; Settings::secondNet)
+//           -> the main network (architecture + weights in HitClassifierWeights.h; docs/08, F4 home run)
+//              and, if the weights header turns it on (Settings::secondNet), the first network
+//              (225 -> 96 -> 9, HitClassifierWeightsV1.h, Groove + E-GMD, CC BY 4.0), per type the larger
+//              of the two probabilities (docs/09 §1). Off since the 2026-10-15 home run (docs/05 F4).
 //           -> one independent probability per type = its weight (multi-label: kick + hat is both)
 //
 // Then: types the user switched off (manual mode) get 0 and their probability moves to misc; the
@@ -55,7 +55,7 @@ public:
     static constexpr std::size_t numBands = ClassifiedHit::numBands;
     static constexpr std::array<double, numBands + 1> bandEdges { 30, 60, 100, 160, 250, 400, 630, 1000,
                                                                   1600, 2500, 4000, 6300, 10000, 16000 };
-    using Network = TinyMlp<HitFeatures::numFeatures, hitClassifierHidden, numDrumTypes>;
+    using Network = HitClassifierMainNet;   // the architecture comes with the generated weights header
     using NetworkV1 = TinyMlp<HitFeatures::numFeatures, hitClassifierV1Hidden, numDrumTypes>;
 
     struct Settings
@@ -66,7 +66,7 @@ public:
         float learnRate = 0.1f;   // long-term spectra, per confident hit
 
         // Post-processing without retraining (docs/09).
-        bool secondNet = true;          // also run the first (CC BY) network and keep, per type, the larger probability
+        bool secondNet = hitClassifierSecondNetDefault;   // also run the first (CC BY) network and keep, per type, the larger probability
         float mainLeadsAbove = 0.6f;    // ...but when the main network's top type is at least this sure, the
                                         // second network may not lift any other type above it
     };

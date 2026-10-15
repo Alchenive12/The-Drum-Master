@@ -361,6 +361,35 @@ model. Vote weights are always picked on other test sets.
 - **Not yet in the plugin:** these models run offline in Python. Shipping means exporting the slow model
   to C++ (a bigger `TinyMlp` with two hidden layers) and building F4's loop learning around it.
 
+### Home GPU run (2026-10-15, RTX 3060 Ti): the owner's packs + free packs
+Raw numbers: `docs/testing/results/2026-10-15-home-gpu-training.txt`. Scripts: `research/loop-learning/home-run/`.
+Training data: Groove + E-GMD (30 performances x 43 kits) + synthetic + **the owner's packs** (63 packs, kit loops,
+split by pack: ~20 % of packs never trained on = `home_test`) + 13 free SampleRadar packs. Test sets never trained on.
+- **The full-length model alone now beats the plugin on every set** (no vote needed). Single best model
+  (`research/loop-learning/models/slow_r3_bal.npz`, 643 -> 1024 -> 512 -> 9), F1 plugin today -> slow:
+
+  | F1 | your unheard packs | electronic | kit loops | acoustic (MDB) |
+  |---|---|---|---|---|
+  | kick | 0.88 -> 0.91 | 0.81 -> 0.89 | 0.77 -> 0.89 | 0.82 -> 0.85 |
+  | snare | 0.62 -> 0.76 | 0.50 -> 0.77 | 0.45 -> 0.81 | 0.70 -> 0.72 |
+  | closed hat | 0.85 -> 0.90 | 0.72 -> 0.75 | 0.72 -> 0.79 | 0.57 -> 0.70 |
+  | open hat | 0.22 -> 0.48 | 0.39 -> 0.72 | 0.45 -> 0.76 | 0.11 -> 0.44 |
+  | crash | 0.12 -> 0.65 | 0.12 -> 0.60 | 0.09 -> 0.51 | 0.14 -> 0.31 |
+  | ride | 0.08 -> 0.65 | 0.21 -> 0.79 | 0.27 -> 0.74 | 0.37 -> 0.47 |
+  | clap | 0.39 -> 0.65 | 0.45 -> 0.62 | 0.41 -> 0.65 | - |
+
+  Averaging four trained models adds a little more (electronic snare 0.84, your packs 0.78; results file, `ens4`).
+  Kick on your packs passes the v1 bar (0.91, precision 0.95); snare and hats are close; rimshot stays weak (0.13-0.46).
+- **The live classifier got bigger and is in the plugin** (`HitClassifierWeights.h`, 225 -> 512 -> 256 -> 9, `TinyMlp2`;
+  the V1 second network is now off by default because it re-adds false snares). Exact plugin numbers (detector +
+  classifier re-run): your unheard packs snare 0.62 -> 0.65, clap 0.39 -> 0.56, crash 0.12 -> 0.24, ride 0.08 -> 0.25;
+  electronic snare 0.50 -> 0.68, open hat 0.39 -> 0.59, clap 0.45 -> 0.67; acoustic snare 0.70 -> 0.65 (worse),
+  closed hat 0.57 -> 0.63. Cost: ~250k multiply-adds per hit (was ~52k).
+- **Why 40 ms stays far behind full length:** same data, same trainer; the extra time is what tells cymbals, open
+  hats and claps apart. That is F4's job (loop learning), now with a model worth shipping.
+- **Next:** export the slow model to C++ (TinyMlp2 already runs two hidden layers; it needs the 643-number
+  picture from `extract_long.cpp` as a plugin class) and build F4's loop learning around it.
+
 ### Rhythm as evidence (user's idea, 2026-10-14)
 - **The idea:** a hit's place in the bar says something about what it is. Kick on 1 (and often 3),
   snare or clap on 2 and 4, hats on the 8ths or 16ths.
