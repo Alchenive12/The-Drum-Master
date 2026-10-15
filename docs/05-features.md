@@ -335,6 +335,32 @@ Nothing was tuned on the set it was scored on.
 - **So the gains have to come from better models:** real training data (your packs), full length, and
   independent evidence. Rhythm (below) is independent evidence.
 
+### Slow model on real drums (2026-10-15, cloud CPU)
+Raw numbers: `docs/testing/results/2026-10-15-slow-model-real-data.txt`. Training data: Groove + E-GMD
+(10 performances x 43 kits) + synthetic, with the same held-out Groove files and E-GMD kits as the fast
+model. Vote weights are always picked on other test sets.
+- **The real-drum slow model alone, on acoustic drums (MDB):** snare 0.65 → 0.76, closed hat 0.51 → 0.72,
+  ride 0.35 → 0.55, open hat 0.06 → 0.23, kick unchanged (0.83). On electronic drums it's weaker than the
+  fast model for hats (0.44) and claps: Groove and E-GMD have no claps and few drum-machine hats.
+- **Three-way vote** (fast + real slow + synthetic slow):
+
+  | F1 | acoustic | electronic | kit loops |
+  |---|---|---|---|
+  | kick | 0.83 → 0.87 | 0.78 → 0.81 | 0.78 → 0.80 |
+  | snare | 0.65 → 0.68 | 0.53 → 0.52 | 0.47 → 0.60 |
+  | closed hat | 0.51 → 0.61 | 0.58 → 0.59 | 0.59 → 0.76 |
+  | open hat | 0.06 → 0.33 | 0.23 → 0.29 | 0.33 → 0.36 |
+  | ride | 0.35 → 0.55 | 0.08 → 0.16 | 0.14 → 0.22 |
+  | clap | – | 0.33 → 0.33 | 0.31 → 0.40 |
+
+  Better than the plugin today on all three sets, but still short of the v1 bar (0.85).
+- **One balanced model (real + synthetic ×4) doesn't close the electronic gap.** The specialists' vote
+  stays best.
+- **What's missing is real electronic drums to train on: your packs** (licence permitting) are the next
+  step, on the home GPU with all the data.
+- **Not yet in the plugin:** these models run offline in Python. Shipping means exporting the slow model
+  to C++ (a bigger `TinyMlp` with two hidden layers) and building F4's loop learning around it.
+
 ### Rhythm as evidence (user's idea, 2026-10-14)
 - **The idea:** a hit's place in the bar says something about what it is. Kick on 1 (and often 3),
   snare or clap on 2 and 4, hats on the 8ths or 16ths.
