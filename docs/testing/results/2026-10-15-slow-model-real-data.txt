@@ -1,0 +1,62 @@
+F4 slow model trained on real drums (2026-10-15, cloud CPU)
+Training: Groove MIDI + E-GMD (10 performances per kit, 43 kits) + synthetic; random 300k of the hits, then rare-label oversampling and EQ/level augmentation (train_slow_torch.py).
+Held out exactly like research/classifier-train/train.py: 15 % of Groove files, six whole E-GMD kits. Test sets never trained on: acoustic (MDB Drums), electronic, kit (kit_loops.py).
+Vote weights per drum type are picked on OTHER test sets than the one scored (vote_eval.py).
+
+== Training log
+training rows 741488 on cpu; label counts kick=183466 snare=188484 closed hat=225270 open hat=47628 crash=50876 ride=88516 rimshot=65686 clap=41744 misc=55574
+80 epochs, 1444 s, validation loss 0.0362
+gmd.csv held-out             slow F1: kick 0.91  snare 0.96  closed hat 0.93  open hat 0.87  crash 0.87  ride 0.94  rimshot 0.92
+egmd.csv held-out            slow F1: kick 0.83  snare 0.76  closed hat 0.74  open hat 0.70  crash 0.50  ride 0.81  rimshot 0.68
+acoustic                     slow F1: kick 0.83  snare 0.76  closed hat 0.72  open hat 0.23  crash 0.21  ride 0.55  rimshot 0.38
+electronic                   slow F1: kick 0.70  snare 0.52  closed hat 0.44  open hat 0.30  crash 0.05  ride 0.18  rimshot 0.32  clap 0.16
+kit                          slow F1: kick 0.69  snare 0.49  closed hat 0.40  open hat 0.34  crash 0.08  ride 0.22  rimshot 0.23  clap 0.07
+saved /tmp/claude-0/-home-user/1296def0-3cb1-502a-ab32-b7db8d178d04/scratchpad/ll/slow_real.npz
+
+== fast + slow(real) vote
+== acoustic  (slow weights from electronic: kick 0.50 snare 0.50 closed hat 0.00 open hat 1.00 crash 0.00 ride 1.00 rimshot 1.00 clap 0.00)
+                                kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+fast (plugin today)      0.83 (0.79)   0.65 (0.75)   0.51 (0.63)   0.06 (0.08)   0.14 (0.11)   0.35 (0.42)   0.42 (0.28)             -
+slow                     0.83 (0.83)   0.76 (0.81)   0.72 (0.80)   0.23 (0.35)   0.21 (0.28)   0.55 (0.58)   0.38 (0.24)             -
+vote                     0.85 (0.84)   0.73 (0.81)   0.51 (0.63)   0.23 (0.35)   0.14 (0.11)   0.55 (0.58)   0.38 (0.24)             -
+(true hits)                     1539          2653          2370           269           151           851            38             0
+
+== electronic  (slow weights from acoustic: kick 0.50 snare 1.00 closed hat 1.00 open hat 1.00 crash 0.50 ride 0.75 rimshot 0.50 clap 0.00)
+                                kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+fast (plugin today)      0.78 (0.79)   0.53 (0.41)   0.58 (0.86)   0.23 (0.64)   0.10 (0.08)   0.08 (0.18)   0.14 (0.38)   0.33 (0.34)
+slow                     0.70 (0.77)   0.52 (0.40)   0.44 (0.88)   0.30 (0.30)   0.05 (0.09)   0.18 (0.32)   0.32 (0.40)   0.16 (0.46)
+vote                     0.78 (0.82)   0.52 (0.40)   0.44 (0.88)   0.30 (0.30)   0.00 (0.00)   0.17 (0.34)   0.25 (0.64)   0.33 (0.34)
+(true hits)                      552           173          1416           161            28           100            59           125
+
+== kit  (slow weights from acoustic+electronic: kick 0.50 snare 0.50 closed hat 0.50 open hat 1.00 crash 0.50 ride 1.00 rimshot 0.50 clap 0.00)
+                                kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+fast (plugin today)      0.78 (0.77)   0.47 (0.36)   0.59 (0.84)   0.33 (0.84)   0.04 (0.03)   0.14 (0.29)   0.03 (0.06)   0.31 (0.35)
+slow                     0.69 (0.73)   0.49 (0.36)   0.40 (0.88)   0.34 (0.39)   0.08 (0.17)   0.22 (0.34)   0.23 (0.26)   0.07 (0.20)
+vote                     0.78 (0.81)   0.60 (0.50)   0.48 (0.88)   0.34 (0.39)   0.05 (0.20)   0.22 (0.34)   0.14 (0.23)   0.31 (0.35)
+(true hits)                      524           159          1337           181            39            90            57           130
+
+== fast + slow(real) + slow(synthetic only) vote (slow 1 = real, slow 2 = synthetic)
+== acoustic  (slow weights from electronic: kick 0.50/0.25 snare 0.25/0.25 closed hat 0.00/1.00 open hat 0.00/1.00 crash 0.00/0.50 ride 1.00/0.00 rimshot 1.00/0.00 clap 0.25/0.50)
+                                kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+fast (plugin today)      0.83 (0.79)   0.65 (0.75)   0.51 (0.63)   0.06 (0.08)   0.14 (0.11)   0.35 (0.42)   0.42 (0.28)             -
+slow 1                   0.83 (0.83)   0.76 (0.81)   0.72 (0.80)   0.23 (0.35)   0.21 (0.28)   0.55 (0.58)   0.38 (0.24)             -
+slow 2                   0.59 (0.48)   0.25 (0.62)   0.61 (0.49)   0.33 (0.31)   0.22 (0.35)   0.23 (0.61)   0.00 (0.00)             -
+vote                     0.87 (0.87)   0.68 (0.86)   0.61 (0.49)   0.33 (0.31)   0.22 (0.45)   0.55 (0.58)   0.38 (0.24)             -
+(true hits)                     1539          2653          2370           269           151           851            38             0
+
+== electronic  (slow weights from acoustic: kick 0.50/0.25 snare 1.00/0.00 closed hat 0.50/0.25 open hat 0.50/0.50 crash 0.50/0.25 ride 0.75/0.25 rimshot 0.50/0.25 clap 0.00/0.00)
+                                kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+fast (plugin today)      0.78 (0.79)   0.53 (0.41)   0.58 (0.86)   0.23 (0.64)   0.10 (0.08)   0.08 (0.18)   0.14 (0.38)   0.33 (0.34)
+slow 1                   0.70 (0.77)   0.52 (0.40)   0.44 (0.88)   0.30 (0.30)   0.05 (0.09)   0.18 (0.32)   0.32 (0.40)   0.16 (0.46)
+slow 2                   0.76 (0.65)   0.42 (0.32)   0.75 (0.85)   0.30 (0.54)   0.18 (0.60)   0.00 (0.00)   0.05 (0.10)   0.28 (0.17)
+vote                     0.81 (0.83)   0.52 (0.40)   0.59 (0.88)   0.29 (0.52)   0.06 (0.33)   0.16 (0.34)   0.22 (0.62)   0.33 (0.34)
+(true hits)                      552           173          1416           161            28           100            59           125
+
+== kit  (slow weights from acoustic+electronic: kick 0.50/0.25 snare 0.50/0.00 closed hat 0.00/0.50 open hat 0.00/1.00 crash 0.00/0.50 ride 1.00/0.00 rimshot 0.50/0.25 clap 0.25/0.50)
+                                kick         snare    closed hat      open hat         crash          ride       rimshot          clap
+fast (plugin today)      0.78 (0.77)   0.47 (0.36)   0.59 (0.84)   0.33 (0.84)   0.04 (0.03)   0.14 (0.29)   0.03 (0.06)   0.31 (0.35)
+slow 1                   0.69 (0.73)   0.49 (0.36)   0.40 (0.88)   0.34 (0.39)   0.08 (0.17)   0.22 (0.34)   0.23 (0.26)   0.07 (0.20)
+slow 2                   0.74 (0.64)   0.49 (0.38)   0.76 (0.84)   0.36 (0.68)   0.05 (0.33)   0.02 (1.00)   0.12 (0.18)   0.28 (0.17)
+vote                     0.80 (0.82)   0.60 (0.50)   0.76 (0.85)   0.36 (0.68)   0.05 (0.50)   0.22 (0.34)   0.15 (0.29)   0.40 (0.27)
+(true hits)                      524           159          1337           181            39            90            57           130
+
